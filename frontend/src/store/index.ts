@@ -1,0 +1,66 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+import { generateId } from '@/lib/utils'
+import type { Mode, Message, Plan, FileDiff } from '@/types'
+
+interface AppState {
+  // Session
+  sessionId: string
+  mode: Mode
+  setMode: (mode: Mode) => void
+
+  // Chat
+  messages: Message[]
+  addMessage: (msg: Omit<Message, 'id' | 'timestamp'>) => void
+  clearMessages: () => void
+  isStreaming: boolean
+  setStreaming: (v: boolean) => void
+
+  // Cowork
+  currentPlan: Plan | null
+  setPlan: (plan: Plan | null) => void
+
+  // Code
+  currentDiff: FileDiff | null
+  setDiff: (diff: FileDiff | null) => void
+  repoPath: string
+  setRepoPath: (path: string) => void
+}
+
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      // Session
+      sessionId: generateId(),
+      mode: 'chat',
+      setMode: (mode) => set({ mode }),
+
+      // Chat
+      messages: [],
+      addMessage: (msg) =>
+        set((s) => ({
+          messages: [
+            ...s.messages,
+            { ...msg, id: generateId(), timestamp: new Date() },
+          ],
+        })),
+      clearMessages: () => set({ messages: [] }),
+      isStreaming: false,
+      setStreaming: (v) => set({ isStreaming: v }),
+
+      // Cowork
+      currentPlan: null,
+      setPlan: (plan) => set({ currentPlan: plan }),
+
+      // Code
+      currentDiff: null,
+      setDiff: (diff) => set({ currentDiff: diff }),
+      repoPath: '',
+      setRepoPath: (path) => set({ repoPath: path }),
+    }),
+    {
+      name: 'lyndon-llm-store',
+      partialize: (s) => ({ sessionId: s.sessionId, repoPath: s.repoPath }),
+    },
+  ),
+)
