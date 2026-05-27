@@ -15,7 +15,8 @@ export function Sidebar() {
   return (
     <aside className="flex flex-col w-56 h-screen bg-card border-r border-border shrink-0">
       {/* Logo */}
-      <div className="px-4 py-5 border-b border-border">
+      <div className="px-4 py-4 border-b border-border flex items-center gap-2.5">
+        <img src="/icon.png" alt="LyndonLLM" className="w-7 h-7 object-contain" />
         <span className="text-lg font-semibold tracking-tight">LyndonLLM</span>
       </div>
 
