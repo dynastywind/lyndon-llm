@@ -7,7 +7,12 @@
       "Read(//usr/local/bin/**)",
       "Read(//opt/homebrew/bin/**)",
       "Bash(pyenv versions *)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(ls /Users/lyndon/Documents/projects/lyndonLLM/backend/.venv/bin/python 2>/dev/null && echo \"VENV EXISTS\" || echo \"VENV MISSING\")",
+      "Bash(/Users/lyndon/Documents/projects/lyndonLLM/backend/.venv/bin/python --version)",
+      "Bash(/Users/lyndon/Documents/projects/lyndonLLM/backend/.venv/bin/python -c \"import pydantic_settings; print\\('pydantic_settings OK'\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
