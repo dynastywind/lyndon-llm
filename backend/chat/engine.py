@@ -1,134 +1,121 @@
 """
-Chat Engine — the main conversation loop for Chat mode.
-Handles tool routing, memory management, and streaming responses.
+Chat Engine — conversation loop for Chat mode.
+
+RAG strategy: retrieve-first.
+Before every LLM call, retrieve relevant chunks from the knowledge base
+and inject them as context. This works reliably with any local model
+without requiring function-calling support.
 """
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncGenerator
 
 from chat.memory.manager import MemoryManager
-from chat.memory.types import MemoryType
+from chat.rag.retriever import HybridRetriever, RetrievedChunk
 from core.events.bus import event_bus, Events
 from core.llm.gateway import llm_gateway, LLMMessage
 from core.session.manager import Session
-from core.tools.registry import tool_registry
-from core.permissions.gate import Mode
 
-CHAT_SYSTEM_PROMPT = """\
+BASE_SYSTEM_PROMPT = """\
 You are a helpful, knowledgeable personal assistant.
-You have access to web search and a local knowledge base.
-Always cite your sources when using retrieved information.
+When context is provided below, use it to answer the question accurately.
+Always cite sources by mentioning the file or URL the information came from.
+If the context does not contain relevant information, say so and answer from your general knowledge.
 Be concise and direct. Ask clarifying questions when needed.
 """
+
+# Maximum characters of retrieved context to inject into the prompt
+MAX_CONTEXT_CHARS = 6000
+
+
+def _format_context(chunks: list[RetrievedChunk]) -> str:
+    """Format retrieved chunks into a context block for the system prompt."""
+    if not chunks:
+        return ""
+    parts = []
+    for i, chunk in enumerate(chunks, 1):
+        parts.append(
+            f"[{i}] Source: {chunk.source}\n{chunk.content}"
+        )
+    return "## Retrieved context\n\n" + "\n\n---\n\n".join(parts)
 
 
 class ChatEngine:
     def __init__(self, session: Session) -> None:
         self.session = session
         self.memory = MemoryManager(session.session_id)
+        self._retriever = HybridRetriever()
 
     async def stream_response(
         self,
         user_message: str,
     ) -> AsyncGenerator[str, None]:
         """
-        Main chat turn: enrich with memories → build messages → call LLM (streaming).
-        Handles tool calls inline if the LLM requests them.
+        Main chat turn:
+          1. Retrieve relevant RAG chunks
+          2. Enrich system prompt (long-term memories + RAG context)
+          3. Add user turn to short-term memory
+          4. Compress short-term memory if near the token limit
+          5. Stream LLM response
+          6. Store assistant turn
         """
         await event_bus.emit(Events.CHAT_MESSAGE_RECEIVED, {
             "session_id": self.session.session_id,
             "message": user_message,
         })
 
-        # 1. Enrich system prompt with long-term memories
-        await self.memory.build_system_prompt(CHAT_SYSTEM_PROMPT, user_message)
+        # 1. Retrieve RAG context
+        rag_chunks = await self._retrieve(user_message)
+        context_block = _format_context(rag_chunks)
 
-        # 2. Add user turn
+        # 2. Build system prompt (base + long-term memories + RAG context)
+        system_prompt = BASE_SYSTEM_PROMPT
+        if context_block:
+            system_prompt = f"{BASE_SYSTEM_PROMPT}\n\n{context_block}"
+
+        await self.memory.build_system_prompt(system_prompt, user_message)
+
+        # 3. Add user turn
         self.memory.add_user_turn(user_message)
 
-        # 3. Compress if needed
+        # 4. Compress if near token limit
         await self.memory.maybe_compress()
 
-        # 4. Get tool schemas for function calling
-        tools = tool_registry.get_openai_schemas(Mode.CHAT)
+        # 5. Build message list and stream
         messages_dict = self.memory.get_messages()
         messages = [LLMMessage(m["role"], m["content"]) for m in messages_dict]
 
-        # 5. Agentic loop — stream response, handle tool calls
         full_response = ""
-        async for chunk in self._agentic_stream(messages, tools):
+        async for chunk in llm_gateway.stream(messages=messages):
             full_response += chunk
             yield chunk
 
-        # 6. Store assistant turn
+        # 6. Store assistant turn + maybe compress again
         self.memory.add_assistant_turn(full_response)
         await self.memory.maybe_compress()
 
         await event_bus.emit(Events.CHAT_RESPONSE_DONE, {
             "session_id": self.session.session_id,
+            "rag_sources": [c.source for c in rag_chunks],
         })
 
-    async def _agentic_stream(
-        self,
-        messages: list[LLMMessage],
-        tools: list[dict],
-    ) -> AsyncGenerator[str, None]:
+    async def _retrieve(self, query: str) -> list[RetrievedChunk]:
         """
-        One round of the agentic loop.
-        If LLM returns a tool call, execute it and re-prompt.
-        Otherwise stream the text response directly.
+        Query the RAG knowledge base. Returns empty list if the
+        knowledge base is empty or the query fails — never raises.
         """
-        # First: non-streaming call to check for tool use
-        response = await llm_gateway.complete(
-            messages=messages,
-            tools=tools or None,
-            tool_choice="auto" if tools else None,
-        )
-
-        # Simple heuristic: if response starts with a tool call JSON block, handle it
-        if response.startswith('{"tool_calls"') or "tool_calls" in response[:50]:
-            try:
-                tool_result_text = await self._handle_tool_calls(response, messages)
-                yield tool_result_text
-                return
-            except Exception:
-                pass  # fall through to stream as-is
-
-        # Stream the text response
-        messages_with_response = messages + [LLMMessage("assistant", response)]
-        async for chunk in llm_gateway.stream(messages=messages):
-            yield chunk
-
-    async def _handle_tool_calls(
-        self,
-        response: str,
-        messages: list[LLMMessage],
-    ) -> str:
-        """Execute tool calls and return a follow-up response."""
-        tool_instances = tool_registry.get_tools(Mode.CHAT, self.session.gate)
-
-        data = json.loads(response)
-        tool_calls = data.get("tool_calls", [])
-
-        tool_results = []
-        for call in tool_calls:
-            fn = call.get("function", {})
-            name = fn.get("name")
-            args = json.loads(fn.get("arguments", "{}"))
-
-            if name in tool_instances:
-                result = await tool_instances[name].run(**args)
-                self.memory.add_tool_turn(name, result.output or result.error or "")
-                tool_results.append(f"[{name}]: {result.output or result.error}")
-
-        # Re-prompt with tool results
-        tool_context = "\n".join(tool_results)
-        follow_up = messages + [
-            LLMMessage("assistant", response),
-            LLMMessage("tool", tool_context),
-        ]
-        return await llm_gateway.complete(messages=follow_up)
+        try:
+            chunks = await self._retriever.retrieve(query)
+            # Trim total context to MAX_CONTEXT_CHARS
+            kept, total = [], 0
+            for chunk in chunks:
+                if total + len(chunk.content) > MAX_CONTEXT_CHARS:
+                    break
+                kept.append(chunk)
+                total += len(chunk.content)
+            return kept
+        except Exception:
+            return []
 
     async def close(self) -> None:
         """Persist session summary to long-term memory."""

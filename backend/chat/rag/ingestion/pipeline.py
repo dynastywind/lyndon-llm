@@ -38,17 +38,21 @@ class IngestPipeline:
         if not all_chunks:
             return 0
 
-        # Batch embed
+        # Batch embed (max 32 chunks per call to avoid timeouts)
         texts = [c.content for c in all_chunks]
-        embeddings = await llm_gateway.embed(texts)
+        embeddings: list[list[float]] = []
+        batch_size = 32
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            embeddings.extend(await llm_gateway.embed(batch))
 
-        # Store
+        # Store — always include "source" in metadata so the retriever can surface it
         vs = await self._get_vector_store()
         await vs.upsert(
             ids=[f"{c.source}::{c.chunk_index}" for c in all_chunks],
             embeddings=embeddings,
             documents=texts,
-            metadatas=[c.metadata for c in all_chunks],
+            metadatas=[{"source": c.source, **c.metadata} for c in all_chunks],
         )
         return len(all_chunks)
 
