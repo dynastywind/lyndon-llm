@@ -25,21 +25,30 @@ class VectorStoreBase:
 
     async def delete(self, ids: list[str]) -> None: ...
 
+    async def delete_by_source(self, source: str) -> None: ...
+
 
 class ChromaVectorStore(VectorStoreBase):
     def __init__(self, collection_name: str) -> None:
-        import chromadb
-        client = chromadb.HttpClient(
-            host=settings.chroma_host,
-            port=settings.chroma_port,
-        )
-        self._col = client.get_or_create_collection(
-            name=collection_name,
-            metadata={"hnsw:space": "cosine"},
-        )
+        self._collection_name = collection_name
+        self._col = None  # lazy — connect on first use
+
+    def _get_col(self):
+        """Connect to Chroma lazily so startup order doesn't matter."""
+        if self._col is None:
+            import chromadb
+            client = chromadb.HttpClient(
+                host=settings.chroma_host,
+                port=settings.chroma_port,
+            )
+            self._col = client.get_or_create_collection(
+                name=self._collection_name,
+                metadata={"hnsw:space": "cosine"},
+            )
+        return self._col
 
     async def upsert(self, ids, embeddings, documents, metadatas) -> None:
-        self._col.upsert(
+        self._get_col().upsert(
             ids=ids,
             embeddings=embeddings,
             documents=documents,
@@ -54,10 +63,17 @@ class ChromaVectorStore(VectorStoreBase):
         )
         if where:
             kwargs["where"] = where
-        return self._col.query(**kwargs)
+        return self._get_col().query(**kwargs)
 
     async def delete(self, ids: list[str]) -> None:
-        self._col.delete(ids=ids)
+        self._get_col().delete(ids=ids)
+
+    async def delete_by_source(self, source: str) -> None:
+        """Delete all chunks whose metadata source matches the given path/URL."""
+        col = self._get_col()
+        result = col.get(where={"source": source}, include=[])
+        if result["ids"]:
+            col.delete(ids=result["ids"])
 
 
 class QdrantVectorStore(VectorStoreBase):
@@ -129,12 +145,24 @@ class QdrantVectorStore(VectorStoreBase):
             points_selector=PointIdsList(points=int_ids),
         )
 
+    async def delete_by_source(self, source: str) -> None:
+        from qdrant_client.models import Filter, FieldCondition, MatchValue, FilterSelector
+        self._client.delete(
+            collection_name=self._collection,
+            points_selector=FilterSelector(
+                filter=Filter(must=[FieldCondition(key="source", match=MatchValue(value=source))])
+            ),
+        )
+
 
 _instances: dict[str, VectorStoreBase] = {}
 
 
 async def get_vector_store(collection_name: str) -> VectorStoreBase:
-    """Return (and cache) the right vector store backend."""
+    """Return (and cache) the right vector store backend.
+    ChromaVectorStore connects lazily, so caching the instance is always safe —
+    a failed connection just means the next call to _get_col() will retry.
+    """
     if collection_name not in _instances:
         if settings.vector_store_backend == VectorStoreBackend.qdrant:
             _instances[collection_name] = QdrantVectorStore(collection_name)

@@ -46,10 +46,18 @@ class IngestPipeline:
             batch = texts[i : i + batch_size]
             embeddings.extend(await llm_gateway.embed(batch))
 
-        # Store — always include "source" in metadata so the retriever can surface it
         vs = await self._get_vector_store()
+
+        # Remove any previously ingested chunks for this source so re-ingestion
+        # is always clean (no orphaned chunks from old versions of the file).
+        await vs.delete_by_source(source)
+
+        # IDs use a *global* sequential index across all chunks.
+        # Per-document chunk_index resets to 0 for each page/section (e.g. PDF
+        # pages), which would produce duplicate IDs like source::0 appearing
+        # multiple times in one upsert call.
         await vs.upsert(
-            ids=[f"{c.source}::{c.chunk_index}" for c in all_chunks],
+            ids=[f"{source}::{i}" for i in range(len(all_chunks))],
             embeddings=embeddings,
             documents=texts,
             metadatas=[{"source": c.source, **c.metadata} for c in all_chunks],
