@@ -26,9 +26,10 @@ dependencies = [
     # Code block
     "gitpython>=3.1",
     # DB
-    "sqlalchemy>=2.0",
+    "sqlalchemy[asyncio]>=2.0",
     "aiosqlite>=0.20",
     "alembic>=1.13",
+    "greenlet>=3.0",
 ]
 
 [project.optional-dependencies]

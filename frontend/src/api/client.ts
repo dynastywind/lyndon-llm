@@ -1,4 +1,4 @@
-import type { Plan, FileDiff, ReviewResult, TestResult } from '@/types'
+import type { Plan, FileDiff, ReviewResult, TestResult, ChatSession, ChatSessionsResponse, ChatSessionMessage } from '@/types'
 
 const BASE = '/api'
 
@@ -30,6 +30,34 @@ export async function streamChat(
     if (done) break
     onChunk(decoder.decode(value, { stream: true }))
   }
+}
+
+// ── Chat sessions ─────────────────────────────────────────────────────────────
+
+export async function createChatSession(): Promise<ChatSession> {
+  const res = await fetch(`${BASE}/chat/sessions`, { method: 'POST' })
+  if (!res.ok) throw new Error(`Failed to create session: ${res.statusText}`)
+  return res.json()
+}
+
+export async function listChatSessions(
+  mode = 'chat',
+  limit = 20,
+  offset = 0,
+): Promise<ChatSessionsResponse> {
+  const res = await fetch(
+    `${BASE}/chat/sessions?mode=${mode}&limit=${limit}&offset=${offset}`,
+  )
+  if (!res.ok) throw new Error(`Failed to list sessions: ${res.statusText}`)
+  return res.json()
+}
+
+export async function getChatMessages(
+  sessionId: string,
+): Promise<{ messages: ChatSessionMessage[] }> {
+  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/messages`)
+  if (!res.ok) throw new Error(`Failed to load messages: ${res.statusText}`)
+  return res.json()
 }
 
 export async function ingestDocument(source: string): Promise<{ chunks_stored: number }> {

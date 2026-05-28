@@ -9,12 +9,16 @@ without requiring function-calling support.
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 from chat.memory.manager import MemoryManager
 from chat.rag.retriever import HybridRetriever, RetrievedChunk
 from core.events.bus import event_bus, Events
 from core.llm.gateway import llm_gateway, LLMMessage
 from core.session.manager import Session
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 BASE_SYSTEM_PROMPT = """\
 You are a helpful, knowledgeable personal assistant.
@@ -41,10 +45,11 @@ def _format_context(chunks: list[RetrievedChunk]) -> str:
 
 
 class ChatEngine:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, db: "AsyncSession | None" = None) -> None:
         self.session = session
         self.memory = MemoryManager(session.session_id)
         self._retriever = HybridRetriever()
+        self._db = db
 
     async def stream_response(
         self,
@@ -63,6 +68,13 @@ class ChatEngine:
             "session_id": self.session.session_id,
             "message": user_message,
         })
+
+        # Persist user message to DB (if a DB session was injected)
+        if self._db:
+            from db.repos.chat import ChatRepo
+            _repo = ChatRepo(self._db)
+            await _repo.ensure_session(self.session.session_id, "chat")
+            await _repo.add_message(self.session.session_id, "user", user_message)
 
         # 1. Retrieve RAG context
         rag_chunks = await self._retrieve(user_message)
@@ -93,6 +105,13 @@ class ChatEngine:
         # 6. Store assistant turn + maybe compress again
         self.memory.add_assistant_turn(full_response)
         await self.memory.maybe_compress()
+
+        # Persist assistant message and update session title / updated_at
+        if self._db:
+            from db.repos.chat import ChatRepo
+            _repo = ChatRepo(self._db)
+            await _repo.add_message(self.session.session_id, "assistant", full_response)
+            await _repo.maybe_set_title(self.session.session_id, user_message)
 
         await event_bus.emit(Events.CHAT_RESPONSE_DONE, {
             "session_id": self.session.session_id,

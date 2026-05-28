@@ -68,3 +68,25 @@ export interface SessionState {
   sessionId: string
   mode: Mode
 }
+
+// ── Chat History ──────────────────────────────────────────────────────────────
+export interface ChatSession {
+  session_id: string
+  mode: string
+  title: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatSessionsResponse {
+  sessions: ChatSession[]
+  total: number
+}
+
+export interface ChatSessionMessage {
+  id: string
+  role: 'user' | 'assistant' | 'tool'
+  content: string
+  tool_name: string | null
+  created_at: string
+}

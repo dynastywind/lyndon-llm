@@ -59,6 +59,11 @@ class SessionManager:
             session = self.get(session_id)
             if session:
                 return session
+            # Recreate in-memory with the same ID — covers server restarts,
+            # TTL expiry, and resuming a session from chat history.
+            session = Session(session_id=session_id, mode=mode)
+            self._sessions[session_id] = session
+            return session
         return self.create(mode)
 
     def switch_mode(self, session_id: str, mode: Mode) -> Session | None:

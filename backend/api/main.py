@@ -15,10 +15,19 @@ from config.settings import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup — create DB tables then register tools
+    await _init_db()
     _register_all_tools()
     yield
     # Shutdown — nothing to clean up yet
+
+
+async def _init_db() -> None:
+    """Create all tables if they don't exist yet (idempotent)."""
+    from db.base import engine, Base
+    import db.models  # noqa: F401 — side-effect: registers all models with Base.metadata
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 def _register_all_tools() -> None:

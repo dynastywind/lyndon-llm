@@ -6,15 +6,21 @@ import type { Mode, Message, Plan, FileDiff } from '@/types'
 interface AppState {
   // Session
   sessionId: string
+  setSessionId: (id: string) => void
   mode: Mode
   setMode: (mode: Mode) => void
 
   // Chat
   messages: Message[]
   addMessage: (msg: Omit<Message, 'id' | 'timestamp'>) => void
+  setMessages: (msgs: Message[]) => void
   clearMessages: () => void
   isStreaming: boolean
   setStreaming: (v: boolean) => void
+
+  // Used by Sidebar to know when to refresh the sessions list
+  sessionListVersion: number
+  bumpSessionVersion: () => void
 
   // Cowork
   currentPlan: Plan | null
@@ -32,6 +38,7 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       // Session
       sessionId: generateId(),
+      setSessionId: (id) => set({ sessionId: id }),
       mode: 'chat',
       setMode: (mode) => set({ mode }),
 
@@ -44,9 +51,14 @@ export const useAppStore = create<AppState>()(
             { ...msg, id: generateId(), timestamp: new Date() },
           ],
         })),
+      setMessages: (msgs) => set({ messages: msgs }),
       clearMessages: () => set({ messages: [] }),
       isStreaming: false,
       setStreaming: (v) => set({ isStreaming: v }),
+
+      sessionListVersion: 0,
+      bumpSessionVersion: () =>
+        set((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
 
       // Cowork
       currentPlan: null,
