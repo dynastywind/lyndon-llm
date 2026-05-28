@@ -3,7 +3,7 @@ import { streamChat } from '@/api/client'
 import { useAppStore } from '@/store'
 
 export function useStream() {
-  const { sessionId, addMessage, setStreaming, bumpSessionVersion } = useAppStore()
+  const { sessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom } = useAppStore()
 
   const send = useCallback(
     async (userMessage: string) => {
@@ -28,11 +28,12 @@ export function useStream() {
         })
       } finally {
         setStreaming(false)
+        bumpScrollToBottom()
         // Signal Sidebar to refresh the sessions list (title + updated_at changed)
         bumpSessionVersion()
       }
     },
-    [sessionId, addMessage, setStreaming, bumpSessionVersion],
+    [sessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom],
   )
 
   return { send }

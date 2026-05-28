@@ -122,3 +122,31 @@ class ChatRepo:
             ).scalars()
         )
         return rows
+
+    async def get_messages_before(
+        self,
+        session_id: str,
+        limit: int = 5,
+        before: datetime | None = None,
+    ) -> tuple[list[ChatMessage], bool]:
+        """
+        Return up to `limit` messages in chronological order, newest-first
+        in the DB query so we get the right slice, then reversed for display.
+
+        `before` is a cursor: only messages created strictly before this
+        timestamp are returned. This is stable even as new messages stream in.
+
+        Returns (messages_asc, has_more) where has_more=True means older
+        messages still exist before the returned batch.
+        """
+        q = select(ChatMessage).where(ChatMessage.session_id == session_id)
+        if before is not None:
+            q = q.where(ChatMessage.created_at < before)
+
+        # Fetch limit+1 to cheaply detect whether there are more
+        q = q.order_by(ChatMessage.created_at.desc()).limit(limit + 1)
+        rows = list((await self._db.execute(q)).scalars())
+
+        has_more = len(rows) > limit
+        rows = rows[:limit]          # drop the probe row
+        return list(reversed(rows)), has_more

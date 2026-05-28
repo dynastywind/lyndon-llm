@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,10 +69,19 @@ async def list_chat_sessions(
 
 
 @router.get("/sessions/{session_id}/messages")
-async def get_session_messages(session_id: str, db: AsyncSession = Depends(get_db)):
-    """Return all messages for a session (for history display / resumption)."""
+async def get_session_messages(
+    session_id: str,
+    limit: int = Query(default=5, ge=1, le=50),
+    before: Optional[str] = Query(default=None, description="ISO-8601 cursor — return messages older than this timestamp"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return up to `limit` messages before the cursor, newest-first then
+    reversed to chronological order. Used for paginated history loading.
+    """
     repo = ChatRepo(db)
-    messages = await repo.get_messages(session_id)
+    before_dt = datetime.fromisoformat(before) if before else None
+    messages, has_more = await repo.get_messages_before(session_id, limit, before_dt)
     return {
         "messages": [
             {
@@ -80,7 +92,8 @@ async def get_session_messages(session_id: str, db: AsyncSession = Depends(get_d
                 "created_at": m.created_at.isoformat(),
             }
             for m in messages
-        ]
+        ],
+        "has_more": has_more,
     }
 
 

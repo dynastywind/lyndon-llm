@@ -12,9 +12,9 @@ import {
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
-import { createChatSession, getChatMessages } from '@/api/client'
+import { createChatSession } from '@/api/client'
 import { SettingsDialog } from './SettingsDialog'
-import type { Mode, ChatSession, ChatSessionMessage } from '@/types'
+import type { Mode, ChatSession } from '@/types'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ export function Sidebar() {
   const {
     mode, setMode,
     sessionId, setSessionId,
-    setMessages, clearMessages,
+    clearMessages,
     bumpSessionVersion,
   } = useAppStore()
 
@@ -68,23 +68,11 @@ export function Sidebar() {
   }
 
   // ── resume session ─────────────────────────────────────────────────────────
+  // ChatWindow watches sessionId and loads messages itself.
 
-  const handleResumeSession = async (session: ChatSession) => {
+  const handleResumeSession = (session: ChatSession) => {
+    clearMessages()           // clear immediately to avoid flash of stale content
     setSessionId(session.session_id)
-    try {
-      const { messages: dbMessages } = await getChatMessages(session.session_id)
-      setMessages(
-        dbMessages.map((m: ChatSessionMessage) => ({
-          id: m.id,
-          role: m.role as 'user' | 'assistant' | 'tool',
-          content: m.content,
-          timestamp: new Date(m.created_at),
-          toolName: m.tool_name ?? undefined,
-        })),
-      )
-    } catch {
-      clearMessages()
-    }
   }
 
   // ─── render ───────────────────────────────────────────────────────────────

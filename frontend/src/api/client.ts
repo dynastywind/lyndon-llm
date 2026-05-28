@@ -54,8 +54,12 @@ export async function listChatSessions(
 
 export async function getChatMessages(
   sessionId: string,
-): Promise<{ messages: ChatSessionMessage[] }> {
-  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/messages`)
+  limit = 5,
+  before?: string,          // ISO-8601 cursor — fetch messages older than this
+): Promise<{ messages: ChatSessionMessage[]; has_more: boolean }> {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (before) params.set('before', before)
+  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/messages?${params}`)
   if (!res.ok) throw new Error(`Failed to load messages: ${res.statusText}`)
   return res.json()
 }

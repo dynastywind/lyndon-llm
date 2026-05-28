@@ -14,9 +14,14 @@ interface AppState {
   messages: Message[]
   addMessage: (msg: Omit<Message, 'id' | 'timestamp'>) => void
   setMessages: (msgs: Message[]) => void
+  prependMessages: (msgs: Message[]) => void
   clearMessages: () => void
   isStreaming: boolean
   setStreaming: (v: boolean) => void
+
+  // Signal ChatWindow to scroll to bottom (incremented, not boolean)
+  scrollToBottomTick: number
+  bumpScrollToBottom: () => void
 
   // Used by Sidebar to know when to refresh the sessions list
   sessionListVersion: number
@@ -52,9 +57,15 @@ export const useAppStore = create<AppState>()(
           ],
         })),
       setMessages: (msgs) => set({ messages: msgs }),
+      prependMessages: (msgs) =>
+        set((s) => ({ messages: [...msgs, ...s.messages] })),
       clearMessages: () => set({ messages: [] }),
       isStreaming: false,
       setStreaming: (v) => set({ isStreaming: v }),
+
+      scrollToBottomTick: 0,
+      bumpScrollToBottom: () =>
+        set((s) => ({ scrollToBottomTick: s.scrollToBottomTick + 1 })),
 
       sessionListVersion: 0,
       bumpSessionVersion: () =>

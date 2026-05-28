@@ -1,5 +1,5 @@
-import { useRef, useEffect, useState } from 'react'
-import { Send } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Send, Loader2 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -7,7 +7,10 @@ import rehypeKatex from 'rehype-katex'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
-import type { Message } from '@/types'
+import { getChatMessages } from '@/api/client'
+import type { Message, ChatSessionMessage } from '@/types'
+
+// ─── MessageBubble ────────────────────────────────────────────────────────────
 
 function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === 'user'
@@ -37,15 +40,150 @@ function MessageBubble({ msg }: { msg: Message }) {
   )
 }
 
+// ─── MoreDivider ──────────────────────────────────────────────────────────────
+
+function MoreDivider({ loading }: { loading: boolean }) {
+  return (
+    <div className="flex items-center gap-3 py-1 select-none">
+      <div className="flex-1 h-px bg-border" />
+      <span className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
+        {loading
+          ? <><Loader2 size={11} className="animate-spin" /> loading</>
+          : '— more —'}
+      </span>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  )
+}
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function toStoreMessage(m: ChatSessionMessage): Message {
+  return {
+    id: m.id,
+    role: m.role as 'user' | 'assistant' | 'tool',
+    content: m.content,
+    timestamp: new Date(m.created_at),
+    toolName: m.tool_name ?? undefined,
+  }
+}
+
+// ─── ChatWindow ───────────────────────────────────────────────────────────────
+
 export function ChatWindow() {
-  const { messages, isStreaming } = useAppStore()
+  const {
+    messages,
+    setMessages,
+    prependMessages,
+    isStreaming,
+    sessionId,
+    scrollToBottomTick,
+    bumpScrollToBottom,
+  } = useAppStore()
+
   const { send } = useStream()
   const [input, setInput] = useState('')
+
+  // Pagination state — reset whenever sessionId changes
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  // ISO cursor: the created_at of the oldest currently-displayed message
+  const cursorRef = useRef<string | undefined>(undefined)
+
+  // DOM refs
+  const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  // Saved scroll height before a prepend, so we can restore position
+  const savedScrollHeightRef = useRef(0)
+
+  // ── Load initial 5 messages when sessionId changes ────────────────────────
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    let cancelled = false
+
+    const loadInitial = async () => {
+      cursorRef.current = undefined
+      setHasMore(false)
+
+      try {
+        const { messages: raw, has_more } = await getChatMessages(sessionId, 5)
+        if (cancelled) return
+
+        const converted = raw.map(toStoreMessage)
+        setMessages(converted)
+        setHasMore(has_more)
+        if (converted.length > 0) {
+          cursorRef.current = raw[0].created_at   // oldest message = cursor for next fetch
+        }
+        bumpScrollToBottom()
+      } catch {
+        // new / empty session — messages already cleared by Sidebar
+      }
+    }
+
+    loadInitial()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId])
+
+  // ── Scroll to bottom when signalled ───────────────────────────────────────
+
+  useEffect(() => {
+    if (scrollToBottomTick > 0) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [scrollToBottomTick])
+
+  // ── Restore scroll position after prepend ─────────────────────────────────
+
+  useLayoutEffect(() => {
+    if (savedScrollHeightRef.current && scrollRef.current) {
+      scrollRef.current.scrollTop +=
+        scrollRef.current.scrollHeight - savedScrollHeightRef.current
+      savedScrollHeightRef.current = 0
+    }
+  })
+
+  // ── Load more (older) messages ────────────────────────────────────────────
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    // Save scroll height before React re-renders with new messages
+    savedScrollHeightRef.current = scrollRef.current?.scrollHeight ?? 0
+
+    try {
+      const { messages: raw, has_more } = await getChatMessages(
+        sessionId, 5, cursorRef.current,
+      )
+      const converted = raw.map(toStoreMessage)
+      prependMessages(converted)
+      setHasMore(has_more)
+      if (converted.length > 0) {
+        cursorRef.current = raw[0].created_at
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, hasMore, sessionId, prependMessages])
+
+  // ── IntersectionObserver on the top sentinel ──────────────────────────────
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasMore) return
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) loadMore() },
+      { threshold: 0.1 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore, loadMore])
+
+  // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,21 +193,33 @@ export function ChatWindow() {
     await send(msg)
   }
 
+  // ─── render ───────────────────────────────────────────────────────────────
+
   return (
     <div className="flex flex-col h-full">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto py-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto py-6">
         <div className="mx-auto w-full max-w-4xl px-4 space-y-4">
-          {messages.length === 0 && (
+
+          {/* Top sentinel — triggers loadMore when scrolled into view */}
+          {hasMore && (
+            <div ref={sentinelRef}>
+              <MoreDivider loading={loadingMore} />
+            </div>
+          )}
+
+          {messages.length === 0 && !hasMore && (
             <div className="flex items-center justify-center h-64">
               <p className="text-muted-foreground text-sm">
                 Ask anything — I can search the web or query your knowledge base.
               </p>
             </div>
           )}
+
           {messages.map((msg) => (
             <MessageBubble key={msg.id} msg={msg} />
           ))}
+
           <div ref={bottomRef} />
         </div>
       </div>
