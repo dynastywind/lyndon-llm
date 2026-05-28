@@ -3,6 +3,22 @@ export type Mode = 'chat' | 'cowork' | 'code'
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
+// ── Charts ────────────────────────────────────────────────────────────────────
+
+export interface ChartSeries {
+  key: string
+  name?: string
+  color?: string
+}
+
+export interface ChartSpec {
+  type: 'bar' | 'line' | 'area' | 'pie'
+  title: string
+  x_key: string
+  data: Record<string, unknown>[]
+  series: ChartSeries[]
+}
+
 export interface ToolCallRecord {
   /** Matches the tool_call_id from the OpenAI response. */
   id: string
@@ -21,6 +37,8 @@ export interface Message {
   toolName?: string
   /** Populated during streaming when the model invokes tools. */
   toolCalls?: ToolCallRecord[]
+  /** Charts emitted by render_chart tool calls. */
+  charts?: ChartSpec[]
 }
 
 // ── Cowork ────────────────────────────────────────────────────────────────────

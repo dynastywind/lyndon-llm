@@ -37,8 +37,10 @@ def _register_all_tools() -> None:
     # Chat tools (read-only)
     from chat.tools.web_search import WebSearchTool
     from chat.tools.rag_query import RAGQueryTool
+    from chat.tools.chart import RenderChartTool
     tool_registry.register(Mode.CHAT, WebSearchTool)
     tool_registry.register(Mode.CHAT, RAGQueryTool)
+    tool_registry.register(Mode.CHAT, RenderChartTool)
 
     # Cowork tools (read + write + exec)
     from cowork.tools.shell import ShellTool

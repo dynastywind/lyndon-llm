@@ -47,6 +47,10 @@ Do NOT search for general knowledge, historical facts, how-to explanations, \
 coding help, math, or anything your training already covers well.
 - **rag_query**: Call this when the user asks about documents, files, or \
 knowledge that may have been uploaded to your personal knowledge base.
+- **render_chart**: Call this whenever the user asks for a chart, graph, or \
+data visualization. Provide the complete dataset and series configuration. \
+You may combine with web_search: search first, then render a chart from \
+the results.
 
 ## Answering
 - When context or search results are provided, use them to answer accurately \
@@ -199,8 +203,18 @@ class ChatEngine:
                     yield {"type": "tool_start", "id": tc.id, "name": fn_name, "args": fn_args}
 
                     tool_result_text, success = await self._call_tool(tools, fn_name, fn_args)
-                    preview = (tool_result_text or "")[:200]
 
+                    # If the tool returned a chart spec, forward it as a dedicated event
+                    if success:
+                        chart_spec = _extract_chart_spec(fn_name, tool_result_text)
+                        if chart_spec:
+                            yield {"type": "chart", "spec": chart_spec}
+                            tool_result_text = (
+                                f"Chart '{chart_spec.get('title', '')}' "
+                                "created and displayed to the user."
+                            )
+
+                    preview = (tool_result_text or "")[:200]
                     yield {"type": "tool_result", "id": tc.id, "name": fn_name,
                            "success": success, "preview": preview}
 
@@ -373,6 +387,18 @@ def _parse_tool_calls_from_content(
 # ------------------------------------------------------------------ #
 #  Message serialisation helpers                                       #
 # ------------------------------------------------------------------ #
+
+def _extract_chart_spec(tool_name: str, result_text: str) -> dict | None:
+    """Return the chart spec dict if the result is from render_chart, else None."""
+    if tool_name != "render_chart":
+        return None
+    try:
+        from chat.tools.chart import CHART_SPEC_KEY
+        obj = json.loads(result_text or "")
+        return obj.get(CHART_SPEC_KEY)
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return None
+
 
 def _inject_tool_results(
     original_messages: list[dict],

@@ -4,17 +4,154 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import {
+  BarChart, Bar,
+  LineChart, Line,
+  AreaChart, Area,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer,
+} from 'recharts'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
 import { getChatMessages } from '@/api/client'
-import type { Message, ToolCallRecord, ChatSessionMessage } from '@/types'
+import type { Message, ToolCallRecord, ChartSpec, ChartSeries, ChatSessionMessage } from '@/types'
+
+// ─── ChartBlock ───────────────────────────────────────────────────────────────
+
+const CHART_COLORS = [
+  '#6366f1', '#22d3ee', '#f59e0b', '#10b981', '#f43f5e', '#a78bfa', '#fb923c',
+]
+
+const CHART_AXIS_STYLE = { fill: '#71717a', fontSize: 11 }
+const CHART_TOOLTIP_STYLE = {
+  backgroundColor: '#1c1c1e',
+  border: '1px solid #3f3f46',
+  borderRadius: 8,
+  color: '#e4e4e7',
+  fontSize: 12,
+}
+
+function resolvedSeries(spec: ChartSpec): ChartSeries[] {
+  if (spec.series?.length) return spec.series
+  const sample = spec.data[0] ?? {}
+  return Object.keys(sample)
+    .filter((k) => k !== spec.x_key)
+    .map((key) => ({ key }))
+}
+
+function ChartBlock({ spec }: { spec: ChartSpec }) {
+  const series = resolvedSeries(spec)
+
+  const colorOf = (i: number, override?: string) =>
+    override ?? CHART_COLORS[i % CHART_COLORS.length]
+
+  return (
+    <div className="mt-3 rounded-xl bg-black/20 border border-border/40 p-3">
+      {spec.title && (
+        <p className="text-xs font-semibold text-muted-foreground mb-3 text-center">
+          {spec.title}
+        </p>
+      )}
+
+      <ResponsiveContainer width="100%" height={220}>
+        {spec.type === 'pie' ? (
+          <PieChart>
+            <Pie
+              data={spec.data}
+              dataKey={series[0]?.key ?? 'value'}
+              nameKey={spec.x_key}
+              cx="50%" cy="50%"
+              outerRadius={80}
+              label={({ name, percent }) =>
+                `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+              }
+              labelLine={false}
+            >
+              {spec.data.map((_, i) => (
+                <Cell key={i} fill={colorOf(i)} />
+              ))}
+            </Pie>
+            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+            <Legend wrapperStyle={{ fontSize: 11, color: '#71717a' }} />
+          </PieChart>
+        ) : spec.type === 'line' ? (
+          <LineChart data={spec.data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+            <XAxis dataKey={spec.x_key} tick={CHART_AXIS_STYLE} />
+            <YAxis tick={CHART_AXIS_STYLE} width={36} />
+            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+            <Legend wrapperStyle={{ fontSize: 11, color: '#71717a' }} />
+            {series.map((s, i) => (
+              <Line
+                key={s.key}
+                type="monotone"
+                dataKey={s.key}
+                name={s.name ?? s.key}
+                stroke={colorOf(i, s.color)}
+                strokeWidth={2}
+                dot={false}
+              />
+            ))}
+          </LineChart>
+        ) : spec.type === 'area' ? (
+          <AreaChart data={spec.data}>
+            <defs>
+              {series.map((s, i) => (
+                <linearGradient key={s.key} id={`grad-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={colorOf(i, s.color)} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={colorOf(i, s.color)} stopOpacity={0}   />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+            <XAxis dataKey={spec.x_key} tick={CHART_AXIS_STYLE} />
+            <YAxis tick={CHART_AXIS_STYLE} width={36} />
+            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+            <Legend wrapperStyle={{ fontSize: 11, color: '#71717a' }} />
+            {series.map((s, i) => (
+              <Area
+                key={s.key}
+                type="monotone"
+                dataKey={s.key}
+                name={s.name ?? s.key}
+                stroke={colorOf(i, s.color)}
+                fill={`url(#grad-${s.key})`}
+                strokeWidth={2}
+              />
+            ))}
+          </AreaChart>
+        ) : (
+          /* default: bar */
+          <BarChart data={spec.data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+            <XAxis dataKey={spec.x_key} tick={CHART_AXIS_STYLE} />
+            <YAxis tick={CHART_AXIS_STYLE} width={36} />
+            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+            <Legend wrapperStyle={{ fontSize: 11, color: '#71717a' }} />
+            {series.map((s, i) => (
+              <Bar
+                key={s.key}
+                dataKey={s.key}
+                name={s.name ?? s.key}
+                fill={colorOf(i, s.color)}
+                radius={[3, 3, 0, 0]}
+              />
+            ))}
+          </BarChart>
+        )}
+      </ResponsiveContainer>
+    </div>
+  )
+}
 
 // ─── ToolCallRow ──────────────────────────────────────────────────────────────
 
 const TOOL_ICONS: Record<string, string> = {
-  web_search: '🔍',
-  rag_query: '📚',
+  web_search:   '🔍',
+  rag_query:    '📚',
+  render_chart: '📊',
 }
 
 function ToolCallRow({ call }: { call: ToolCallRecord }) {
@@ -62,6 +199,7 @@ function ToolCallsSection({ calls }: { calls: ToolCallRecord[] }) {
 
 function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === 'user'
+  const hasCharts = (msg.charts?.length ?? 0) > 0
 
   // Show blinking cursor only when: no content yet AND no tool is actively running
   const hasRunningTool = msg.toolCalls?.some((tc) => tc.status === 'running') ?? false
@@ -71,10 +209,13 @@ function MessageBubble({ msg }: { msg: Message }) {
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm',
+          'rounded-2xl px-4 py-2.5 text-sm',
+          // Widen the bubble when it contains charts
           isUser
-            ? 'bg-primary text-primary-foreground rounded-br-sm'
-            : 'bg-card border border-border rounded-bl-sm',
+            ? 'max-w-[75%] bg-primary text-primary-foreground rounded-br-sm'
+            : hasCharts
+            ? 'w-[85%] bg-card border border-border rounded-bl-sm'
+            : 'max-w-[75%] bg-card border border-border rounded-bl-sm',
         )}
       >
         {isUser ? (
@@ -84,13 +225,21 @@ function MessageBubble({ msg }: { msg: Message }) {
             {msg.toolCalls && msg.toolCalls.length > 0 && (
               <ToolCallsSection calls={msg.toolCalls} />
             )}
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
-              rehypePlugins={[rehypeKatex]}
-              className="prose prose-sm prose-invert max-w-none"
-            >
-              {msg.content || placeholder}
-            </ReactMarkdown>
+            {msg.charts?.map((spec, i) => (
+              <ChartBlock key={i} spec={spec} />
+            ))}
+            {(msg.content || (!hasCharts)) && (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                className={cn(
+                  'prose prose-sm prose-invert max-w-none',
+                  hasCharts && 'mt-2',
+                )}
+              >
+                {msg.content || placeholder}
+              </ReactMarkdown>
+            )}
           </>
         )}
       </div>

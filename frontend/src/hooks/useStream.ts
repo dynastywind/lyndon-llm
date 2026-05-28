@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { streamChat } from '@/api/client'
 import { useAppStore } from '@/store'
 import { generateId } from '@/lib/utils'
-import type { ToolCallRecord } from '@/types'
+import type { ToolCallRecord, ChartSpec } from '@/types'
 
 export function useStream() {
   const { sessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom } = useAppStore()
@@ -75,6 +75,19 @@ export function useStream() {
                     : tc,
                 )
                 msgs[idx] = { ...msgs[idx], toolCalls }
+                return { messages: msgs }
+              })
+              break
+            }
+
+            // ── Chart ─────────────────────────────────────────────────
+            case 'chart': {
+              const spec = data.spec as ChartSpec
+              useAppStore.setState((s) => {
+                const msgs = [...s.messages]
+                const idx = msgs.findIndex((m) => m.id === msgId)
+                if (idx < 0) return s
+                msgs[idx] = { ...msgs[idx], charts: [...(msgs[idx].charts ?? []), spec] }
                 return { messages: msgs }
               })
               break
