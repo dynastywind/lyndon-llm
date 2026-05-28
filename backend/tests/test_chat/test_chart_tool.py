@@ -38,8 +38,12 @@ async def test_render_chart_coerces_json_string_arrays():
 @pytest.mark.asyncio
 async def test_agentic_loop_stops_after_successful_chart(monkeypatch):
     from chat.engine import ChatEngine
+    from chat.tools.chart import RenderChartTool
     from core.permissions.gate import Mode
     from core.session.manager import Session
+    from core.tools.registry import tool_registry
+
+    tool_registry.register(Mode.CHAT, RenderChartTool)
 
     class FakeFunction:
         name = "render_chart"
