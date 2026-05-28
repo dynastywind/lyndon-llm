@@ -107,6 +107,55 @@ class LLMGateway:
             if delta.content:
                 yield delta.content
 
+    async def complete_with_tools_raw(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> ChatCompletionMessage:
+        """
+        Non-streaming call that accepts already-serialised message dicts and
+        tool schemas (OpenAI function-calling format).  Returns the full
+        ChatCompletionMessage so callers can inspect tool_calls.
+        """
+        response: ChatCompletion = await self._client.chat.completions.create(
+            model=model or settings.llm_model,
+            messages=messages,  # type: ignore[arg-type]
+            temperature=temperature if temperature is not None else settings.llm_temperature,
+            max_tokens=max_tokens or settings.llm_max_tokens,
+            tools=tools or None,  # type: ignore[arg-type]
+            tool_choice="auto",
+            stream=False,
+        )
+        return response.choices[0].message
+
+    async def stream_from_raw(
+        self,
+        messages: list[dict],
+        *,
+        model: str | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Streaming completion that accepts already-serialised message dicts.
+        Use this for the final answer after tool calls have been resolved.
+        """
+        response = await self._client.chat.completions.create(
+            model=model or settings.llm_model,
+            messages=messages,  # type: ignore[arg-type]
+            temperature=temperature if temperature is not None else settings.llm_temperature,
+            max_tokens=max_tokens or settings.llm_max_tokens,
+            stream=True,
+        )
+        async for chunk in response:
+            delta = chunk.choices[0].delta
+            if delta.content:
+                yield delta.content
+
     # ------------------------------------------------------------------ #
     #  Embeddings                                                          #
     # ------------------------------------------------------------------ #

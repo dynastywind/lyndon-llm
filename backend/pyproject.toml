@@ -23,6 +23,8 @@ dependencies = [
     "pypdf>=4.2",
     "httpx>=0.27",
     "beautifulsoup4>=4.12",
+    # Web search
+    "ddgs>=9.0",
     # Code block
     "gitpython>=3.1",
     # DB

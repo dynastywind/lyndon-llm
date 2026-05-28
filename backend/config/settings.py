@@ -63,10 +63,15 @@ class Settings(BaseSettings):
     rag_bm25_weight: float = 0.3            # hybrid retrieval weight
 
     # Web search
-    web_search_provider: str = "tavily"     # tavily | serpapi
+    web_search_provider: str = "duckduckgo"  # duckduckgo | google | tavily | serpapi
+    web_search_max_results: int = 5
+    # DuckDuckGo — no key required
+    # Google Custom Search (optional upgrade)
+    google_api_key: str = ""
+    google_cse_id: str = ""
+    # Tavily / SerpAPI (legacy)
     tavily_api_key: str = ""
     serpapi_api_key: str = ""
-    web_search_max_results: int = 5
 
     # Cowork
     cowork_shell_timeout: int = 30          # seconds
