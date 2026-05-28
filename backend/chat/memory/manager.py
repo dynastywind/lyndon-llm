@@ -33,6 +33,8 @@ class MemoryManager:
         Retrieve relevant long-term memories and prepend them to the
         system prompt so the LLM has cross-session context.
         """
+        self.short_term.set_system_prompt(base_prompt)
+
         memories = await self.long_term.retrieve(
             query=user_message,
             top_k=settings.long_term_top_k,
