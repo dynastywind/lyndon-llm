@@ -236,52 +236,70 @@ function ToolCallsSection({ calls }: { calls: ToolCallRecord[] }) {
   )
 }
 
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function formatTimestamp(date: Date): string {
+  const now = new Date()
+  const isToday     = date.toDateString() === now.toDateString()
+  const yesterday   = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const isYesterday = date.toDateString() === yesterday.toDateString()
+
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  if (isToday)     return time
+  if (isYesterday) return `Yesterday · ${time}`
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + time
+}
+
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
 function MessageBubble({ msg }: { msg: Message }) {
-  const isUser = msg.role === 'user'
+  const isUser    = msg.role === 'user'
   const hasCharts = (msg.charts?.length ?? 0) > 0
 
   // Show blinking cursor only when: no content yet AND no tool is actively running
   const hasRunningTool = msg.toolCalls?.some((tc) => tc.status === 'running') ?? false
-  const placeholder = hasRunningTool ? '' : '▌'
+  const placeholder    = hasRunningTool ? '' : '▌'
+
+  if (isUser) {
+    return (
+      <div className="flex justify-end">
+        {/* group/bubble owns max-w so the absolute tooltip stays within it */}
+        <div className="relative group/bubble max-w-[75%]">
+          <div className="rounded-2xl rounded-br-sm px-4 py-2.5 text-sm bg-primary text-primary-foreground">
+            <p className="whitespace-pre-wrap">{msg.content}</p>
+          </div>
+          {/* Timestamp tooltip — appears above the bubble on hover */}
+          <div className="absolute bottom-full right-0 mb-1.5 px-2 py-1 rounded-md bg-popover border border-border text-xs text-muted-foreground whitespace-nowrap shadow-sm opacity-0 group-hover/bubble:opacity-100 transition-opacity duration-150 pointer-events-none">
+            {formatTimestamp(msg.timestamp)}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
+    <div className="flex justify-start">
       <div
         className={cn(
-          'rounded-2xl px-4 py-2.5 text-sm',
-          // Widen the bubble when it contains charts
-          isUser
-            ? 'max-w-[75%] bg-primary text-primary-foreground rounded-br-sm'
-            : hasCharts
-            ? 'w-[85%] bg-card border border-border rounded-bl-sm'
-            : 'max-w-[75%] bg-card border border-border rounded-bl-sm',
+          'rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm bg-card border border-border',
+          hasCharts ? 'w-[85%]' : 'max-w-[75%]',
         )}
       >
-        {isUser ? (
-          <p className="whitespace-pre-wrap">{msg.content}</p>
-        ) : (
-          <>
-            {msg.toolCalls && msg.toolCalls.length > 0 && (
-              <ToolCallsSection calls={msg.toolCalls} />
-            )}
-            {msg.charts?.map((spec, i) => (
-              <ChartBlock key={i} spec={spec} />
-            ))}
-            {(msg.content || (!hasCharts)) && (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath]}
-                rehypePlugins={[rehypeKatex]}
-                className={cn(
-                  'prose prose-sm prose-invert max-w-none',
-                  hasCharts && 'mt-2',
-                )}
-              >
-                {msg.content || placeholder}
-              </ReactMarkdown>
-            )}
-          </>
+        {msg.toolCalls && msg.toolCalls.length > 0 && (
+          <ToolCallsSection calls={msg.toolCalls} />
+        )}
+        {msg.charts?.map((spec, i) => (
+          <ChartBlock key={i} spec={spec} />
+        ))}
+        {(msg.content || !hasCharts) && (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex]}
+            className={cn('prose prose-sm prose-invert max-w-none', hasCharts && 'mt-2')}
+          >
+            {msg.content || placeholder}
+          </ReactMarkdown>
         )}
       </div>
     </div>
