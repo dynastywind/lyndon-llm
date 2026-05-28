@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { generateId } from '@/lib/utils'
 import type { Mode, Message, Plan, FileDiff } from '@/types'
+import { CODE_THEME_DEFAULT } from '@/config/codeThemes'
+import type { CodeThemeName } from '@/config/codeThemes'
 
 interface AppState {
   // Session
@@ -36,6 +38,10 @@ interface AppState {
   setDiff: (diff: FileDiff | null) => void
   repoPath: string
   setRepoPath: (path: string) => void
+
+  // Appearance
+  codeTheme: CodeThemeName
+  setCodeTheme: (theme: CodeThemeName) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -80,10 +86,14 @@ export const useAppStore = create<AppState>()(
       setDiff: (diff) => set({ currentDiff: diff }),
       repoPath: '',
       setRepoPath: (path) => set({ repoPath: path }),
+
+      // Appearance
+      codeTheme: CODE_THEME_DEFAULT,
+      setCodeTheme: (codeTheme) => set({ codeTheme }),
     }),
     {
       name: 'lyndon-llm-store',
-      partialize: (s) => ({ sessionId: s.sessionId, repoPath: s.repoPath }),
+      partialize: (s) => ({ sessionId: s.sessionId, repoPath: s.repoPath, codeTheme: s.codeTheme }),
     },
   ),
 )

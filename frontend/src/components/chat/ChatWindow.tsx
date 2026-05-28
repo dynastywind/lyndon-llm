@@ -2,9 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, Component } 
 import type { ReactNode, ErrorInfo } from 'react'
 import { Send, Loader2, Check, AlertCircle, Copy } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { CODE_THEMES } from '@/config/codeThemes'
+import { CODE_THEME_DEFAULT } from '@/config/codeThemes'
 import {
   BarChart, Bar,
   LineChart, Line,
@@ -18,6 +22,60 @@ import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
 import { getChatMessages } from '@/api/client'
 import type { Message, ToolCallRecord, ChartSpec, ChartSeries, ChatSessionMessage } from '@/types'
+
+// ─── CodeBlock ────────────────────────────────────────────────────────────────
+
+function CodeBlock({ language, code }: { language: string | undefined; code: string }) {
+  const [copied, setCopied] = useState(false)
+  const themeName = useAppStore((s) => s.codeTheme)
+  const theme = CODE_THEMES[themeName] ?? CODE_THEMES[CODE_THEME_DEFAULT]
+  const lang = language ?? 'plaintext'
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <div className="my-3 rounded-lg overflow-hidden border border-border/50 text-sm">
+      {/* Header bar */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/80 border-b border-border/50">
+        <span className="text-[11px] font-mono text-muted-foreground/60 select-none">
+          {lang}
+        </span>
+        <button
+          onClick={handleCopy}
+          className={cn(
+            'flex items-center gap-1 text-[11px] transition-colors',
+            copied
+              ? 'text-green-400'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {copied ? <Check size={11} /> : <Copy size={11} />}
+          <span>{copied ? 'Copied!' : 'Copy'}</span>
+        </button>
+      </div>
+      {/* Syntax-highlighted code */}
+      <SyntaxHighlighter
+        language={lang}
+        style={theme}
+        PreTag="div"
+        customStyle={{
+          margin: 0,
+          borderRadius: 0,
+          fontSize: '0.8rem',
+          lineHeight: '1.6',
+          padding: '0.85rem 1rem',
+        }}
+        codeTagProps={{ style: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }}
+      >
+        {code}
+      </SyntaxHighlighter>
+    </div>
+  )
+}
 
 // ─── ChartBlock ───────────────────────────────────────────────────────────────
 
@@ -256,6 +314,32 @@ function formatTimestamp(date: Date): string {
   return date.toLocaleDateString([], { timeZone: tz, month: 'short', day: 'numeric' }) + ' · ' + time
 }
 
+// ─── Markdown component overrides ────────────────────────────────────────────
+// Defined at module level so the object reference is stable across renders.
+
+const MD_COMPONENTS: Components = {
+  // Suppress the <pre> wrapper — CodeBlock provides its own container.
+  pre({ children }) {
+    return <>{children}</>
+  },
+  // Route fenced code blocks to CodeBlock; style inline code distinctly.
+  code({ className, children }) {
+    const match = /language-(\w+)/.exec(className ?? '')
+    const code  = String(children).replace(/\n$/, '')
+
+    // Inline code: no language tag AND no newlines
+    if (!match && !code.includes('\n')) {
+      return (
+        <code className="rounded bg-zinc-800 px-1 py-0.5 text-[0.85em] font-mono text-zinc-200">
+          {children}
+        </code>
+      )
+    }
+
+    return <CodeBlock language={match?.[1]} code={code} />
+  },
+}
+
 // ─── MessageActions ───────────────────────────────────────────────────────────
 
 function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
@@ -335,6 +419,7 @@ function MessageBubble({ msg }: { msg: Message }) {
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath]}
               rehypePlugins={[rehypeKatex]}
+              components={MD_COMPONENTS}
               className={cn('prose prose-sm prose-invert max-w-none', hasCharts && 'mt-2')}
             >
               {msg.content || placeholder}
