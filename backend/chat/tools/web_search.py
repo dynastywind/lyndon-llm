@@ -26,7 +26,7 @@ class WebSearchTool(BaseTool):
 
     @require_permission(Permission.READ)
     async def run(self, query: str, max_results: int | None = None) -> ToolResult:  # type: ignore[override]
-        k = max_results or settings.web_search_max_results
+        k = int(max_results) if max_results is not None else settings.web_search_max_results
         provider = settings.web_search_provider
 
         try:
