@@ -192,6 +192,7 @@ class ChatEngine:
                 ))
 
                 round_results: list[tuple[str, str]] = []   # (tool_name, result_text)
+                chart_rendered = False
 
                 for tc in effective_calls:
                     fn_name = tc.function.name
@@ -209,6 +210,7 @@ class ChatEngine:
                         chart_spec = _extract_chart_spec(fn_name, tool_result_text)
                         if chart_spec:
                             yield {"type": "chart", "spec": chart_spec}
+                            chart_rendered = True
                             tool_result_text = (
                                 f"Chart '{chart_spec.get('title', '')}' "
                                 "created and displayed to the user."
@@ -224,6 +226,12 @@ class ChatEngine:
                         "tool_call_id": tc.id,
                         "content": tool_result_text,
                     })
+
+                if chart_rendered:
+                    # The chart event is already the user-visible result. Some
+                    # local models contradict successful tool calls when asked
+                    # to produce a follow-up answer, so end chart turns here.
+                    return
 
                 if is_synthetic:
                     # EXO / Llama 3.x path: the server doesn't understand tool-role

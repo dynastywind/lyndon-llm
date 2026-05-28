@@ -21,6 +21,23 @@ CHART_SPEC_KEY = "__chart_spec__"
 VALID_TYPES = ("bar", "line", "area", "pie")
 
 
+def _coerce_json_array(value: Any, field_name: str) -> tuple[list[dict] | None, str | None]:
+    """Accept either a real array or a JSON-encoded array from imperfect tool callers."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            return None, f"'{field_name}' must be an array or a JSON-encoded array."
+
+    if not isinstance(value, list):
+        return None, f"'{field_name}' must be an array."
+
+    if not all(isinstance(item, dict) for item in value):
+        return None, f"'{field_name}' must contain only objects."
+
+    return value, None
+
+
 class RenderChartTool(BaseTool):
     name = "render_chart"
     description = (
@@ -37,8 +54,8 @@ class RenderChartTool(BaseTool):
         type: str,
         title: str,
         x_key: str,
-        data: list[dict],
-        series: list[dict] | None = None,
+        data: list[dict] | str,
+        series: list[dict] | str | None = None,
     ) -> ToolResult:
         # ── Validation ───────────────────────────────────────────────────
         if type not in VALID_TYPES:
@@ -46,11 +63,27 @@ class RenderChartTool(BaseTool):
                 tool_name=self.name, success=False, output=None,
                 error=f"Invalid chart type '{type}'. Must be one of: {', '.join(VALID_TYPES)}",
             )
+
+        data, data_error = _coerce_json_array(data, "data")
+        if data_error:
+            return ToolResult(
+                tool_name=self.name, success=False, output=None,
+                error=data_error,
+            )
+
         if not data:
             return ToolResult(
                 tool_name=self.name, success=False, output=None,
                 error="'data' must be a non-empty array of objects.",
             )
+
+        if series is not None:
+            series, series_error = _coerce_json_array(series, "series")
+            if series_error:
+                return ToolResult(
+                    tool_name=self.name, success=False, output=None,
+                    error=series_error,
+                )
 
         # Auto-detect series from data keys when not supplied
         effective_series: list[dict] = series or []
