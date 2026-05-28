@@ -56,7 +56,7 @@ export function ChatWindow() {
     <div className="flex flex-col h-full">
       {/* Messages */}
       <div className="flex-1 overflow-y-auto py-6">
-        <div className="mx-auto w-full max-w-3xl px-4 space-y-4">
+        <div className="mx-auto w-full max-w-4xl px-4 space-y-4">
           {messages.length === 0 && (
             <div className="flex items-center justify-center h-64">
               <p className="text-muted-foreground text-sm">
@@ -75,7 +75,7 @@ export function ChatWindow() {
       <div className="border-t border-border py-3">
         <form
           onSubmit={handleSubmit}
-          className="mx-auto w-full max-w-3xl px-4 flex items-end gap-2"
+          className="mx-auto w-full max-w-4xl px-4 flex items-end gap-2"
         >
           <textarea
             value={input}
