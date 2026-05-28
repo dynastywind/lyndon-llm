@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, Component } from 'react'
+import type { ReactNode, ErrorInfo } from 'react'
 import { Send, Loader2, Check, AlertCircle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -24,13 +25,32 @@ const CHART_COLORS = [
   '#6366f1', '#22d3ee', '#f59e0b', '#10b981', '#f43f5e', '#a78bfa', '#fb923c',
 ]
 
-const CHART_AXIS_STYLE = { fill: '#71717a', fontSize: 11 }
-const CHART_TOOLTIP_STYLE = {
+const AXIS_STYLE  = { fill: '#71717a', fontSize: 11 }
+const LEGEND_STYLE = { fontSize: 11, color: '#71717a' }
+const TOOLTIP_STYLE = {
   backgroundColor: '#1c1c1e',
   border: '1px solid #3f3f46',
   borderRadius: 8,
   color: '#e4e4e7',
   fontSize: 12,
+}
+
+/** Coerce string-number values in data rows to actual numbers (model quirk). */
+function normaliseData(
+  data: Record<string, unknown>[],
+  xKey: string,
+): Record<string, unknown>[] {
+  return data.map((row) => {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(row)) {
+      if (k !== xKey && typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v))) {
+        out[k] = Number(v)
+      } else {
+        out[k] = v
+      }
+    }
+    return out
+  })
 }
 
 function resolvedSeries(spec: ChartSpec): ChartSeries[] {
@@ -41,11 +61,106 @@ function resolvedSeries(spec: ChartSpec): ChartSeries[] {
     .map((key) => ({ key }))
 }
 
-function ChartBlock({ spec }: { spec: ChartSpec }) {
-  const series = resolvedSeries(spec)
+/** Error boundary — prevents a Recharts crash from taking down the whole page. */
+class ChartErrorBoundary extends Component<
+  { children: ReactNode },
+  { crashed: boolean; message: string }
+> {
+  state = { crashed: false, message: '' }
+
+  static getDerivedStateFromError(err: Error) {
+    return { crashed: true, message: err.message }
+  }
+
+  componentDidCatch(err: Error, info: ErrorInfo) {
+    console.error('[ChartBlock]', err, info)
+  }
+
+  render() {
+    if (this.state.crashed) {
+      return (
+        <div className="mt-3 rounded-xl bg-black/20 border border-border/40 p-4 text-xs text-muted-foreground">
+          Chart could not be rendered: {this.state.message}
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+function ChartInner({ spec }: { spec: ChartSpec }) {
+  const data   = normaliseData(spec.data ?? [], spec.x_key)
+  const series = resolvedSeries({ ...spec, data })
 
   const colorOf = (i: number, override?: string) =>
     override ?? CHART_COLORS[i % CHART_COLORS.length]
+
+  const inner =
+    spec.type === 'pie' ? (
+      <PieChart>
+        <Pie
+          data={data}
+          dataKey={series[0]?.key ?? 'value'}
+          nameKey={spec.x_key}
+          cx="50%" cy="50%"
+          outerRadius={80}
+          label={({ name, percent }) =>
+            `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+          }
+          labelLine={false}
+        >
+          {data.map((_, i) => <Cell key={i} fill={colorOf(i)} />)}
+        </Pie>
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
+        <Legend wrapperStyle={LEGEND_STYLE} />
+      </PieChart>
+    ) : spec.type === 'line' ? (
+      <LineChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+        <XAxis dataKey={spec.x_key} tick={AXIS_STYLE} />
+        <YAxis tick={AXIS_STYLE} width={36} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
+        <Legend wrapperStyle={LEGEND_STYLE} />
+        {series.map((s, i) => (
+          <Line key={s.key} type="monotone" dataKey={s.key}
+            name={s.name ?? s.key} stroke={colorOf(i, s.color)}
+            strokeWidth={2} dot={false} />
+        ))}
+      </LineChart>
+    ) : spec.type === 'area' ? (
+      <AreaChart data={data}>
+        <defs>
+          {series.map((s, i) => (
+            <linearGradient key={s.key} id={`grad-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor={colorOf(i, s.color)} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={colorOf(i, s.color)} stopOpacity={0}   />
+            </linearGradient>
+          ))}
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+        <XAxis dataKey={spec.x_key} tick={AXIS_STYLE} />
+        <YAxis tick={AXIS_STYLE} width={36} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
+        <Legend wrapperStyle={LEGEND_STYLE} />
+        {series.map((s, i) => (
+          <Area key={s.key} type="monotone" dataKey={s.key}
+            name={s.name ?? s.key} stroke={colorOf(i, s.color)}
+            fill={`url(#grad-${s.key})`} strokeWidth={2} />
+        ))}
+      </AreaChart>
+    ) : (
+      <BarChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+        <XAxis dataKey={spec.x_key} tick={AXIS_STYLE} />
+        <YAxis tick={AXIS_STYLE} width={36} />
+        <Tooltip contentStyle={TOOLTIP_STYLE} />
+        <Legend wrapperStyle={LEGEND_STYLE} />
+        {series.map((s, i) => (
+          <Bar key={s.key} dataKey={s.key} name={s.name ?? s.key}
+            fill={colorOf(i, s.color)} radius={[3, 3, 0, 0]} />
+        ))}
+      </BarChart>
+    )
 
   return (
     <div className="mt-3 rounded-xl bg-black/20 border border-border/40 p-3">
@@ -54,95 +169,21 @@ function ChartBlock({ spec }: { spec: ChartSpec }) {
           {spec.title}
         </p>
       )}
-
-      <ResponsiveContainer width="100%" height={220}>
-        {spec.type === 'pie' ? (
-          <PieChart>
-            <Pie
-              data={spec.data}
-              dataKey={series[0]?.key ?? 'value'}
-              nameKey={spec.x_key}
-              cx="50%" cy="50%"
-              outerRadius={80}
-              label={({ name, percent }) =>
-                `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
-              }
-              labelLine={false}
-            >
-              {spec.data.map((_, i) => (
-                <Cell key={i} fill={colorOf(i)} />
-              ))}
-            </Pie>
-            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-            <Legend wrapperStyle={{ fontSize: 11, color: '#71717a' }} />
-          </PieChart>
-        ) : spec.type === 'line' ? (
-          <LineChart data={spec.data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-            <XAxis dataKey={spec.x_key} tick={CHART_AXIS_STYLE} />
-            <YAxis tick={CHART_AXIS_STYLE} width={36} />
-            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-            <Legend wrapperStyle={{ fontSize: 11, color: '#71717a' }} />
-            {series.map((s, i) => (
-              <Line
-                key={s.key}
-                type="monotone"
-                dataKey={s.key}
-                name={s.name ?? s.key}
-                stroke={colorOf(i, s.color)}
-                strokeWidth={2}
-                dot={false}
-              />
-            ))}
-          </LineChart>
-        ) : spec.type === 'area' ? (
-          <AreaChart data={spec.data}>
-            <defs>
-              {series.map((s, i) => (
-                <linearGradient key={s.key} id={`grad-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={colorOf(i, s.color)} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={colorOf(i, s.color)} stopOpacity={0}   />
-                </linearGradient>
-              ))}
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-            <XAxis dataKey={spec.x_key} tick={CHART_AXIS_STYLE} />
-            <YAxis tick={CHART_AXIS_STYLE} width={36} />
-            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-            <Legend wrapperStyle={{ fontSize: 11, color: '#71717a' }} />
-            {series.map((s, i) => (
-              <Area
-                key={s.key}
-                type="monotone"
-                dataKey={s.key}
-                name={s.name ?? s.key}
-                stroke={colorOf(i, s.color)}
-                fill={`url(#grad-${s.key})`}
-                strokeWidth={2}
-              />
-            ))}
-          </AreaChart>
-        ) : (
-          /* default: bar */
-          <BarChart data={spec.data}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-            <XAxis dataKey={spec.x_key} tick={CHART_AXIS_STYLE} />
-            <YAxis tick={CHART_AXIS_STYLE} width={36} />
-            <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
-            <Legend wrapperStyle={{ fontSize: 11, color: '#71717a' }} />
-            {series.map((s, i) => (
-              <Bar
-                key={s.key}
-                dataKey={s.key}
-                name={s.name ?? s.key}
-                fill={colorOf(i, s.color)}
-                radius={[3, 3, 0, 0]}
-              />
-            ))}
-          </BarChart>
-        )}
-      </ResponsiveContainer>
+      {/* Explicit height div — required by Recharts v3 ResponsiveContainer */}
+      <div style={{ width: '100%', height: 220 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          {inner}
+        </ResponsiveContainer>
+      </div>
     </div>
+  )
+}
+
+function ChartBlock({ spec }: { spec: ChartSpec }) {
+  return (
+    <ChartErrorBoundary>
+      <ChartInner spec={spec} />
+    </ChartErrorBoundary>
   )
 }
 
