@@ -143,15 +143,22 @@ class ChatEngine:
         Runs tool calls until the model produces a plain-text response or
         MAX_TOOL_ROUNDS is reached, then streams the final answer as token events.
 
-        Handles two tool-call response styles:
-          • Structured  — response_msg.tool_calls is populated (standard OpenAI API)
-          • Content     — tool call is embedded as JSON in response_msg.content
-                          (EXO / servers that don't convert Llama's native tokens)
+        Two server behaviours are handled:
+
+        Structured (standard OpenAI API)
+          response_msg.tool_calls is populated → execute tools → append tool-role
+          messages → call model again → repeat until plain answer → stream.
+
+        Content / EXO (Llama 3.x servers that don't translate native tokens)
+          Tool call JSON appears in response_msg.content instead → extract via
+          _parse_tool_calls_from_content → execute tools → inject results directly
+          into the last user message → single streaming call.  No second round-trip
+          is attempted because EXO doesn't understand tool / tool_calls messages.
         """
-        messages: list[dict] = self.memory.get_messages()
+        original_messages: list[dict] = self.memory.get_messages()
+        messages: list[dict] = list(original_messages)
         tool_schemas = tool_registry.get_openai_schemas(Mode.CHAT)
         tools = tool_registry.get_tools(Mode.CHAT, self._gate)
-        tools_ran = False
 
         try:
             for _round in range(MAX_TOOL_ROUNDS):
@@ -161,6 +168,7 @@ class ChatEngine:
 
                 # Primary: structured tool_calls from the API
                 # Fallback: parse tool call JSON embedded in content (EXO / Llama 3.x)
+                is_synthetic = not response_msg.tool_calls
                 effective_calls = (
                     response_msg.tool_calls
                     or _parse_tool_calls_from_content(response_msg.content or "", tools)
@@ -172,15 +180,13 @@ class ChatEngine:
                         yield {"type": "token", "text": chunk}
                     return
 
-                # ── Tool calls (real or synthetic) ────────────────────────
-                tools_ran = True
-
-                # content is discarded for synthetic calls (it contains raw tokens)
-                is_synthetic = not response_msg.tool_calls
+                # ── Execute tool calls ────────────────────────────────────
                 messages.append(_build_tool_call_msg(
                     content=None if is_synthetic else response_msg.content,
                     tool_calls=effective_calls,
                 ))
+
+                round_results: list[tuple[str, str]] = []   # (tool_name, result_text)
 
                 for tc in effective_calls:
                     fn_name = tc.function.name
@@ -197,11 +203,21 @@ class ChatEngine:
                     yield {"type": "tool_result", "id": tc.id, "name": fn_name,
                            "success": success, "preview": preview}
 
+                    round_results.append((fn_name, tool_result_text))
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
                         "content": tool_result_text,
                     })
+
+                if is_synthetic:
+                    # EXO / Llama 3.x path: the server doesn't understand tool-role
+                    # messages.  Inject results into the user message and stream once
+                    # — no second round-trip.
+                    final_msgs = _inject_tool_results(original_messages, round_results)
+                    async for chunk in llm_gateway.stream_from_raw(final_msgs):
+                        yield {"type": "token", "text": chunk}
+                    return
 
             # Max rounds reached — stream final answer
             async for chunk in llm_gateway.stream_from_raw(messages):
@@ -210,8 +226,7 @@ class ChatEngine:
         except Exception as exc:
             yield {"type": "error", "message": str(exc)}
             # Fall back: plain streaming without tools
-            plain_messages = self.memory.get_messages()
-            async for chunk in llm_gateway.stream_from_raw(plain_messages):
+            async for chunk in llm_gateway.stream_from_raw(original_messages):
                 yield {"type": "token", "text": chunk}
 
     # ------------------------------------------------------------------ #
@@ -357,6 +372,41 @@ def _parse_tool_calls_from_content(
 # ------------------------------------------------------------------ #
 #  Message serialisation helpers                                       #
 # ------------------------------------------------------------------ #
+
+def _inject_tool_results(
+    original_messages: list[dict],
+    tool_results: list[tuple[str, str]],
+) -> list[dict]:
+    """
+    EXO / Llama 3.x fallback: rather than using tool-role messages (which EXO
+    doesn't understand), append the tool results as context inside the last
+    user message so the model can answer in one streaming call.
+    """
+    if not tool_results:
+        return original_messages
+
+    result_block = "\n\n".join(
+        f"[{name} result]\n{text}" for name, text in tool_results
+    )
+
+    enriched = list(original_messages)
+    # Find the last user turn and append the results to it
+    for i in range(len(enriched) - 1, -1, -1):
+        if enriched[i].get("role") == "user":
+            original_content = enriched[i].get("content") or ""
+            enriched[i] = {
+                **enriched[i],
+                "content": (
+                    f"{original_content}\n\n"
+                    f"---\n"
+                    f"Here are results retrieved by available tools:\n\n"
+                    f"{result_block}"
+                ),
+            }
+            break
+
+    return enriched
+
 
 def _build_tool_call_msg(content: str | None, tool_calls: list) -> dict:
     """Build the assistant message dict that precedes tool result messages."""
