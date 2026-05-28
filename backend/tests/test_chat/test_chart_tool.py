@@ -36,7 +36,7 @@ async def test_render_chart_coerces_json_string_arrays():
 
 
 @pytest.mark.asyncio
-async def test_agentic_loop_stops_after_successful_chart(monkeypatch):
+async def test_agentic_loop_continues_after_successful_chart(monkeypatch):
     from chat.engine import ChatEngine
     from chat.tools.chart import RenderChartTool
     from core.permissions.gate import Mode
@@ -65,12 +65,22 @@ async def test_agentic_loop_stops_after_successful_chart(monkeypatch):
         content = None
         tool_calls = [FakeToolCall()]
 
-    async def fake_complete_with_tools_raw(messages, tools):
-        return FakeMessage()
+    class FinalMessage:
+        content = "Here is the explanation."
+        tool_calls = []
 
-    async def fail_if_streamed(messages):
-        raise AssertionError("final LLM stream should not run after chart rendering")
-        yield ""
+    calls = 0
+    streamed_messages = None
+
+    async def fake_complete_with_tools_raw(messages, tools):
+        nonlocal calls
+        calls += 1
+        return FakeMessage() if calls == 1 else FinalMessage()
+
+    async def fake_stream_from_raw(messages):
+        nonlocal streamed_messages
+        streamed_messages = messages
+        yield "Here is the trend."
 
     from chat import engine as engine_module
 
@@ -79,7 +89,7 @@ async def test_agentic_loop_stops_after_successful_chart(monkeypatch):
         "complete_with_tools_raw",
         fake_complete_with_tools_raw,
     )
-    monkeypatch.setattr(engine_module.llm_gateway, "stream_from_raw", fail_if_streamed)
+    monkeypatch.setattr(engine_module.llm_gateway, "stream_from_raw", fake_stream_from_raw)
 
     engine = ChatEngine(Session("chart-session", Mode.CHAT))
     engine.memory.short_term.set_system_prompt("system")
@@ -91,4 +101,10 @@ async def test_agentic_loop_stops_after_successful_chart(monkeypatch):
         "tool_start",
         "chart",
         "tool_result",
+        "token",
     ]
+    assert events[-1]["text"] == "Here is the trend."
+    assert streamed_messages is not None
+    tool_message = streamed_messages[-1]["content"]
+    assert "render_chart tool succeeded" in tool_message
+    assert "already been rendered" in tool_message

@@ -327,6 +327,18 @@ const MD_COMPONENTS: Components = {
     const match = /language-(\w+)/.exec(className ?? '')
     const code  = String(children).replace(/\n$/, '')
 
+    if (match?.[1] === 'chart') {
+      try {
+        return <ChartBlock spec={JSON.parse(code) as ChartSpec} />
+      } catch {
+        return (
+          <div className="mt-3 rounded-xl bg-black/20 border border-border/40 p-4 text-xs text-muted-foreground">
+            Chart could not be rendered: invalid chart spec
+          </div>
+        )
+      }
+    }
+
     // Inline code: no language tag AND no newlines
     if (!match && !code.includes('\n')) {
       return (
@@ -386,7 +398,7 @@ function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
 
 function MessageBubble({ msg }: { msg: Message }) {
   const isUser    = msg.role === 'user'
-  const hasCharts = (msg.charts?.length ?? 0) > 0
+  const hasCharts = (msg.charts?.length ?? 0) > 0 || msg.content.includes('```chart')
 
   // Show blinking cursor only when: no content yet AND no tool is actively running
   const hasRunningTool = msg.toolCalls?.some((tc) => tc.status === 'running') ?? false
@@ -470,7 +482,6 @@ export function ChatWindow() {
     isStreaming,
     sessionId,
     scrollToBottomTick,
-    bumpScrollToBottom,
   } = useAppStore()
 
   const { send } = useStream()
@@ -488,6 +499,19 @@ export function ChatWindow() {
   const sentinelRef = useRef<HTMLDivElement>(null)
   // Saved scroll height before a prepend, so we can restore position
   const savedScrollHeightRef = useRef(0)
+  // Set while loading/resuming a session so history opens at the newest turn.
+  const pendingInitialScrollRef = useRef(false)
+
+  const scrollToLatest = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+    requestAnimationFrame(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+      }
+    })
+  }, [])
 
   // ── Load initial 5 messages when sessionId changes ────────────────────────
 
@@ -497,6 +521,7 @@ export function ChatWindow() {
     const loadInitial = async () => {
       cursorRef.current = undefined
       setHasMore(false)
+      pendingInitialScrollRef.current = true
 
       try {
         const { messages: raw, has_more } = await getChatMessages(sessionId, 5)
@@ -508,9 +533,9 @@ export function ChatWindow() {
         if (converted.length > 0) {
           cursorRef.current = raw[0].created_at   // oldest message = cursor for next fetch
         }
-        bumpScrollToBottom()
       } catch {
         // new / empty session — messages already cleared by Sidebar
+        pendingInitialScrollRef.current = false
       }
     }
 
@@ -524,10 +549,17 @@ export function ChatWindow() {
   // flash of the top of the conversation when opening history.
 
   useLayoutEffect(() => {
-    if (scrollToBottomTick > 0 && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    if (scrollToBottomTick > 0) {
+      scrollToLatest()
     }
-  }, [scrollToBottomTick])
+  }, [scrollToBottomTick, scrollToLatest])
+
+  useLayoutEffect(() => {
+    if (pendingInitialScrollRef.current && messages.length > 0) {
+      scrollToLatest()
+      pendingInitialScrollRef.current = false
+    }
+  }, [messages.length, sessionId, scrollToLatest])
 
   // ── Restore scroll position after prepend ─────────────────────────────────
 
@@ -542,7 +574,7 @@ export function ChatWindow() {
   // ── Load more (older) messages ────────────────────────────────────────────
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return
+    if (loadingMore || !hasMore || pendingInitialScrollRef.current) return
     setLoadingMore(true)
     // Save scroll height before React re-renders with new messages
     savedScrollHeightRef.current = scrollRef.current?.scrollHeight ?? 0

@@ -122,6 +122,8 @@ class ChatEngine:
         async for event in self._agentic_loop():
             if event["type"] == "token":
                 full_response += event["text"]
+            elif event["type"] == "chart":
+                full_response += _chart_spec_to_markdown(event["spec"])
             yield event
 
         # 5. Persist assistant turn & update session title
@@ -403,6 +405,11 @@ def _extract_chart_spec(tool_name: str, result_text: str) -> dict | None:
         return obj.get(CHART_SPEC_KEY)
     except (json.JSONDecodeError, AttributeError, TypeError):
         return None
+
+
+def _chart_spec_to_markdown(spec: dict) -> str:
+    """Embed a chart spec in assistant content so it persists in chat history."""
+    return "\n\n```chart\n" + json.dumps(spec, ensure_ascii=False) + "\n```\n\n"
 
 
 def _inject_tool_results(

@@ -4,6 +4,10 @@ import { useAppStore } from '@/store'
 import { generateId } from '@/lib/utils'
 import type { ToolCallRecord, ChartSpec } from '@/types'
 
+function chartSpecToMarkdown(spec: ChartSpec): string {
+  return `\n\n\`\`\`chart\n${JSON.stringify(spec)}\n\`\`\`\n\n`
+}
+
 export function useStream() {
   const { sessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom } = useAppStore()
 
@@ -87,7 +91,10 @@ export function useStream() {
                 const msgs = [...s.messages]
                 const idx = msgs.findIndex((m) => m.id === msgId)
                 if (idx < 0) return s
-                msgs[idx] = { ...msgs[idx], charts: [...(msgs[idx].charts ?? []), spec] }
+                msgs[idx] = {
+                  ...msgs[idx],
+                  content: msgs[idx].content + chartSpecToMarkdown(spec),
+                }
                 return { messages: msgs }
               })
               break
