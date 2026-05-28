@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, Component } from 'react'
 import type { ReactNode, ErrorInfo } from 'react'
-import { Send, Loader2, Check, AlertCircle } from 'lucide-react'
+import { Send, Loader2, Check, AlertCircle, Copy } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -256,6 +256,48 @@ function formatTimestamp(date: Date): string {
   return date.toLocaleDateString([], { timeZone: tz, month: 'short', day: 'numeric' }) + ' · ' + time
 }
 
+// ─── MessageActions ───────────────────────────────────────────────────────────
+
+function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(msg.content).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <div
+      className={cn(
+        'absolute -bottom-7 flex items-center gap-1',
+        isUser ? 'right-0' : 'left-0',
+        'opacity-0 group-hover/msg:opacity-100',
+        'pointer-events-none group-hover/msg:pointer-events-auto',
+        'transition-opacity duration-150',
+      )}
+    >
+      {isUser && (
+        <span className="text-[11px] text-muted-foreground/60 px-1 select-none">
+          {formatTimestamp(msg.timestamp)}
+        </span>
+      )}
+      <button
+        onClick={handleCopy}
+        title={copied ? 'Copied!' : 'Copy'}
+        className={cn(
+          'flex items-center justify-center w-6 h-6 rounded-md',
+          'bg-popover border border-border shadow-sm',
+          'text-muted-foreground hover:text-foreground hover:bg-accent',
+          'transition-colors',
+        )}
+      >
+        {copied ? <Check size={12} /> : <Copy size={12} />}
+      </button>
+    </div>
+  )
+}
+
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
 function MessageBubble({ msg }: { msg: Message }) {
@@ -268,44 +310,38 @@ function MessageBubble({ msg }: { msg: Message }) {
 
   if (isUser) {
     return (
-      <div className="flex justify-end">
-        {/* group/bubble owns max-w so the absolute tooltip stays within it */}
-        <div className="relative group/bubble max-w-[75%]">
+      <div className="flex justify-end pb-7">
+        <div className="relative group/msg max-w-[75%]">
           <div className="rounded-2xl rounded-br-sm px-4 py-2.5 text-sm bg-primary text-primary-foreground">
             <p className="whitespace-pre-wrap">{msg.content}</p>
           </div>
-          {/* Timestamp tooltip — appears above the bubble on hover */}
-          <div className="absolute bottom-full right-0 mb-1.5 px-2 py-1 rounded-md bg-popover border border-border text-xs text-muted-foreground whitespace-nowrap shadow-sm opacity-0 group-hover/bubble:opacity-100 transition-opacity duration-150 pointer-events-none">
-            {formatTimestamp(msg.timestamp)}
-          </div>
+          <MessageActions msg={msg} isUser={true} />
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex justify-start">
-      <div
-        className={cn(
-          'rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm bg-card border border-border',
-          hasCharts ? 'w-[85%]' : 'max-w-[75%]',
-        )}
-      >
-        {msg.toolCalls && msg.toolCalls.length > 0 && (
-          <ToolCallsSection calls={msg.toolCalls} />
-        )}
-        {msg.charts?.map((spec, i) => (
-          <ChartBlock key={i} spec={spec} />
-        ))}
-        {(msg.content || !hasCharts) && (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex]}
-            className={cn('prose prose-sm prose-invert max-w-none', hasCharts && 'mt-2')}
-          >
-            {msg.content || placeholder}
-          </ReactMarkdown>
-        )}
+    <div className="flex justify-start pb-7">
+      <div className={cn('relative group/msg', hasCharts ? 'w-[85%]' : 'max-w-[75%]')}>
+        <div className="rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm bg-card border border-border">
+          {msg.toolCalls && msg.toolCalls.length > 0 && (
+            <ToolCallsSection calls={msg.toolCalls} />
+          )}
+          {msg.charts?.map((spec, i) => (
+            <ChartBlock key={i} spec={spec} />
+          ))}
+          {(msg.content || !hasCharts) && (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+              className={cn('prose prose-sm prose-invert max-w-none', hasCharts && 'mt-2')}
+            >
+              {msg.content || placeholder}
+            </ReactMarkdown>
+          )}
+        </div>
+        <MessageActions msg={msg} isUser={false} />
       </div>
     </div>
   )
@@ -472,7 +508,7 @@ export function ChatWindow() {
     <div className="flex flex-col h-full">
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto py-6">
-        <div className="mx-auto w-full max-w-4xl px-4 space-y-4">
+        <div className="mx-auto w-full max-w-4xl px-4 space-y-1">
 
           {/* Top sentinel — triggers loadMore when scrolled into view */}
           {hasMore && (
