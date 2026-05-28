@@ -2,6 +2,8 @@ import { useRef, useEffect, useState } from 'react'
 import { Send } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
@@ -23,7 +25,8 @@ function MessageBubble({ msg }: { msg: Message }) {
           <p className="whitespace-pre-wrap">{msg.content}</p>
         ) : (
           <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex]}
             className="prose prose-sm prose-invert max-w-none"
           >
             {msg.content || '▌'}
