@@ -17,8 +17,11 @@ All yields are typed event dicts consumed by the SSE route:
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from chat.memory.manager import MemoryManager
 from chat.rag.retriever import HybridRetriever, RetrievedChunk
@@ -139,6 +142,11 @@ class ChatEngine:
         """
         Runs tool calls until the model produces a plain-text response or
         MAX_TOOL_ROUNDS is reached, then streams the final answer as token events.
+
+        Handles two tool-call response styles:
+          • Structured  — response_msg.tool_calls is populated (standard OpenAI API)
+          • Content     — tool call is embedded as JSON in response_msg.content
+                          (EXO / servers that don't convert Llama's native tokens)
         """
         messages: list[dict] = self.memory.get_messages()
         tool_schemas = tool_registry.get_openai_schemas(Mode.CHAT)
@@ -151,18 +159,30 @@ class ChatEngine:
                     messages, tool_schemas,
                 )
 
-                if not response_msg.tool_calls:
-                    # Stream the final answer
-                    src = messages if not tools_ran else messages
-                    async for chunk in llm_gateway.stream_from_raw(src):
+                # Primary: structured tool_calls from the API
+                # Fallback: parse tool call JSON embedded in content (EXO / Llama 3.x)
+                effective_calls = (
+                    response_msg.tool_calls
+                    or _parse_tool_calls_from_content(response_msg.content or "", tools)
+                )
+
+                if not effective_calls:
+                    # No tool calls — stream the final answer
+                    async for chunk in llm_gateway.stream_from_raw(messages):
                         yield {"type": "token", "text": chunk}
                     return
 
-                # ── Tool calls requested ──────────────────────────────────
+                # ── Tool calls (real or synthetic) ────────────────────────
                 tools_ran = True
-                messages.append(_assistant_tool_call_msg(response_msg))
 
-                for tc in response_msg.tool_calls:
+                # content is discarded for synthetic calls (it contains raw tokens)
+                is_synthetic = not response_msg.tool_calls
+                messages.append(_build_tool_call_msg(
+                    content=None if is_synthetic else response_msg.content,
+                    tool_calls=effective_calls,
+                ))
+
+                for tc in effective_calls:
                     fn_name = tc.function.name
                     try:
                         fn_args = json.loads(tc.function.arguments or "{}")
@@ -189,7 +209,7 @@ class ChatEngine:
 
         except Exception as exc:
             yield {"type": "error", "message": str(exc)}
-            # Fall back: stream without tools
+            # Fall back: plain streaming without tools
             plain_messages = self.memory.get_messages()
             async for chunk in llm_gateway.stream_from_raw(plain_messages):
                 yield {"type": "token", "text": chunk}
@@ -234,14 +254,115 @@ class ChatEngine:
 
 
 # ------------------------------------------------------------------ #
+#  Synthetic tool-call types (used when the server embeds tool calls  #
+#  in content instead of returning structured tool_calls)             #
+# ------------------------------------------------------------------ #
+
+@dataclass
+class _SyntheticFunction:
+    name: str
+    arguments: str          # JSON-encoded string, matching OpenAI API shape
+
+
+@dataclass
+class _SyntheticToolCall:
+    id: str
+    function: _SyntheticFunction
+
+
+# ------------------------------------------------------------------ #
+#  Content parser — EXO / Llama 3.x fallback                         #
+# ------------------------------------------------------------------ #
+
+# Llama 3 special tokens that may wrap tool-call JSON in content
+_LLAMA_TOKEN_RE = re.compile(r'<\|[^|>]+\|>')
+
+
+def _extract_json_objects(text: str) -> list[dict]:
+    """Extract all top-level JSON objects from text using brace counting."""
+    objects: list[dict] = []
+    depth = 0
+    start = -1
+    for i, ch in enumerate(text):
+        if ch == '{':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0 and start >= 0:
+                try:
+                    obj = json.loads(text[start : i + 1])
+                    if isinstance(obj, dict):
+                        objects.append(obj)
+                except json.JSONDecodeError:
+                    pass
+                start = -1
+    return objects
+
+
+def _parse_tool_calls_from_content(
+    content: str,
+    available_tools: dict,
+) -> list[_SyntheticToolCall]:
+    """
+    Fallback parser for servers (e.g. EXO) that put Llama 3.x tool calls
+    in the message content instead of the tool_calls field.
+
+    Recognises the Llama 3 native format:
+        {"name": "<tool>", "parameters": {...}}
+
+    and the OpenAI-alike format:
+        {"name": "<tool>", "arguments": {...}}
+    """
+    if not content:
+        return []
+
+    # Strip Llama special tokens so the JSON is cleanly extractable
+    clean = _LLAMA_TOKEN_RE.sub('', content).strip()
+
+    calls: list[_SyntheticToolCall] = []
+    seen: set[str] = set()
+
+    for obj in _extract_json_objects(clean):
+        name = obj.get('name')
+        # Only accept known tool names to avoid false positives
+        if not name or name not in available_tools or name in seen:
+            continue
+        seen.add(name)
+
+        params = (
+            obj.get('parameters')       # Llama 3 native
+            or obj.get('arguments')     # OpenAI-alike
+            or obj.get('input')         # some models use "input"
+            or {}
+        )
+        if isinstance(params, str):
+            try:
+                params = json.loads(params)
+            except json.JSONDecodeError:
+                params = {}
+
+        calls.append(_SyntheticToolCall(
+            id=f"call_{uuid4().hex[:8]}",
+            function=_SyntheticFunction(
+                name=name,
+                arguments=json.dumps(params),
+            ),
+        ))
+
+    return calls
+
+
+# ------------------------------------------------------------------ #
 #  Message serialisation helpers                                       #
 # ------------------------------------------------------------------ #
 
-def _assistant_tool_call_msg(response_msg) -> dict:
-    """Convert a ChatCompletionMessage with tool_calls to a plain dict."""
+def _build_tool_call_msg(content: str | None, tool_calls: list) -> dict:
+    """Build the assistant message dict that precedes tool result messages."""
     return {
         "role": "assistant",
-        "content": response_msg.content,  # may be None
+        "content": content,
         "tool_calls": [
             {
                 "id": tc.id,
@@ -251,6 +372,6 @@ def _assistant_tool_call_msg(response_msg) -> dict:
                     "arguments": tc.function.arguments,
                 },
             }
-            for tc in (response_msg.tool_calls or [])
+            for tc in tool_calls
         ],
     }
