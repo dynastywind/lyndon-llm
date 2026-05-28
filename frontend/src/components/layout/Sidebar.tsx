@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   MessageSquare,
   Wrench,
@@ -6,6 +7,7 @@ import {
   Settings,
   Plus,
   Loader2,
+  Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
@@ -47,7 +49,7 @@ export function Sidebar() {
     bumpSessionVersion,
   } = useAppStore()
 
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
 
   const { sessions, loading, loadingMore, hasMore, sentinelRef } =
     useChatHistory(mode === 'chat' ? 'chat' : mode === 'cowork' ? 'cowork' : 'code')
@@ -59,9 +61,8 @@ export function Sidebar() {
       const session = await createChatSession()
       setSessionId(session.session_id)
       clearMessages()
-      bumpSessionVersion()   // refresh recents immediately
+      bumpSessionVersion()
     } catch {
-      // fallback: generate a local id and clear messages
       clearMessages()
     }
   }
@@ -130,13 +131,13 @@ export function Sidebar() {
             </button>
           )}
           {mode === 'cowork' && (
-            <button className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors opacity-50 cursor-not-allowed" disabled>
+            <button disabled className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground opacity-50 cursor-not-allowed">
               <Plus size={15} />
               New Task
             </button>
           )}
           {mode === 'code' && (
-            <button className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors opacity-50 cursor-not-allowed" disabled>
+            <button disabled className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground opacity-50 cursor-not-allowed">
               <Plus size={15} />
               New Session
             </button>
@@ -182,15 +183,39 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Settings button */}
+      {/* Settings — dropdown trigger */}
       <div className="px-3 pb-2 shrink-0">
-        <button
-          onClick={() => setSettingsOpen(true)}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-        >
-          <Settings size={18} className="shrink-0" />
-          <span className="text-sm font-medium">Settings</span>
-        </button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors text-muted-foreground hover:bg-accent hover:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground">
+              <Settings size={18} className="shrink-0" />
+              <span className="text-sm font-medium">Settings</span>
+            </button>
+          </DropdownMenu.Trigger>
+
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              side="top"
+              align="start"
+              sideOffset={4}
+              className={cn(
+                'z-50 min-w-[180px] rounded-lg border border-border bg-card p-1 shadow-lg',
+                'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+                'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+                'data-[side=top]:slide-in-from-bottom-2',
+              )}
+            >
+              <DropdownMenu.Item
+                onSelect={() => setUploadOpen(true)}
+                className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-foreground cursor-pointer select-none outline-none hover:bg-accent focus:bg-accent transition-colors"
+              >
+                <Upload size={14} className="text-muted-foreground shrink-0" />
+                Upload source
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       </div>
 
       {/* Footer */}
@@ -198,7 +223,7 @@ export function Sidebar() {
         <p className="text-xs text-muted-foreground">Local model · localhost:52415</p>
       </div>
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog open={uploadOpen} onOpenChange={setUploadOpen} />
     </aside>
   )
 }
@@ -219,7 +244,7 @@ function SessionRow({
       <button
         onClick={() => onSelect(session)}
         className={cn(
-          'w-full text-left px-2.5 py-2 rounded-lg transition-colors group',
+          'w-full text-left px-2.5 py-2 rounded-lg transition-colors',
           active
             ? 'bg-accent text-accent-foreground'
             : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
