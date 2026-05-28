@@ -27,6 +27,8 @@ class VectorStoreBase:
 
     async def delete_by_source(self, source: str) -> None: ...
 
+    async def list_sources(self) -> list[str]: ...
+
 
 class ChromaVectorStore(VectorStoreBase):
     def __init__(self, collection_name: str) -> None:
@@ -74,6 +76,16 @@ class ChromaVectorStore(VectorStoreBase):
         result = col.get(where={"source": source}, include=[])
         if result["ids"]:
             col.delete(ids=result["ids"])
+
+    async def list_sources(self) -> list[str]:
+        """Return sorted list of distinct source paths in the collection."""
+        result = self._get_col().get(include=["metadatas"])
+        sources = sorted({
+            m.get("source", "")
+            for m in (result.get("metadatas") or [])
+            if m.get("source")
+        })
+        return sources
 
 
 class QdrantVectorStore(VectorStoreBase):
@@ -153,6 +165,25 @@ class QdrantVectorStore(VectorStoreBase):
                 filter=Filter(must=[FieldCondition(key="source", match=MatchValue(value=source))])
             ),
         )
+
+    async def list_sources(self) -> list[str]:
+        """Scroll all points and collect distinct source values."""
+        sources: set[str] = set()
+        offset = None
+        while True:
+            results, offset = self._client.scroll(
+                collection_name=self._collection,
+                with_payload=True,
+                limit=256,
+                offset=offset,
+            )
+            for point in results:
+                src = (point.payload or {}).get("source", "")
+                if src:
+                    sources.add(src)
+            if offset is None:
+                break
+        return sorted(sources)
 
 
 _instances: dict[str, VectorStoreBase] = {}

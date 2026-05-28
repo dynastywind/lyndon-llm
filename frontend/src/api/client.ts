@@ -41,6 +41,35 @@ export async function ingestDocument(source: string): Promise<{ chunks_stored: n
   return res.json()
 }
 
+// ── RAG management ────────────────────────────────────────────────────────────
+
+export async function uploadRagFile(
+  file: File,
+): Promise<{ filename: string; path: string; chunks_stored: number }> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASE}/rag/upload`, { method: 'POST', body: form })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export async function listRagSources(): Promise<{ sources: string[] }> {
+  const res = await fetch(`${BASE}/rag/sources`)
+  if (!res.ok) throw new Error(`Failed to list sources: ${res.statusText}`)
+  return res.json()
+}
+
+export async function deleteRagSource(source: string): Promise<void> {
+  const res = await fetch(
+    `${BASE}/rag/sources?source=${encodeURIComponent(source)}`,
+    { method: 'DELETE' },
+  )
+  if (!res.ok) throw new Error(`Failed to delete source: ${res.statusText}`)
+}
+
 // ── Cowork ────────────────────────────────────────────────────────────────────
 export async function createPlan(goal: string, sessionId: string): Promise<Plan> {
   const res = await fetch(`${BASE}/cowork/plan`, {

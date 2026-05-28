@@ -1,6 +1,8 @@
-import { MessageSquare, Wrench, Code2 } from 'lucide-react'
+import { useState } from 'react'
+import { MessageSquare, Wrench, Code2, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { SettingsDialog } from './SettingsDialog'
 import type { Mode } from '@/types'
 
 const MODES: { id: Mode; label: string; icon: React.ElementType; description: string }[] = [
@@ -11,6 +13,7 @@ const MODES: { id: Mode; label: string; icon: React.ElementType; description: st
 
 export function Sidebar() {
   const { mode, setMode } = useAppStore()
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
     <aside className="flex flex-col w-56 h-screen bg-card border-r border-border shrink-0">
@@ -47,10 +50,23 @@ export function Sidebar() {
         ))}
       </nav>
 
+      {/* Settings button — sits above the footer */}
+      <div className="px-3 pb-2">
+        <button
+          onClick={() => setSettingsOpen(true)}
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          <Settings size={18} className="shrink-0" />
+          <span className="text-sm font-medium">Settings</span>
+        </button>
+      </div>
+
       {/* Footer */}
       <div className="px-4 py-3 border-t border-border">
         <p className="text-xs text-muted-foreground">Local model · localhost:52415</p>
       </div>
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </aside>
   )
 }
