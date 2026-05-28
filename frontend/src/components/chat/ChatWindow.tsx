@@ -128,10 +128,12 @@ export function ChatWindow() {
   }, [sessionId])
 
   // ── Scroll to bottom when signalled ───────────────────────────────────────
+  // useLayoutEffect fires before the browser paints, so there is no visible
+  // flash of the top of the conversation when opening history.
 
-  useEffect(() => {
-    if (scrollToBottomTick > 0) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  useLayoutEffect(() => {
+    if (scrollToBottomTick > 0 && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [scrollToBottomTick])
 

@@ -8,6 +8,7 @@ export function useStream() {
   const send = useCallback(
     async (userMessage: string) => {
       addMessage({ role: 'user', content: userMessage })
+      bumpScrollToBottom()   // show user's message immediately
       setStreaming(true)
 
       let buffer = ''
