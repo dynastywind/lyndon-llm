@@ -4,18 +4,21 @@ Chat Engine — conversation loop for Chat mode.
 Agentic tool loop:
   1. Build messages from memory (system + history + user turn)
   2. Call the LLM non-streaming with registered tools exposed
-  3. If the model requests tool calls → execute them, stream status hints,
+  3. If the model requests tool calls → execute them, emit SSE events,
      append results to message list, repeat (max MAX_TOOL_ROUNDS)
-  4. Stream the final answer back to the client
+  4. Stream the final answer back as token events
 
-RAG context is injected into the system prompt before the loop so retrieval
-results are always available to the model regardless of whether it uses tools.
+All yields are typed event dicts consumed by the SSE route:
+  {"type": "token",       "text": "…"}
+  {"type": "tool_start",  "id": "…", "name": "…", "args": {…}}
+  {"type": "tool_result", "id": "…", "name": "…", "success": bool, "preview": "…"}
+  {"type": "error",       "message": "…"}
 """
 from __future__ import annotations
 
 import json
 from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from chat.memory.manager import MemoryManager
 from chat.rag.retriever import HybridRetriever, RetrievedChunk
@@ -79,7 +82,7 @@ class ChatEngine:
     async def stream_response(
         self,
         user_message: str,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         await event_bus.emit(Events.CHAT_MESSAGE_RECEIVED, {
             "session_id": self.session.session_id,
             "message": user_message,
@@ -106,11 +109,12 @@ class ChatEngine:
         self.memory.add_user_turn(user_message)
         await self.memory.maybe_compress()
 
-        # 4. Run the agentic tool loop
+        # 4. Run the agentic tool loop — collect text for memory
         full_response = ""
-        async for chunk in self._agentic_loop():
-            full_response += chunk
-            yield chunk
+        async for event in self._agentic_loop():
+            if event["type"] == "token":
+                full_response += event["text"]
+            yield event
 
         # 5. Persist assistant turn & update session title
         self.memory.add_assistant_turn(full_response)
@@ -131,19 +135,14 @@ class ChatEngine:
     #  Agentic loop                                                        #
     # ------------------------------------------------------------------ #
 
-    async def _agentic_loop(self) -> AsyncGenerator[str, None]:
+    async def _agentic_loop(self) -> AsyncGenerator[dict[str, Any], None]:
         """
         Runs tool calls until the model produces a plain-text response or
-        MAX_TOOL_ROUNDS is reached, then streams the final answer.
+        MAX_TOOL_ROUNDS is reached, then streams the final answer as token events.
         """
-        # Serialise current memory to raw message dicts
         messages: list[dict] = self.memory.get_messages()
-
-        # Get OpenAI-format tool schemas for Chat mode
         tool_schemas = tool_registry.get_openai_schemas(Mode.CHAT)
-        # Instantiated tools for execution
         tools = tool_registry.get_tools(Mode.CHAT, self._gate)
-
         tools_ran = False
 
         try:
@@ -153,25 +152,14 @@ class ChatEngine:
                 )
 
                 if not response_msg.tool_calls:
-                    # Model is done with tool use — stream the final answer
-                    if tools_ran:
-                        # Append assistant message (no tool_calls) and stream
-                        messages.append({
-                            "role": "assistant",
-                            "content": response_msg.content or "",
-                        })
-                        async for chunk in llm_gateway.stream_from_raw(messages[:-1]):
-                            yield chunk
-                    else:
-                        # First call had no tool calls — stream fresh (better UX)
-                        async for chunk in llm_gateway.stream_from_raw(messages):
-                            yield chunk
+                    # Stream the final answer
+                    src = messages if not tools_ran else messages
+                    async for chunk in llm_gateway.stream_from_raw(src):
+                        yield {"type": "token", "text": chunk}
                     return
 
                 # ── Tool calls requested ──────────────────────────────────
                 tools_ran = True
-
-                # Append the assistant's tool-call turn (required by the API)
                 messages.append(_assistant_tool_call_msg(response_msg))
 
                 for tc in response_msg.tool_calls:
@@ -181,30 +169,30 @@ class ChatEngine:
                     except json.JSONDecodeError:
                         fn_args = {}
 
-                    # Yield a visible status hint to the frontend
-                    hint = _tool_status_hint(fn_name, fn_args)
-                    yield hint
+                    yield {"type": "tool_start", "id": tc.id, "name": fn_name, "args": fn_args}
 
-                    # Execute the tool
-                    tool_result_text = await self._call_tool(tools, fn_name, fn_args)
+                    tool_result_text, success = await self._call_tool(tools, fn_name, fn_args)
+                    preview = (tool_result_text or "")[:200]
 
-                    # Append tool result message
+                    yield {"type": "tool_result", "id": tc.id, "name": fn_name,
+                           "success": success, "preview": preview}
+
                     messages.append({
                         "role": "tool",
                         "tool_call_id": tc.id,
                         "content": tool_result_text,
                     })
 
-            # Max rounds reached — stream a final answer with the accumulated context
+            # Max rounds reached — stream final answer
             async for chunk in llm_gateway.stream_from_raw(messages):
-                yield chunk
+                yield {"type": "token", "text": chunk}
 
         except Exception as exc:
-            # Model doesn't support function calling or an unexpected error occurred.
-            # Fall back to plain streaming without tools.
-            yield f"\n\n*(tool system unavailable: {exc})*\n\n"
-            async for chunk in llm_gateway.stream_from_raw(messages):
-                yield chunk
+            yield {"type": "error", "message": str(exc)}
+            # Fall back: stream without tools
+            plain_messages = self.memory.get_messages()
+            async for chunk in llm_gateway.stream_from_raw(plain_messages):
+                yield {"type": "token", "text": chunk}
 
     # ------------------------------------------------------------------ #
     #  Helpers                                                             #
@@ -215,17 +203,18 @@ class ChatEngine:
         tools: dict,
         fn_name: str,
         fn_args: dict,
-    ) -> str:
+    ) -> tuple[str, bool]:
+        """Execute a tool and return (result_text, success)."""
         tool = tools.get(fn_name)
         if tool is None:
-            return f"Error: unknown tool '{fn_name}'"
+            return f"Error: unknown tool '{fn_name}'", False
         try:
             result = await tool.run(**fn_args)
             if result.success:
-                return result.output or "(empty result)"
-            return f"Tool error: {result.error}"
+                return result.output or "(empty result)", True
+            return f"Tool error: {result.error}", False
         except Exception as exc:
-            return f"Tool execution error: {exc}"
+            return f"Tool execution error: {exc}", False
 
     async def _retrieve(self, query: str) -> list[RetrievedChunk]:
         try:
@@ -250,30 +239,18 @@ class ChatEngine:
 
 def _assistant_tool_call_msg(response_msg) -> dict:
     """Convert a ChatCompletionMessage with tool_calls to a plain dict."""
-    tool_calls_serialised = [
-        {
-            "id": tc.id,
-            "type": "function",
-            "function": {
-                "name": tc.function.name,
-                "arguments": tc.function.arguments,
-            },
-        }
-        for tc in (response_msg.tool_calls or [])
-    ]
     return {
         "role": "assistant",
         "content": response_msg.content,  # may be None
-        "tool_calls": tool_calls_serialised,
+        "tool_calls": [
+            {
+                "id": tc.id,
+                "type": "function",
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": tc.function.arguments,
+                },
+            }
+            for tc in (response_msg.tool_calls or [])
+        ],
     }
-
-
-def _tool_status_hint(fn_name: str, fn_args: dict) -> str:
-    """Return a short Markdown status line to stream to the client."""
-    if fn_name == "web_search":
-        query = fn_args.get("query", "…")
-        return f"\n> 🔍 Searching the web for **{query}**…\n\n"
-    if fn_name == "rag_query":
-        query = fn_args.get("query", "…")
-        return f"\n> 📚 Querying knowledge base for **{query}**…\n\n"
-    return f"\n> ⚙️ Running **{fn_name}**…\n\n"

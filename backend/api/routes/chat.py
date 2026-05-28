@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -29,6 +30,11 @@ class IngestRequest(BaseModel):
 
 # ── Chat stream ───────────────────────────────────────────────────────────────
 
+def _sse(event_type: str, data: dict) -> str:
+    """Format a single SSE frame."""
+    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+
 @router.post("/")
 async def chat(
     body: ChatRequest,
@@ -38,10 +44,20 @@ async def chat(
     engine = ChatEngine(session, db=db)
 
     async def _generate():
-        async for chunk in engine.stream_response(body.message):
-            yield chunk
+        async for event in engine.stream_response(body.message):
+            evt_type = event["type"]
+            payload = {k: v for k, v in event.items() if k != "type"}
+            yield _sse(evt_type, payload)
+        yield _sse("done", {})
 
-    return StreamingResponse(_generate(), media_type="text/plain")
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # disable nginx buffering
+        },
+    )
 
 
 # ── Session management ────────────────────────────────────────────────────────

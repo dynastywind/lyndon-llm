@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Loader2, Check, AlertCircle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -8,12 +8,65 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
 import { getChatMessages } from '@/api/client'
-import type { Message, ChatSessionMessage } from '@/types'
+import type { Message, ToolCallRecord, ChatSessionMessage } from '@/types'
+
+// ─── ToolCallRow ──────────────────────────────────────────────────────────────
+
+const TOOL_ICONS: Record<string, string> = {
+  web_search: '🔍',
+  rag_query: '📚',
+}
+
+function ToolCallRow({ call }: { call: ToolCallRecord }) {
+  const icon = TOOL_ICONS[call.name] ?? '⚙️'
+  const query = (call.args.query as string | undefined) ?? call.name
+  const label =
+    call.name === 'web_search' ? `Searched "${query}"`
+    : call.name === 'rag_query' ? `Knowledge base "${query}"`
+    : query
+
+  return (
+    <div
+      title={call.preview}
+      className={cn(
+        'flex items-center gap-1.5 text-xs select-none',
+        call.status === 'running' ? 'text-muted-foreground' : 'text-muted-foreground/50',
+      )}
+    >
+      {call.status === 'running' ? (
+        <Loader2 size={10} className="animate-spin shrink-0" />
+      ) : call.status === 'error' ? (
+        <AlertCircle size={10} className="shrink-0 text-destructive/70" />
+      ) : (
+        <Check size={10} className="shrink-0" />
+      )}
+      <span>{icon} {label}</span>
+    </div>
+  )
+}
+
+// ─── ToolCallsSection ─────────────────────────────────────────────────────────
+
+function ToolCallsSection({ calls }: { calls: ToolCallRecord[] }) {
+  if (!calls.length) return null
+  return (
+    <div className="mb-2.5 space-y-1.5 border-b border-border/40 pb-2.5">
+      {calls.map((call) => (
+        <ToolCallRow key={call.id} call={call} />
+      ))}
+    </div>
+  )
+}
 
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
 function MessageBubble({ msg }: { msg: Message }) {
   const isUser = msg.role === 'user'
+
+  // Show blinking cursor only when: no content yet AND no tool is actively running
+  const hasRunningTool = msg.toolCalls?.some((tc) => tc.status === 'running') ?? false
+  const placeholder = hasRunningTool ? '' : '▌'
+
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
       <div
@@ -27,13 +80,18 @@ function MessageBubble({ msg }: { msg: Message }) {
         {isUser ? (
           <p className="whitespace-pre-wrap">{msg.content}</p>
         ) : (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeKatex]}
-            className="prose prose-sm prose-invert max-w-none"
-          >
-            {msg.content || '▌'}
-          </ReactMarkdown>
+          <>
+            {msg.toolCalls && msg.toolCalls.length > 0 && (
+              <ToolCallsSection calls={msg.toolCalls} />
+            )}
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+              className="prose prose-sm prose-invert max-w-none"
+            >
+              {msg.content || placeholder}
+            </ReactMarkdown>
+          </>
         )}
       </div>
     </div>

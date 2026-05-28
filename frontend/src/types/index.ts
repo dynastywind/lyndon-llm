@@ -2,12 +2,25 @@
 export type Mode = 'chat' | 'cowork' | 'code'
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
+
+export interface ToolCallRecord {
+  /** Matches the tool_call_id from the OpenAI response. */
+  id: string
+  name: string
+  args: Record<string, unknown>
+  status: 'running' | 'done' | 'error'
+  /** First 200 chars of the tool result, shown as a tooltip hint. */
+  preview?: string
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant' | 'tool'
   content: string
   timestamp: Date
   toolName?: string
+  /** Populated during streaming when the model invokes tools. */
+  toolCalls?: ToolCallRecord[]
 }
 
 // ── Cowork ────────────────────────────────────────────────────────────────────

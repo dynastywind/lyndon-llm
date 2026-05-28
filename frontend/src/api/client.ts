@@ -11,10 +11,21 @@ function headers(sessionId: string, mode: string) {
 }
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Stream a chat message and receive typed SSE events.
+ *
+ * Event types emitted by the backend:
+ *   token       — { text: string }           LLM token to append
+ *   tool_start  — { id, name, args }         model requested a tool call
+ *   tool_result — { id, name, success, preview } tool finished
+ *   error       — { message: string }        non-fatal error
+ *   done        — {}                         stream complete
+ */
 export async function streamChat(
   message: string,
   sessionId: string,
-  onChunk: (chunk: string) => void,
+  onEvent: (type: string, data: Record<string, unknown>) => void,
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/`, {
     method: 'POST',
@@ -25,10 +36,36 @@ export async function streamChat(
 
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
+  let buffer = ''
+
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
-    onChunk(decoder.decode(value, { stream: true }))
+
+    buffer += decoder.decode(value, { stream: true })
+
+    // SSE messages are separated by \n\n
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() ?? ''          // last element may be incomplete
+
+    for (const part of parts) {
+      if (!part.trim()) continue
+      let eventType = 'message'
+      let dataStr = ''
+
+      for (const line of part.split('\n')) {
+        if (line.startsWith('event: ')) eventType = line.slice(7).trim()
+        else if (line.startsWith('data: ')) dataStr = line.slice(6)
+      }
+
+      if (dataStr) {
+        try {
+          onEvent(eventType, JSON.parse(dataStr))
+        } catch {
+          // malformed JSON — skip
+        }
+      }
+    }
   }
 }
 
