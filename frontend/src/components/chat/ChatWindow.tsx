@@ -239,16 +239,21 @@ function ToolCallsSection({ calls }: { calls: ToolCallRecord[] }) {
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function formatTimestamp(date: Date): string {
+  const tz  = Intl.DateTimeFormat().resolvedOptions().timeZone
   const now = new Date()
-  const isToday     = date.toDateString() === now.toDateString()
-  const yesterday   = new Date(now)
-  yesterday.setDate(yesterday.getDate() - 1)
-  const isYesterday = date.toDateString() === yesterday.toDateString()
 
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  if (isToday)     return time
-  if (isYesterday) return `Yesterday · ${time}`
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + time
+  // Compare calendar dates in the user's local timezone
+  const localDate = (d: Date) =>
+    d.toLocaleDateString([], { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  const time = date.toLocaleTimeString([], { timeZone: tz, hour: '2-digit', minute: '2-digit' })
+
+  if (localDate(date) === localDate(now))       return time
+  if (localDate(date) === localDate(yesterday)) return `Yesterday · ${time}`
+  return date.toLocaleDateString([], { timeZone: tz, month: 'short', day: 'numeric' }) + ' · ' + time
 }
 
 // ─── MessageBubble ────────────────────────────────────────────────────────────
