@@ -56,6 +56,30 @@ function Mark({ size = 22 }: { size?: number }) {
   )
 }
 
+// ── Animated asterisk (sidebar session rows while streaming) ──────────────────
+function SidebarAsteriskAnimated({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none"
+         stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"
+         className="lv-asterisk-animated"
+         style={{ flex: 'none', color: 'var(--lv-gold)' }}>
+      <line className="spoke" x1="50" y1="39" x2="50" y2="10"
+        style={{ '--len':'29','--opmin':'0.55', strokeDasharray:29, animationName:'emit,flicker', animationDuration:'1.8s,1.1s', animationDelay:'0s,0.2s', animationTimingFunction:'cubic-bezier(.4,0,.2,1),ease-in-out', animationIterationCount:'infinite,infinite' } as React.CSSProperties} />
+      <line className="spoke" x1="59.526" y1="44.5" x2="84.641" y2="30"
+        style={{ '--len':'29','--opmin':'0.7',  strokeDasharray:29, animationName:'emit,flicker', animationDuration:'2.1s,1.7s', animationDelay:'0.35s,0.8s', animationTimingFunction:'cubic-bezier(.4,0,.2,1),ease-in-out', animationIterationCount:'infinite,infinite' } as React.CSSProperties} />
+      <line className="spoke" x1="59.526" y1="55.5" x2="84.641" y2="70"
+        style={{ '--len':'29','--opmin':'0.4',  strokeDasharray:29, animationName:'emit,flicker', animationDuration:'1.65s,0.95s', animationDelay:'1.2s,0.05s', animationTimingFunction:'cubic-bezier(.4,0,.2,1),ease-in-out', animationIterationCount:'infinite,infinite' } as React.CSSProperties} />
+      <line className="spoke" x1="50" y1="61" x2="50" y2="90"
+        style={{ '--len':'29','--opmin':'0.65', strokeDasharray:29, animationName:'emit,flicker', animationDuration:'2.3s,2.4s', animationDelay:'0.55s,1.3s', animationTimingFunction:'cubic-bezier(.4,0,.2,1),ease-in-out', animationIterationCount:'infinite,infinite' } as React.CSSProperties} />
+      <line className="spoke" x1="40.474" y1="55.5" x2="15.359" y2="70"
+        style={{ '--len':'29','--opmin':'0.5',  strokeDasharray:29, animationName:'emit,flicker', animationDuration:'1.5s,1.25s', animationDelay:'1.55s,0.5s', animationTimingFunction:'cubic-bezier(.4,0,.2,1),ease-in-out', animationIterationCount:'infinite,infinite' } as React.CSSProperties} />
+      <line className="spoke" x1="40.474" y1="44.5" x2="15.359" y2="30"
+        style={{ '--len':'29','--opmin':'0.75', strokeDasharray:29, animationName:'emit,flicker', animationDuration:'1.95s,1.85s', animationDelay:'0.85s,1.05s', animationTimingFunction:'cubic-bezier(.4,0,.2,1),ease-in-out', animationIterationCount:'infinite,infinite' } as React.CSSProperties} />
+      <circle className="core" cx="50" cy="50" r="5.5" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 // ── Modes ─────────────────────────────────────────────────────────────────────
 const MODES: { id: Mode; label: string }[] = [
   { id: 'chat',   label: 'Chat'   },
@@ -68,7 +92,8 @@ export function Sidebar() {
     mode, setMode,
     sessionId, setSessionId,
     setSessionTitle,
-    clearMessages,
+    clearSessionMessages,
+    streamingSet,
     bumpSessionVersion,
   } = useAppStore()
 
@@ -88,22 +113,22 @@ export function Sidebar() {
 
   const handleNewChat = () => {
     if (!sessionId) return
-    clearMessages(); setSessionId(null); setSessionTitle(null)
+    setSessionId(null); setSessionTitle(null)
   }
 
   const handleResumeSession = (session: ChatSession) => {
-    clearMessages(); setSessionId(session.session_id); setSessionTitle(session.title)
+    setSessionId(session.session_id); setSessionTitle(session.title)
   }
 
   const handleDeleteSession = async (session: ChatSession) => {
     removeSession(session.session_id)
+    clearSessionMessages(session.session_id)
     if (session.session_id === sessionId) {
-      clearMessages()
       try {
         const fresh = await createChatSession()
         setSessionId(fresh.session_id)
         bumpSessionVersion()
-      } catch { clearMessages() }
+      } catch { setSessionId(null) }
     }
     deleteChatSession(session.session_id).catch(() => {})
   }
@@ -190,6 +215,7 @@ export function Sidebar() {
                 <SessionRow
                   key={s.session_id} session={s}
                   active={sessionId === s.session_id}
+                  isStreaming={streamingSet[s.session_id] === true}
                   onSelect={handleResumeSession}
                   onDelete={handleDeleteSession}
                 />
@@ -284,9 +310,9 @@ export function Sidebar() {
 
 // ── SessionRow ────────────────────────────────────────────────────────────────
 function SessionRow({
-  session, active, onSelect, onDelete,
+  session, active, isStreaming, onSelect, onDelete,
 }: {
-  session: ChatSession; active: boolean
+  session: ChatSession; active: boolean; isStreaming: boolean
   onSelect: (s: ChatSession) => void
   onDelete: (s: ChatSession) => void
 }) {
@@ -327,13 +353,19 @@ function SessionRow({
       onClick={() => onSelect(session)}
     >
       <div style={{
-        fontFamily: 'var(--font-sans)', fontSize: 12.5,
-        fontWeight: active ? 500 : 400,
-        color: active ? 'var(--lv-ink)' : 'var(--lv-soft)',
-        lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        paddingRight: 20,
+        display: 'flex', alignItems: 'center', gap: 6,
+        overflow: 'hidden', paddingRight: 20,
       }}>
-        {session.title ?? 'New chat'}
+        {isStreaming && <SidebarAsteriskAnimated size={11} />}
+        <span style={{
+          fontFamily: 'var(--font-sans)', fontSize: 12.5,
+          fontWeight: active ? 500 : 400,
+          color: active ? 'var(--lv-ink)' : 'var(--lv-soft)',
+          lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          flexShrink: 1,
+        }}>
+          {session.title ?? 'New chat'}
+        </span>
       </div>
       <span style={{
         fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)',

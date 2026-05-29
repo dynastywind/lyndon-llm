@@ -70,9 +70,13 @@ class WebSearchTool(BaseTool):
             with DDGS() as ddgs:
                 return list(ddgs.text(query, max_results=k))
 
-        # duckduckgo_search is synchronous; run it in a thread pool
+        # duckduckgo_search is synchronous; run it in a thread pool.
+        # Wrap in wait_for so a rate-limit stall doesn't hang the request.
         loop = asyncio.get_event_loop()
-        raw = await loop.run_in_executor(None, _sync_search)
+        raw = await asyncio.wait_for(
+            loop.run_in_executor(None, _sync_search),
+            timeout=10,
+        )
         return [
             {
                 "title": r.get("title", ""),

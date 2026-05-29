@@ -42,9 +42,13 @@ _EXPLICIT_DOC_RE = re.compile(
 )
 
 # Real-time / web search signals
+# Note: "today" / "tonight" intentionally excluded — date-only questions
+# ("what's today's date?") don't need a web search and DuckDuckGo returns
+# stale cached page dates.  Queries that genuinely need live data already
+# match on their own keywords (weather, news, score, etc.).
 _WEB_SEARCH_RE = re.compile(
     r"\b("
-    r"today|tonight|right\s+now|currently|current|latest|recent|"
+    r"right\s+now|currently|current|latest|recent|"
     r"weather|forecast|news|headline|score|scores|"
     r"price\s+of|stock\s+price|exchange\s+rate|"
     r"this\s+week|this\s+month|this\s+year|"
@@ -152,13 +156,30 @@ def get_orchestrator() -> Orchestrator:
 
 
 async def kb_has_sources() -> bool:
-    """Return True if the RAG knowledge base has at least one ingested source."""
+    """Return True if the RAG knowledge base has at least one ingested source.
+
+    ChromaVectorStore.list_sources() calls chromadb synchronously (blocking I/O).
+    Run it in a thread pool executor so a slow or absent Chroma server never
+    stalls the async event loop.  A 3-second timeout ensures we fail fast.
+    """
+    import asyncio
     try:
         from db.vector.store import get_vector_store
         from chat.rag.retriever import HybridRetriever
 
-        store = get_vector_store(HybridRetriever.COLLECTION_NAME)
-        sources = await store.list_sources()
+        store = await get_vector_store(HybridRetriever.COLLECTION_NAME)
+
+        # list_sources() is `async def` but its internals are synchronous Chroma /
+        # Qdrant calls — off-load to a thread so blocking I/O can't freeze the loop.
+        def _sync_list():
+            import asyncio as _aio
+            return _aio.run(store.list_sources())
+
+        loop = asyncio.get_running_loop()
+        sources = await asyncio.wait_for(
+            loop.run_in_executor(None, _sync_list),
+            timeout=3,
+        )
         return len(sources) > 0
     except Exception:
         return False

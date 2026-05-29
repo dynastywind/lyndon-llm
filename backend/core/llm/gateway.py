@@ -4,6 +4,8 @@ Uses the OpenAI-compatible API (works with local models, OpenAI, etc.)
 """
 from __future__ import annotations
 
+import logging
+import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -11,6 +13,8 @@ from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessage
 
 from config.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class LLMMessage:
@@ -53,6 +57,7 @@ class LLMGateway:
         tool_choice: str | dict | None = None,
     ) -> str:
         """Non-streaming completion — returns the assistant text content."""
+        t0 = time.monotonic()
         response: ChatCompletion = await self._client.chat.completions.create(
             model=model or settings.llm_model,
             messages=[m.to_dict() for m in messages],
@@ -62,6 +67,7 @@ class LLMGateway:
             tool_choice=tool_choice or None,
             stream=False,
         )
+        logger.info("llm.complete  %.0f ms", (time.monotonic() - t0) * 1000)
         return response.choices[0].message.content or ""
 
     async def complete_full(
@@ -75,6 +81,7 @@ class LLMGateway:
         tool_choice: str | dict | None = None,
     ) -> ChatCompletionMessage:
         """Non-streaming completion — returns the full message object (content + tool_calls)."""
+        t0 = time.monotonic()
         response: ChatCompletion = await self._client.chat.completions.create(
             model=model or settings.llm_model,
             messages=[m.to_dict() for m in messages],
@@ -84,6 +91,7 @@ class LLMGateway:
             tool_choice=tool_choice or None,
             stream=False,
         )
+        logger.info("llm.complete_full  %.0f ms", (time.monotonic() - t0) * 1000)
         return response.choices[0].message
 
     async def stream(
@@ -95,6 +103,7 @@ class LLMGateway:
         max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]:
         """Streaming completion — yields text chunks as they arrive."""
+        t0 = time.monotonic()
         response = await self._client.chat.completions.create(
             model=model or settings.llm_model,
             messages=[m.to_dict() for m in messages],
@@ -102,10 +111,16 @@ class LLMGateway:
             max_tokens=max_tokens or settings.llm_max_tokens,
             stream=True,
         )
+        ttfb = (time.monotonic() - t0) * 1000
+        token_count = 0
         async for chunk in response:
             delta = chunk.choices[0].delta
             if delta.content:
+                if token_count == 0:
+                    logger.info("llm.stream  TTFB %.0f ms", ttfb)
+                token_count += 1
                 yield delta.content
+        logger.info("llm.stream  total %.0f ms  tokens %d", (time.monotonic() - t0) * 1000, token_count)
 
     async def complete_with_tools_raw(
         self,
@@ -121,6 +136,7 @@ class LLMGateway:
         tool schemas (OpenAI function-calling format).  Returns the full
         ChatCompletionMessage so callers can inspect tool_calls.
         """
+        t0 = time.monotonic()
         response: ChatCompletion = await self._client.chat.completions.create(
             model=model or settings.llm_model,
             messages=messages,  # type: ignore[arg-type]
@@ -130,6 +146,7 @@ class LLMGateway:
             tool_choice="auto",
             stream=False,
         )
+        logger.info("llm.complete_with_tools_raw  %.0f ms", (time.monotonic() - t0) * 1000)
         return response.choices[0].message
 
     async def stream_from_raw(
@@ -144,6 +161,7 @@ class LLMGateway:
         Streaming completion that accepts already-serialised message dicts.
         Use this for the final answer after tool calls have been resolved.
         """
+        t0 = time.monotonic()
         response = await self._client.chat.completions.create(
             model=model or settings.llm_model,
             messages=messages,  # type: ignore[arg-type]
@@ -151,10 +169,19 @@ class LLMGateway:
             max_tokens=max_tokens or settings.llm_max_tokens,
             stream=True,
         )
+        ttfb = (time.monotonic() - t0) * 1000
+        token_count = 0
         async for chunk in response:
             delta = chunk.choices[0].delta
             if delta.content:
+                if token_count == 0:
+                    logger.info("llm.stream_from_raw  TTFB %.0f ms", ttfb)
+                token_count += 1
                 yield delta.content
+        logger.info(
+            "llm.stream_from_raw  total %.0f ms  tokens %d",
+            (time.monotonic() - t0) * 1000, token_count,
+        )
 
     # ------------------------------------------------------------------ #
     #  Embeddings                                                          #

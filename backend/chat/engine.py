@@ -20,8 +20,9 @@ import base64 as b64
 import json
 import logging
 import re
+import time
 from collections.abc import AsyncGenerator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -73,6 +74,19 @@ MAX_CONTEXT_CHARS = 6000
 MAX_TOOL_ROUNDS = 5
 
 
+@dataclass
+class _Timer:
+    """Lightweight wall-clock stopwatch for per-phase request metrics."""
+    _t0: float = field(default_factory=time.monotonic, init=False)
+    phases: dict[str, int] = field(default_factory=dict, init=False)
+
+    def mark(self, name: str) -> None:
+        self.phases[name] = round((time.monotonic() - self._t0) * 1000)
+
+    def elapsed_ms(self) -> int:
+        return round((time.monotonic() - self._t0) * 1000)
+
+
 def _format_context(chunks: list[RetrievedChunk]) -> str:
     if not chunks:
         return ""
@@ -98,6 +112,8 @@ class ChatEngine:
         user_message: str,
         attachments: list[dict] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
+        timer = _Timer()
+
         await event_bus.emit(Events.CHAT_MESSAGE_RECEIVED, {
             "session_id": self.session.session_id,
             "message": user_message,
@@ -122,12 +138,14 @@ class ChatEngine:
         else:
             decision = legacy_route_decision()
 
+        timer.mark("route_ms")
         logger.info(
-            "chat route=%s tools=%s reason=%s session=%s",
+            "chat route=%s tools=%s reason=%s session=%s  [%.0f ms]",
             decision.route,
             sorted(decision.tools),
             decision.reason,
             self.session.session_id,
+            timer.phases["route_ms"],
         )
 
         # 2. Retrieve RAG context when orchestrator requests it
@@ -135,6 +153,8 @@ class ChatEngine:
         if decision.needs_rag:
             rag_chunks = await self._retrieve(user_message)
         context_block = _format_context(rag_chunks)
+        if decision.needs_rag:
+            timer.mark("rag_ms")
 
         # 3. Build system prompt (base + memories + optional RAG)
         system_prompt = BASE_SYSTEM_PROMPT
@@ -154,22 +174,54 @@ class ChatEngine:
 
         # 5. Tool loop or direct stream — collect text for memory
         full_response = ""
+        first_token = False
         if decision.needs_tools:
-            async for event in self._agentic_loop(
-                allowed_tools=decision.tools,
-                messages_override=llm_messages,
-            ):
-                if event["type"] == "token":
-                    full_response += event["text"]
-                elif event["type"] == "chart":
-                    full_response += _chart_spec_to_markdown(event["spec"])
-                yield event
+            # Fast path: when web_search is the only tool needed, skip the
+            # non-streaming "pick a tool" LLM round-trip.  Run the search
+            # directly, inject results, then do a single streaming call.
+            # This cuts first-token latency roughly in half for news/weather queries.
+            if decision.tools == frozenset({"web_search"}):
+                async for event in self._search_and_stream(
+                    user_message, llm_messages,
+                ):
+                    if event["type"] == "tool_result":
+                        timer.mark("search_ms")
+                    if event["type"] == "token":
+                        if not first_token:
+                            first_token = True
+                            timer.mark("ttft_ms")
+                        full_response += event["text"]
+                    yield event
+            else:
+                async for event in self._agentic_loop(
+                    allowed_tools=decision.tools,
+                    messages_override=llm_messages,
+                ):
+                    if event["type"] == "token":
+                        if not first_token:
+                            first_token = True
+                            timer.mark("ttft_ms")
+                        full_response += event["text"]
+                    elif event["type"] == "chart":
+                        full_response += _chart_spec_to_markdown(event["spec"])
+                    yield event
         else:
             async for chunk in llm_gateway.stream_from_raw(llm_messages):
+                if not first_token:
+                    first_token = True
+                    timer.mark("ttft_ms")
                 full_response += chunk
                 yield {"type": "token", "text": chunk}
 
-        # 5. Persist assistant turn & update session title
+        total_ms = timer.elapsed_ms()
+        timer.mark("total_ms")
+        logger.info(
+            "chat done  total=%d ms  phases=%s",
+            total_ms, timer.phases,
+        )
+        yield {"type": "metrics", "total_ms": total_ms, "phases": timer.phases}
+
+        # 6. Persist assistant turn & update session title
         self.memory.add_assistant_turn(full_response)
         await self.memory.maybe_compress()
 
@@ -327,6 +379,40 @@ class ChatEngine:
             return f"Tool error: {result.error}", False
         except Exception as exc:
             return f"Tool execution error: {exc}", False
+
+    async def _search_and_stream(
+        self,
+        user_message: str,
+        messages: list[dict],
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """
+        Web-search fast path — avoids the non-streaming LLM round-trip that the
+        full agentic loop uses to decide which tool to call.
+
+        Flow: run web_search directly → emit tool events → inject results into
+        the message list → stream the final answer in one pass.
+        """
+        tools = tool_registry.get_tools(Mode.CHAT, self._gate)
+        tool = tools.get("web_search")
+
+        if tool is None:
+            async for chunk in llm_gateway.stream_from_raw(messages):
+                yield {"type": "token", "text": chunk}
+            return
+
+        tool_id = f"call_{uuid4().hex[:8]}"
+        yield {"type": "tool_start", "id": tool_id, "name": "web_search",
+               "args": {"query": user_message}}
+
+        result = await self._call_tool(tools, "web_search", {"query": user_message})
+        result_text, success = result
+
+        yield {"type": "tool_result", "id": tool_id, "name": "web_search",
+               "success": success, "preview": (result_text or "")[:200]}
+
+        enriched = _inject_tool_results(messages, [("web_search", result_text)])
+        async for chunk in llm_gateway.stream_from_raw(enriched):
+            yield {"type": "token", "text": chunk}
 
     async def _retrieve(self, query: str) -> list[RetrievedChunk]:
         try:

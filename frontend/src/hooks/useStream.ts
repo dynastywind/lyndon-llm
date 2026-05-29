@@ -10,7 +10,12 @@ function chartSpecToMarkdown(spec: ChartSpec): string {
 }
 
 export function useStream() {
-  const { sessionId, setSessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom } = useAppStore()
+  const {
+    sessionId, setSessionId,
+    addSessionMessage,
+    startStreaming, stopStreaming,
+    bumpSessionVersion, bumpScrollToBottom,
+  } = useAppStore()
 
   const send = useCallback(
     async (userMessage: string, attachments?: MessageAttachment[]) => {
@@ -21,27 +26,42 @@ export function useStream() {
           const session = await createChatSession()
           activeSessionId = session.session_id
           setSessionId(activeSessionId)
-          bumpSessionVersion()   // show the new session in the sidebar
+          bumpSessionVersion()
         } catch {
-          return   // can't proceed without a session
+          return
         }
       }
 
-      // 1. Add user bubble immediately (with attachments for display)
-      addMessage({ role: 'user', content: userMessage, attachments })
+      // 1. Add user bubble immediately
+      addSessionMessage(activeSessionId, { role: 'user', content: userMessage, attachments })
       bumpScrollToBottom()
-      setStreaming(true)
+      startStreaming(activeSessionId)
 
       // 2. Create an empty assistant bubble with a stable ID
       const msgId = generateId()
       useAppStore.setState((s) => ({
-        messages: [
-          ...s.messages,
-          { id: msgId, role: 'assistant', content: '', timestamp: new Date(), toolCalls: [] },
-        ],
+        sessionMessages: {
+          ...s.sessionMessages,
+          [activeSessionId!]: [
+            ...(s.sessionMessages[activeSessionId!] ?? []),
+            { id: msgId, role: 'assistant' as const, content: '', timestamp: new Date(), toolCalls: [] },
+          ],
+        },
       }))
 
-      // Convert MessageAttachment → AttachmentPayload (strip data URL prefix)
+      // Helper: update the assistant message in its session slot
+      const updateMsg = (updater: (prev: ReturnType<typeof useAppStore.getState>['sessionMessages'][string][number]) =>
+        ReturnType<typeof useAppStore.getState>['sessionMessages'][string][number]) => {
+        useAppStore.setState((s) => {
+          const msgs = [...(s.sessionMessages[activeSessionId!] ?? [])]
+          const idx  = msgs.findIndex((m) => m.id === msgId)
+          if (idx < 0) return s
+          msgs[idx] = updater(msgs[idx])
+          return { sessionMessages: { ...s.sessionMessages, [activeSessionId!]: msgs } }
+        })
+      }
+
+      // Convert MessageAttachment → AttachmentPayload
       const apiAttachments: AttachmentPayload[] | undefined = attachments?.length
         ? attachments.map((a) => ({
             name: a.name,
@@ -53,77 +73,50 @@ export function useStream() {
       try {
         await streamChat(userMessage, activeSessionId, (type, data) => {
           switch (type) {
-            // ── LLM token ─────────────────────────────────────────────
             case 'token': {
               const text = data.text as string
-              useAppStore.setState((s) => {
-                const msgs = [...s.messages]
-                const idx = msgs.findIndex((m) => m.id === msgId)
-                if (idx < 0) return s
-                msgs[idx] = { ...msgs[idx], content: msgs[idx].content + text }
-                return { messages: msgs }
-              })
+              updateMsg((m) => ({ ...m, content: m.content + text }))
+              bumpScrollToBottom()
               break
             }
 
-            // ── Tool call started ──────────────────────────────────────
             case 'tool_start': {
               const newCall: ToolCallRecord = {
-                id: data.id as string,
-                name: data.name as string,
-                args: data.args as Record<string, unknown>,
+                id:     data.id   as string,
+                name:   data.name as string,
+                args:   data.args as Record<string, unknown>,
                 status: 'running',
               }
-              useAppStore.setState((s) => {
-                const msgs = [...s.messages]
-                const idx = msgs.findIndex((m) => m.id === msgId)
-                if (idx < 0) return s
-                msgs[idx] = {
-                  ...msgs[idx],
-                  toolCalls: [...(msgs[idx].toolCalls ?? []), newCall],
-                }
-                return { messages: msgs }
-              })
+              updateMsg((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), newCall] }))
               break
             }
 
-            // ── Tool call finished ─────────────────────────────────────
             case 'tool_result': {
-              const { id, success, preview } = data as {
-                id: string; success: boolean; preview: string
-              }
-              useAppStore.setState((s) => {
-                const msgs = [...s.messages]
-                const idx = msgs.findIndex((m) => m.id === msgId)
-                if (idx < 0) return s
-                const toolCalls = (msgs[idx].toolCalls ?? []).map((tc) =>
+              const { id, success, preview } = data as { id: string; success: boolean; preview: string }
+              updateMsg((m) => ({
+                ...m,
+                toolCalls: (m.toolCalls ?? []).map((tc) =>
                   tc.id === id
                     ? { ...tc, status: success ? ('done' as const) : ('error' as const), preview }
                     : tc,
-                )
-                msgs[idx] = { ...msgs[idx], toolCalls }
-                return { messages: msgs }
-              })
+                ),
+              }))
               break
             }
 
-            // ── Chart ─────────────────────────────────────────────────
             case 'chart': {
               const spec = data.spec as ChartSpec
-              useAppStore.setState((s) => {
-                const msgs = [...s.messages]
-                const idx = msgs.findIndex((m) => m.id === msgId)
-                if (idx < 0) return s
-                msgs[idx] = {
-                  ...msgs[idx],
-                  content: msgs[idx].content + chartSpecToMarkdown(spec),
-                }
-                return { messages: msgs }
-              })
+              updateMsg((m) => ({ ...m, content: m.content + chartSpecToMarkdown(spec) }))
               break
             }
 
-            // ── Non-fatal error ────────────────────────────────────────
+            case 'metrics': {
+              const { total_ms, phases } = data as { total_ms: number; phases: Record<string, number> }
+              const parts = Object.entries(phases).map(([k, v]) => `${k}=${v}ms`).join('  ')
+              console.info(`[metrics] total=${total_ms}ms  ${parts}`)
+              break
+            }
+
             case 'error': {
               console.warn('[stream] backend error event:', data.message)
               break
@@ -131,12 +124,12 @@ export function useStream() {
           }
         }, apiAttachments)
       } finally {
-        setStreaming(false)
+        stopStreaming(activeSessionId)
         bumpScrollToBottom()
         bumpSessionVersion()
       }
     },
-    [sessionId, setSessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom],
+    [sessionId, setSessionId, addSessionMessage, startStreaming, stopStreaming, bumpSessionVersion, bumpScrollToBottom],
   )
 
   return { send }

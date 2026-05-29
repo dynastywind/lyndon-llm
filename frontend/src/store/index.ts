@@ -14,13 +14,28 @@ interface AppState {
   mode: Mode
   setMode: (mode: Mode) => void
 
-  // Chat
+  // Per-session messages — each session owns its own array.
+  // ChatWindow derives its view as sessionMessages[sessionId ?? '__new__'] ?? []
+  sessionMessages: Record<string, Message[]>
+  addSessionMessage:     (sid: string, msg: Omit<Message, 'id' | 'timestamp'>) => void
+  setSessionMessages:    (sid: string, msgs: Message[]) => void
+  prependSessionMessages:(sid: string, msgs: Message[]) => void
+  clearSessionMessages:  (sid: string) => void
+
+  /** @deprecated use per-session helpers; kept for CoworkWindow / CodeWindow */
   messages: Message[]
-  addMessage: (msg: Omit<Message, 'id' | 'timestamp'>) => void
-  setMessages: (msgs: Message[]) => void
-  prependMessages: (msgs: Message[]) => void
-  clearMessages: () => void
+  /** @deprecated */ addMessage:     (msg: Omit<Message, 'id' | 'timestamp'>) => void
+  /** @deprecated */ setMessages:    (msgs: Message[]) => void
+  /** @deprecated */ prependMessages:(msgs: Message[]) => void
+  /** @deprecated */ clearMessages:  () => void
+
+  /** Sessions currently receiving a streaming response, keyed by sessionId. */
+  streamingSet: Record<string, boolean>
+  startStreaming: (sessionId: string) => void
+  stopStreaming:  (sessionId: string) => void
+  /** Kept for components that read isStreaming directly; auto-updated on session switch. */
   isStreaming: boolean
+  /** @deprecated use startStreaming / stopStreaming */
   setStreaming: (v: boolean) => void
 
   // Signal ChatWindow to scroll to bottom (incremented, not boolean)
@@ -41,6 +56,11 @@ interface AppState {
   repoPath: string
   setRepoPath: (path: string) => void
 
+  // Per-session input drafts (keyed by sessionId or '__new__')
+  drafts: Record<string, string>
+  setDraft:  (key: string, text: string) => void
+  clearDraft:(key: string) => void
+
   // Appearance
   codeTheme: CodeThemeName
   setCodeTheme: (theme: CodeThemeName) => void
@@ -49,7 +69,7 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      // Session
+      // ── Session ──────────────────────────────────────────────────────
       sessionId: null,
       setSessionId: (id) => set({ sessionId: id }),
       sessionTitle: null,
@@ -57,19 +77,65 @@ export const useAppStore = create<AppState>()(
       mode: 'chat',
       setMode: (mode) => set({ mode }),
 
-      // Chat
+      // ── Per-session messages ──────────────────────────────────────────
+      sessionMessages: {},
+
+      addSessionMessage: (sid, msg) =>
+        set((s) => ({
+          sessionMessages: {
+            ...s.sessionMessages,
+            [sid]: [
+              ...(s.sessionMessages[sid] ?? []),
+              { ...msg, id: generateId(), timestamp: new Date() },
+            ],
+          },
+        })),
+
+      setSessionMessages: (sid, msgs) =>
+        set((s) => ({ sessionMessages: { ...s.sessionMessages, [sid]: msgs } })),
+
+      prependSessionMessages: (sid, msgs) =>
+        set((s) => ({
+          sessionMessages: {
+            ...s.sessionMessages,
+            [sid]: [...msgs, ...(s.sessionMessages[sid] ?? [])],
+          },
+        })),
+
+      clearSessionMessages: (sid) =>
+        set((s) => {
+          const next = { ...s.sessionMessages }
+          delete next[sid]
+          return { sessionMessages: next }
+        }),
+
+      // ── Deprecated message helpers (Cowork / Code still use these) ────
       messages: [],
       addMessage: (msg) =>
         set((s) => ({
-          messages: [
-            ...s.messages,
-            { ...msg, id: generateId(), timestamp: new Date() },
-          ],
+          messages: [...s.messages, { ...msg, id: generateId(), timestamp: new Date() }],
         })),
-      setMessages: (msgs) => set({ messages: msgs }),
-      prependMessages: (msgs) =>
-        set((s) => ({ messages: [...msgs, ...s.messages] })),
-      clearMessages: () => set({ messages: [] }),
+      setMessages:     (msgs) => set({ messages: msgs }),
+      prependMessages: (msgs) => set((s) => ({ messages: [...msgs, ...s.messages] })),
+      clearMessages:   ()     => set({ messages: [] }),
+
+      // ── Streaming state ───────────────────────────────────────────────
+      streamingSet: {},
+      startStreaming: (id) =>
+        set((s) => ({
+          streamingSet: { ...s.streamingSet, [id]: true },
+          // keep isStreaming in sync for the current session
+          isStreaming: s.sessionId === id ? true : s.isStreaming,
+        })),
+      stopStreaming: (id) =>
+        set((s) => {
+          const next = { ...s.streamingSet }
+          delete next[id]
+          return {
+            streamingSet: next,
+            isStreaming: next[s.sessionId ?? '__new__'] === true,
+          }
+        }),
       isStreaming: false,
       setStreaming: (v) => set({ isStreaming: v }),
 
@@ -81,17 +147,28 @@ export const useAppStore = create<AppState>()(
       bumpSessionVersion: () =>
         set((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
 
-      // Cowork
+      // ── Cowork ────────────────────────────────────────────────────────
       currentPlan: null,
       setPlan: (plan) => set({ currentPlan: plan }),
 
-      // Code
+      // ── Code ──────────────────────────────────────────────────────────
       currentDiff: null,
       setDiff: (diff) => set({ currentDiff: diff }),
       repoPath: '',
       setRepoPath: (path) => set({ repoPath: path }),
 
-      // Appearance
+      // ── Per-session input drafts ──────────────────────────────────────
+      drafts: {},
+      setDraft: (key, text) =>
+        set((s) => ({ drafts: { ...s.drafts, [key]: text } })),
+      clearDraft: (key) =>
+        set((s) => {
+          const drafts = { ...s.drafts }
+          delete drafts[key]
+          return { drafts }
+        }),
+
+      // ── Appearance ────────────────────────────────────────────────────
       codeTheme: CODE_THEME_DEFAULT,
       setCodeTheme: (codeTheme) => set({ codeTheme }),
     }),

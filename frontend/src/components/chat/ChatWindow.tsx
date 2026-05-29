@@ -953,20 +953,29 @@ function toStoreMessage(m: ChatSessionMessage): Message {
 
 export function ChatWindow() {
   const {
-    messages,
-    setMessages,
-    prependMessages,
-    isStreaming,
+    sessionMessages,
+    setSessionMessages,
+    prependSessionMessages,
+    streamingSet,
     sessionId,
     sessionTitle,
     scrollToBottomTick,
+    drafts,
+    setDraft,
+    clearDraft,
   } = useAppStore()
+
+  const draftKey   = sessionId ?? '__new__'
+  const messages   = sessionMessages[draftKey] ?? []
+  const isStreaming = streamingSet[draftKey] === true
 
   // ── Context panel visibility (hidden by default) ──────────────────────
   const [showContext, setShowContext] = useState(false)
 
   const { send } = useStream()
-  const [input, setInput] = useState('')
+
+  // Each session keeps its own draft; initialise from store on mount.
+  const [input, setInput] = useState(() => drafts[draftKey] ?? '')
 
   // ── Context panel — collect all attachments from current session ──────
   // Newest-first; deduplicated by data URL prefix so identical files are
@@ -1068,19 +1077,23 @@ export function ChatWindow() {
 
       if (!sessionId) return
 
-      // When a new session is lazily created on the first send(), setSessionId()
-      // is batched with addMessage() in the same render, so messages are already
-      // present when this effect fires.  History loads always call clearMessages()
-      // first, so messages.length === 0 for those — safe to proceed.
-      if (useAppStore.getState().messages.length > 0) return
+      // Skip DB fetch when:
+      // (a) messages already exist for this session (new session lazily created
+      //     by send(), or we're returning to a session mid-stream whose messages
+      //     are still live in the store)
+      const sid = sessionId
+      if ((useAppStore.getState().sessionMessages[sid] ?? []).length > 0) {
+        canLoadRef.current = true
+        return
+      }
 
       try {
-        const { messages: raw, has_more } = await getChatMessages(sessionId, 5)
+        const { messages: raw, has_more } = await getChatMessages(sid, 5)
         if (cancelled) return
 
         const converted = raw.map(toStoreMessage)
         flushSync(() => {
-          setMessages(converted)
+          setSessionMessages(sid, converted)
           setHasMore(has_more)
         })
         if (converted.length > 0) cursorRef.current = raw[0].created_at
@@ -1132,7 +1145,7 @@ export function ChatWindow() {
       const { messages: raw, has_more } = await getChatMessages(sid, 5, cursorRef.current)
       if (useAppStore.getState().sessionId !== sid) return
       const converted = raw.map(toStoreMessage)
-      prependMessages(converted)
+      prependSessionMessages(sid, converted)
       setHasMore(has_more)
       if (converted.length > 0) cursorRef.current = raw[0].created_at
     } catch {
@@ -1140,7 +1153,7 @@ export function ChatWindow() {
     } finally {
       setLoadingMore(false)
     }
-  }, [loadingMore, hasMore, sessionId, prependMessages])
+  }, [loadingMore, hasMore, sessionId, prependSessionMessages])
 
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -1165,6 +1178,7 @@ export function ChatWindow() {
     }
 
     setInput('')
+    clearDraft(draftKey)
     await send(msg, msgAttachments)
   }
 
@@ -1178,7 +1192,7 @@ export function ChatWindow() {
       {/* ── Title bar ────────────────────────────────────────────────── */}
       <div style={{
         display: 'flex', alignItems: 'center',
-        paddingLeft: 56, height: 48,
+        paddingLeft: 240, height: 48,
         borderBottom: '1px solid var(--lv-rule)', flexShrink: 0,
       }}>
         <div style={{
@@ -1213,7 +1227,7 @@ export function ChatWindow() {
           {/* Messages scroll area */}
           <div
             ref={scrollRef}
-            style={{ flex: 1, overflowY: 'auto', padding: '24px 56px' }}
+            style={{ flex: 1, overflowY: 'auto', padding: '24px 240px' }}
             onWheel={(e) => {
               if (e.deltaY < 0 && hasMore && canLoadRef.current) loadMore()
             }}
@@ -1246,7 +1260,7 @@ export function ChatWindow() {
           </div>
 
           {/* ── Input bar ──────────────────────────────────────────────── */}
-          <div style={{ borderTop: '1px solid var(--lv-rule)', padding: '14px 56px 18px', flexShrink: 0 }}>
+          <div style={{ borderTop: '1px solid var(--lv-rule)', padding: '14px 240px 18px', flexShrink: 0 }}>
             <form onSubmit={handleSubmit}>
               {/* Hidden file picker */}
               <input
@@ -1313,7 +1327,7 @@ export function ChatWindow() {
                 {/* Textarea */}
                 <textarea
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => { setInput(e.target.value); setDraft(draftKey, e.target.value) }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e) }
                   }}
