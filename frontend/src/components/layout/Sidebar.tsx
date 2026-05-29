@@ -7,14 +7,15 @@ import {
   Settings,
   Plus,
   Loader2,
-  Upload,
+  BookOpen,
+  Server,
   Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
 import { createChatSession, deleteChatSession } from '@/api/client'
-import { SettingsDialog } from './SettingsDialog'
+import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import type { Mode, ChatSession } from '@/types'
 
 // ─── constants ────────────────────────────────────────────────────────────────
@@ -49,7 +50,13 @@ export function Sidebar() {
     bumpSessionVersion,
   } = useAppStore()
 
-  const [uploadOpen, setUploadOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('knowledge')
+
+  const openSettings = (tab: SettingsTab) => {
+    setSettingsTab(tab)
+    setSettingsOpen(true)
+  }
 
   const { sessions, loading, loadingMore, hasMore, sentinelRef, removeSession } =
     useChatHistory(mode === 'chat' ? 'chat' : 'code')
@@ -208,11 +215,18 @@ export function Sidebar() {
               )}
             >
               <DropdownMenu.Item
-                onSelect={() => setUploadOpen(true)}
+                onSelect={() => openSettings('knowledge')}
                 className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-foreground cursor-pointer select-none outline-none hover:bg-accent focus:bg-accent transition-colors"
               >
-                <Upload size={14} className="text-muted-foreground shrink-0" />
-                Upload source
+                <BookOpen size={14} className="text-muted-foreground shrink-0" />
+                Knowledge
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                onSelect={() => openSettings('tools')}
+                className="flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-foreground cursor-pointer select-none outline-none hover:bg-accent focus:bg-accent transition-colors"
+              >
+                <Server size={14} className="text-muted-foreground shrink-0" />
+                MCP
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
@@ -224,7 +238,11 @@ export function Sidebar() {
         <p className="text-xs text-muted-foreground">Local model · localhost:52415</p>
       </div>
 
-      <SettingsDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        initialTab={settingsTab}
+      />
     </aside>
   )
 }

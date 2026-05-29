@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import chat, cowork, code, rag
+from api.routes import chat, cowork, code, rag, registry
 from api.ws.stream import router as ws_router
 from config.settings import settings
 
@@ -18,6 +18,8 @@ async def lifespan(app: FastAPI):
     # Startup — create DB tables then register tools
     await _init_db()
     _register_all_tools()
+    from core.mcp.manager import mcp_tool_manager
+    await mcp_tool_manager.reload_all()
     yield
     # Shutdown — nothing to clean up yet
 
@@ -74,7 +76,8 @@ app.add_middleware(
 app.include_router(chat.router,   prefix="/api/chat",   tags=["chat"])
 app.include_router(cowork.router, prefix="/api/cowork", tags=["cowork"])
 app.include_router(code.router,   prefix="/api/code",   tags=["code"])
-app.include_router(rag.router,    prefix="/api/rag",    tags=["rag"])
+app.include_router(rag.router,      prefix="/api/rag",      tags=["rag"])
+app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
 app.include_router(ws_router,     prefix="/ws",         tags=["websocket"])
 
 

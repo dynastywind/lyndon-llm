@@ -20,8 +20,15 @@ from db.repos.chat import ChatRepo
 router = APIRouter()
 
 
+class AttachmentPayload(BaseModel):
+    name: str
+    type: str   # MIME type, e.g. "image/png"
+    data: str   # raw base64 (no "data:...;base64," prefix)
+
+
 class ChatRequest(BaseModel):
     message: str
+    attachments: list[AttachmentPayload] = []
 
 
 class IngestRequest(BaseModel):
@@ -42,9 +49,10 @@ async def chat(
     db: AsyncSession = Depends(get_db),
 ):
     engine = ChatEngine(session, db=db)
+    attachments = [a.model_dump() for a in body.attachments] if body.attachments else None
 
     async def _generate():
-        async for event in engine.stream_response(body.message):
+        async for event in engine.stream_response(body.message, attachments=attachments):
             evt_type = event["type"]
             payload = {k: v for k, v in event.items() if k != "type"}
             yield _sse(evt_type, payload)

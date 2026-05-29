@@ -29,6 +29,13 @@ export interface ToolCallRecord {
   preview?: string
 }
 
+/** A file or image attached to a user message. */
+export interface MessageAttachment {
+  name: string
+  type: string    // MIME type, e.g. "image/png"
+  dataUrl: string // full data URL: "data:<type>;base64,<data>"
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant' | 'tool'
@@ -39,6 +46,8 @@ export interface Message {
   toolCalls?: ToolCallRecord[]
   /** Charts emitted by render_chart tool calls. */
   charts?: ChartSpec[]
+  /** Files / images the user attached to this message. */
+  attachments?: MessageAttachment[]
 }
 
 // ── Cowork ────────────────────────────────────────────────────────────────────
@@ -120,4 +129,56 @@ export interface ChatSessionMessage {
   content: string
   tool_name: string | null
   created_at: string
+}
+
+// ── Tool registry (Settings) ──────────────────────────────────────────────────
+
+export interface RegistryTool {
+  name: string
+  description: string
+  permission: string | null
+  mode: string | null
+  source: 'internal' | 'mcp'
+  editable: boolean
+  server_id?: string | null
+  server_name?: string | null
+  mcp_name?: string | null
+  enabled?: boolean | null
+}
+
+export interface McpServerTool {
+  qualified_name: string
+  mcp_name: string
+  description: string
+  enabled: boolean
+}
+
+export interface McpServer {
+  id: string
+  name: string
+  description: string | null
+  transport: 'stdio' | 'sse' | string
+  command: string | null
+  args: string[]
+  env: Record<string, string>
+  url: string | null
+  enabled: boolean
+  last_error: string | null
+  tools: McpServerTool[]
+}
+
+export interface ToolRegistry {
+  internal_tools: RegistryTool[]
+  mcp_servers: McpServer[]
+}
+
+export interface McpServerCreate {
+  name: string
+  description?: string | null
+  transport: 'stdio' | 'sse'
+  command?: string | null
+  args?: string[]
+  env?: Record<string, string>
+  url?: string | null
+  enabled?: boolean
 }

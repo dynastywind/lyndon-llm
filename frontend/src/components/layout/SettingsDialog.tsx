@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   AlertCircle,
@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { deleteRagSource, listRagSources, uploadRagFile } from '@/api/client'
+import { ToolsRegistryPanel } from './ToolsRegistryPanel'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -24,9 +25,12 @@ interface UploadItem {
   error?: string
 }
 
+export type SettingsTab = 'knowledge' | 'tools'
+
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialTab?: SettingsTab
 }
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -39,7 +43,8 @@ function basename(path: string) {
 
 // ─── component ────────────────────────────────────────────────────────────────
 
-export function SettingsDialog({ open, onOpenChange }: Props) {
+export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }: Props) {
+  const [tab, setTab] = useState<SettingsTab>(initialTab)
   const [queue, setQueue] = useState<UploadItem[]>([])
   const [sources, setSources] = useState<string[]>([])
   const [loadingSources, setLoadingSources] = useState(false)
@@ -59,6 +64,10 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
       setLoadingSources(false)
     }
   }, [])
+
+  useEffect(() => {
+    if (open) setTab(initialTab)
+  }, [open, initialTab])
 
   const handleOpenChange = (v: boolean) => {
     onOpenChange(v)
@@ -131,7 +140,7 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
         <Dialog.Content
           className={cn(
             'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
-            'w-[540px] max-h-[78vh] bg-card border border-border rounded-xl shadow-2xl',
+            'w-[580px] max-h-[82vh] bg-card border border-border rounded-xl shadow-2xl',
             'flex flex-col overflow-hidden',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
             'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
@@ -148,9 +157,22 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
             </Dialog.Close>
           </div>
 
-          {/* ── Body ── */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-7">
+          {/* ── Tabs ── */}
+          <div className="flex gap-1 px-5 pt-3 border-b border-border shrink-0">
+            <TabButton active={tab === 'knowledge'} onClick={() => setTab('knowledge')}>
+              Knowledge Base
+            </TabButton>
+            <TabButton active={tab === 'tools'} onClick={() => setTab('tools')}>
+              MCP
+            </TabButton>
+          </div>
 
+          {/* ── Body ── */}
+          <div className="flex-1 overflow-y-auto p-5">
+          {tab === 'tools' ? (
+            <ToolsRegistryPanel active={open && tab === 'tools'} />
+          ) : (
+          <div className="space-y-7">
             {/* ── Upload section ── */}
             <section>
               <SectionLabel>Knowledge Base — Upload</SectionLabel>
@@ -272,6 +294,8 @@ export function SettingsDialog({ open, onOpenChange }: Props) {
               )}
             </section>
           </div>
+          )}
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -285,5 +309,30 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
       {children}
     </h3>
+  )
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'px-3 py-1.5 text-xs font-medium rounded-t transition-colors',
+        active
+          ? 'text-foreground border-b-2 border-primary -mb-px'
+          : 'text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
   )
 }

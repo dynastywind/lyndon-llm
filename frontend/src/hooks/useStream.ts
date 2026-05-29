@@ -2,7 +2,8 @@ import { useCallback } from 'react'
 import { createChatSession, streamChat } from '@/api/client'
 import { useAppStore } from '@/store'
 import { generateId } from '@/lib/utils'
-import type { ToolCallRecord, ChartSpec } from '@/types'
+import type { ToolCallRecord, ChartSpec, MessageAttachment } from '@/types'
+import type { AttachmentPayload } from '@/api/client'
 
 function chartSpecToMarkdown(spec: ChartSpec): string {
   return `\n\n\`\`\`chart\n${JSON.stringify(spec)}\n\`\`\`\n\n`
@@ -12,7 +13,7 @@ export function useStream() {
   const { sessionId, setSessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom } = useAppStore()
 
   const send = useCallback(
-    async (userMessage: string) => {
+    async (userMessage: string, attachments?: MessageAttachment[]) => {
       // Lazily create a session on the very first message.
       let activeSessionId = sessionId
       if (!activeSessionId) {
@@ -26,8 +27,8 @@ export function useStream() {
         }
       }
 
-      // 1. Add user bubble immediately
-      addMessage({ role: 'user', content: userMessage })
+      // 1. Add user bubble immediately (with attachments for display)
+      addMessage({ role: 'user', content: userMessage, attachments })
       bumpScrollToBottom()
       setStreaming(true)
 
@@ -39,6 +40,15 @@ export function useStream() {
           { id: msgId, role: 'assistant', content: '', timestamp: new Date(), toolCalls: [] },
         ],
       }))
+
+      // Convert MessageAttachment → AttachmentPayload (strip data URL prefix)
+      const apiAttachments: AttachmentPayload[] | undefined = attachments?.length
+        ? attachments.map((a) => ({
+            name: a.name,
+            type: a.type,
+            data: a.dataUrl.split(',')[1] ?? a.dataUrl,
+          }))
+        : undefined
 
       try {
         await streamChat(userMessage, activeSessionId, (type, data) => {
@@ -119,7 +129,7 @@ export function useStream() {
               break
             }
           }
-        })
+        }, apiAttachments)
       } finally {
         setStreaming(false)
         bumpScrollToBottom()

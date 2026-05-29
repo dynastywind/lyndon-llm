@@ -1,6 +1,25 @@
-import type { Plan, FileDiff, ReviewResult, TestResult, ChatSession, ChatSessionsResponse, ChatSessionMessage } from '@/types'
+import type {
+  Plan,
+  FileDiff,
+  ReviewResult,
+  TestResult,
+  ChatSession,
+  ChatSessionsResponse,
+  ChatSessionMessage,
+  ToolRegistry,
+  McpServer,
+  McpServerCreate,
+  McpServerTool,
+} from '@/types'
 
 const BASE = '/api'
+
+/** Attachment payload sent to the chat endpoint (base64 content, no prefix). */
+export interface AttachmentPayload {
+  name: string
+  type: string  // MIME type
+  data: string  // raw base64 (no "data:...;base64," prefix)
+}
 
 function headers(sessionId: string, mode: string) {
   return {
@@ -26,11 +45,15 @@ export async function streamChat(
   message: string,
   sessionId: string,
   onEvent: (type: string, data: Record<string, unknown>) => void,
+  attachments?: AttachmentPayload[],
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/`, {
     method: 'POST',
     headers: headers(sessionId, 'chat'),
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      message,
+      ...(attachments?.length ? { attachments } : {}),
+    }),
   })
   if (!res.ok) throw new Error(`Chat error: ${res.statusText}`)
 
@@ -150,6 +173,78 @@ export async function deleteRagSource(source: string): Promise<void> {
     { method: 'DELETE' },
   )
   if (!res.ok) throw new Error(`Failed to delete source: ${res.statusText}`)
+}
+
+// ── Tool registry (MCP + internal) ───────────────────────────────────────────
+
+export async function getToolRegistry(): Promise<ToolRegistry> {
+  const res = await fetch(`${BASE}/registry`)
+  if (!res.ok) throw new Error(`Failed to load tool registry: ${res.statusText}`)
+  return res.json()
+}
+
+export async function createMcpServer(body: McpServerCreate): Promise<McpServer> {
+  const res = await fetch(`${BASE}/registry/mcp/servers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export async function updateMcpServer(
+  serverId: string,
+  body: Partial<McpServerCreate>,
+): Promise<McpServer> {
+  const res = await fetch(`${BASE}/registry/mcp/servers/${serverId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export async function deleteMcpServer(serverId: string): Promise<void> {
+  const res = await fetch(`${BASE}/registry/mcp/servers/${serverId}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) throw new Error(`Failed to delete MCP server: ${res.statusText}`)
+}
+
+export async function refreshMcpServer(serverId: string): Promise<McpServer> {
+  const res = await fetch(`${BASE}/registry/mcp/servers/${serverId}/refresh`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export async function toggleMcpTool(
+  serverId: string,
+  qualifiedName: string,
+  enabled: boolean,
+): Promise<McpServerTool> {
+  const res = await fetch(
+    `${BASE}/registry/mcp/servers/${serverId}/tools/${encodeURIComponent(qualifiedName)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    },
+  )
+  if (!res.ok) throw new Error(`Failed to update tool: ${res.statusText}`)
+  return res.json()
 }
 
 // ── Cowork ────────────────────────────────────────────────────────────────────

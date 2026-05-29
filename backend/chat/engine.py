@@ -16,7 +16,9 @@ All yields are typed event dicts consumed by the SSE route:
 """
 from __future__ import annotations
 
+import base64 as b64
 import json
+import logging
 import re
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
@@ -24,7 +26,14 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from chat.memory.manager import MemoryManager
+from chat.orchestrator import (
+    RouteDecision,
+    get_orchestrator,
+    kb_has_sources,
+    legacy_route_decision,
+)
 from chat.rag.retriever import HybridRetriever, RetrievedChunk
+from config.settings import settings
 from core.events.bus import event_bus, Events
 from core.llm.gateway import llm_gateway, LLMMessage
 from core.permissions.gate import Mode, PermissionGate
@@ -38,27 +47,24 @@ BASE_SYSTEM_PROMPT = """\
 You are a helpful, knowledgeable personal assistant.
 
 ## Tools
-You have access to the following tools — use them proactively:
+When tools are available for this turn, use them only when needed:
 
-- **web_search**: Call this ONLY when the answer genuinely requires current \
-data: live news, today's weather, real-time prices, sports scores, or \
-software release announcements from the past few months. \
-Do NOT search for general knowledge, historical facts, how-to explanations, \
-coding help, math, or anything your training already covers well.
-- **rag_query**: Call this when the user asks about documents, files, or \
-knowledge that may have been uploaded to your personal knowledge base.
-- **render_chart**: Call this whenever the user asks for a chart, graph, or \
-data visualization. Provide the complete dataset and series configuration. \
-You may combine with web_search: search first, then render a chart from \
-the results.
+- **web_search**: For current data — live news, today's weather, real-time \
+prices, sports scores, or recent software releases. Do NOT search for general \
+knowledge, historical facts, how-to explanations, coding help, or math.
+- **rag_query**: For documents or files in the personal knowledge base when \
+you need more detail than the retrieved context already provides.
+- **render_chart**: When the user asks for a chart, graph, or visualization. \
+Provide the complete dataset and series configuration.
 
 ## Answering
-- When context or search results are provided, use them to answer accurately \
-and cite the source (file name or URL).
-- If neither tool returns useful information, answer from your general \
-knowledge and say so briefly.
-- Be concise and direct. Ask clarifying questions when needed.
+- When retrieved document context appears below, use it and cite sources \
+(file names).
+- When tool results are provided, use them and cite URLs or sources.
+- Otherwise answer from your general knowledge. Be concise and direct.
 """
+
+logger = logging.getLogger(__name__)
 
 # Maximum characters of retrieved RAG context to inject into the system prompt
 MAX_CONTEXT_CHARS = 6000
@@ -90,6 +96,7 @@ class ChatEngine:
     async def stream_response(
         self,
         user_message: str,
+        attachments: list[dict] | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         await event_bus.emit(Events.CHAT_MESSAGE_RECEIVED, {
             "session_id": self.session.session_id,
@@ -103,28 +110,61 @@ class ChatEngine:
             await _repo.ensure_session(self.session.session_id, "chat")
             await _repo.add_message(self.session.session_id, "user", user_message)
 
-        # 1. Retrieve RAG context
-        rag_chunks = await self._retrieve(user_message)
+        # 1. Route: direct | rag | tools | rag_and_tools
+        if settings.orchestrator_enabled:
+            has_kb = await kb_has_sources()
+            decision = await get_orchestrator().route(
+                user_message, has_kb_sources=has_kb,
+            )
+        else:
+            decision = legacy_route_decision()
+
+        logger.info(
+            "chat route=%s tools=%s reason=%s session=%s",
+            decision.route,
+            sorted(decision.tools),
+            decision.reason,
+            self.session.session_id,
+        )
+
+        # 2. Retrieve RAG context when orchestrator requests it
+        rag_chunks: list[RetrievedChunk] = []
+        if decision.needs_rag:
+            rag_chunks = await self._retrieve(user_message)
         context_block = _format_context(rag_chunks)
 
-        # 2. Build system prompt (base + memories + RAG)
+        # 3. Build system prompt (base + memories + optional RAG)
         system_prompt = BASE_SYSTEM_PROMPT
         if context_block:
             system_prompt = f"{BASE_SYSTEM_PROMPT}\n\n{context_block}"
         await self.memory.build_system_prompt(system_prompt, user_message)
 
-        # 3. Add user turn to short-term memory & compress if needed
+        # 4. Add user turn to short-term memory & compress if needed
+        #    Memory always stores plain text (no base64 blobs).
         self.memory.add_user_turn(user_message)
         await self.memory.maybe_compress()
 
-        # 4. Run the agentic tool loop — collect text for memory
+        # Build the actual message list for the LLM.  If the user attached files,
+        # patch the last user message to multimodal content *after* memory is
+        # updated so compression always operates on plain text.
+        llm_messages = _inject_attachments(self.memory.get_messages(), attachments or [])
+
+        # 5. Tool loop or direct stream — collect text for memory
         full_response = ""
-        async for event in self._agentic_loop():
-            if event["type"] == "token":
-                full_response += event["text"]
-            elif event["type"] == "chart":
-                full_response += _chart_spec_to_markdown(event["spec"])
-            yield event
+        if decision.needs_tools:
+            async for event in self._agentic_loop(
+                allowed_tools=decision.tools,
+                messages_override=llm_messages,
+            ):
+                if event["type"] == "token":
+                    full_response += event["text"]
+                elif event["type"] == "chart":
+                    full_response += _chart_spec_to_markdown(event["spec"])
+                yield event
+        else:
+            async for chunk in llm_gateway.stream_from_raw(llm_messages):
+                full_response += chunk
+                yield {"type": "token", "text": chunk}
 
         # 5. Persist assistant turn & update session title
         self.memory.add_assistant_turn(full_response)
@@ -138,6 +178,7 @@ class ChatEngine:
 
         await event_bus.emit(Events.CHAT_RESPONSE_DONE, {
             "session_id": self.session.session_id,
+            "route": decision.route,
             "rag_sources": [c.source for c in rag_chunks],
         })
 
@@ -145,7 +186,11 @@ class ChatEngine:
     #  Agentic loop                                                        #
     # ------------------------------------------------------------------ #
 
-    async def _agentic_loop(self) -> AsyncGenerator[dict[str, Any], None]:
+    async def _agentic_loop(
+        self,
+        allowed_tools: frozenset[str] | None = None,
+        messages_override: list[dict] | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Runs tool calls until the model produces a plain-text response or
         MAX_TOOL_ROUNDS is reached, then streams the final answer as token events.
@@ -162,10 +207,17 @@ class ChatEngine:
           into the last user message → single streaming call.  No second round-trip
           is attempted because EXO doesn't understand tool / tool_calls messages.
         """
-        original_messages: list[dict] = self.memory.get_messages()
+        original_messages: list[dict] = (
+            messages_override if messages_override is not None
+            else self.memory.get_messages()
+        )
         messages: list[dict] = list(original_messages)
         tool_schemas = tool_registry.get_openai_schemas(Mode.CHAT)
         tools = tool_registry.get_tools(Mode.CHAT, self._gate)
+
+        if allowed_tools is not None:
+            tool_schemas = [s for s in tool_schemas if s["function"]["name"] in allowed_tools]
+            tools = {k: v for k, v in tools.items() if k in allowed_tools}
 
         try:
             for _round in range(MAX_TOOL_ROUNDS):
@@ -410,6 +462,79 @@ def _extract_chart_spec(tool_name: str, result_text: str) -> dict | None:
 def _chart_spec_to_markdown(spec: dict) -> str:
     """Embed a chart spec in assistant content so it persists in chat history."""
     return "\n\n```chart\n" + json.dumps(spec, ensure_ascii=False) + "\n```\n\n"
+
+
+def _inject_attachments(messages: list[dict], attachments: list[dict]) -> list[dict]:
+    """
+    Patch the last user message to include file / image attachments.
+
+    * Images  → appended as OpenAI ``image_url`` content blocks so vision-capable
+                models can analyse them.
+    * Text / code files → decoded from base64 and prepended to the message text as
+                fenced code blocks (capped at 4 000 chars each to avoid context bloat).
+    * Other binary files → just the filename is mentioned in the text.
+
+    Memory always stores plain text; this function only modifies the copy passed to
+    the LLM, never the memory manager's internal state.
+    """
+    if not attachments:
+        return messages
+
+    image_blocks: list[dict] = []
+    text_prefix_parts: list[str] = []
+
+    for att in attachments:
+        mime: str  = att.get("type", "")
+        name: str  = att.get("name", "file")
+        data: str  = att.get("data", "")
+
+        if mime.startswith("image/"):
+            image_blocks.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{mime};base64,{data}"},
+            })
+        else:
+            # Attempt UTF-8 decode for text / code / JSON files.
+            try:
+                raw_bytes = b64.b64decode(data)
+                text_content = raw_bytes.decode("utf-8", errors="replace")
+                # Cap individual file content to avoid blowing out the context window.
+                if len(text_content) > 4000:
+                    text_content = text_content[:4000] + "\n… (truncated)"
+                lang = name.rsplit(".", 1)[-1] if "." in name else ""
+                text_prefix_parts.append(
+                    f"[Attached file: {name}]\n```{lang}\n{text_content}\n```"
+                )
+            except Exception:
+                text_prefix_parts.append(f"[Attached binary file: {name}]")
+
+    if not image_blocks and not text_prefix_parts:
+        return messages
+
+    # Find the last user message and rebuild its content.
+    patched = list(messages)
+    for i in range(len(patched) - 1, -1, -1):
+        if patched[i].get("role") == "user":
+            original_text: str = patched[i].get("content") or ""
+            if isinstance(original_text, list):
+                # Already multimodal for some reason — leave as-is.
+                break
+
+            # Prepend any extracted text blocks to the user's own text.
+            pieces = text_prefix_parts + ([original_text] if original_text else [])
+            combined_text = "\n\n".join(pieces)
+
+            if image_blocks:
+                new_content: list[dict] | str = (
+                    [{"type": "text", "text": combined_text or " "}] + image_blocks
+                )
+            else:
+                new_content = combined_text
+
+            patched[i] = {**patched[i], "content": new_content}
+            break
+
+    return patched
 
 
 def _inject_tool_results(

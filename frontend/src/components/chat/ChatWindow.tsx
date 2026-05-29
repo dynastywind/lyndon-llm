@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, Component } from 'react'
 import { flushSync } from 'react-dom'
 import type { ReactNode, ErrorInfo } from 'react'
-import { Send, Loader2, Check, AlertCircle, Copy } from 'lucide-react'
+import { Send, Loader2, Check, AlertCircle, Copy, Paperclip, X, FileText, Image as ImageIcon } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -22,7 +23,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
 import { getChatMessages } from '@/api/client'
-import type { Message, ToolCallRecord, ChartSpec, ChartSeries, ChatSessionMessage } from '@/types'
+import type { Message, ToolCallRecord, ChartSpec, ChartSeries, ChatSessionMessage, MessageAttachment } from '@/types'
 
 // ─── CodeBlock ────────────────────────────────────────────────────────────────
 
@@ -353,6 +354,84 @@ const MD_COMPONENTS: Components = {
   },
 }
 
+// ─── Attachment helpers ───────────────────────────────────────────────────────
+
+/** Local state shape — object URL for fast preview, revoked on cleanup. */
+interface LocalAttachment {
+  id: string
+  file: File
+  /** Blob object URL (images only) — revoked when removed or submitted. */
+  previewUrl: string | null
+}
+
+/** Read a file and return its full data URL ("data:<type>;base64,…"). */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload  = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  attachment: LocalAttachment
+  onRemove: (id: string) => void
+}) {
+  return (
+    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-background/60 px-2 py-1 text-xs max-w-[180px]">
+      {attachment.previewUrl ? (
+        <img
+          src={attachment.previewUrl}
+          alt={attachment.file.name}
+          className="w-6 h-6 rounded object-cover shrink-0"
+        />
+      ) : (
+        <FileText size={12} className="shrink-0 text-muted-foreground" />
+      )}
+      <span className="truncate text-foreground/70 select-none">{attachment.file.name}</span>
+      <button
+        type="button"
+        onClick={() => onRemove(attachment.id)}
+        className="ml-0.5 shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-foreground hover:bg-accent transition-colors"
+      >
+        <X size={10} />
+      </button>
+    </div>
+  )
+}
+
+// ─── MessageAttachments ───────────────────────────────────────────────────────
+
+function MessageAttachments({ attachments }: { attachments: MessageAttachment[] }) {
+  if (!attachments.length) return null
+  return (
+    <div className="flex flex-wrap gap-1.5 mb-2">
+      {attachments.map((a, i) =>
+        a.type.startsWith('image/') ? (
+          <img
+            key={i}
+            src={a.dataUrl}
+            alt={a.name}
+            className="max-w-[220px] max-h-[160px] rounded-xl object-cover"
+          />
+        ) : (
+          <div
+            key={i}
+            className="flex items-center gap-1.5 rounded-lg bg-white/15 px-2 py-1 text-xs"
+          >
+            <FileText size={12} className="shrink-0" />
+            <span className="truncate max-w-[140px]">{a.name}</span>
+          </div>
+        ),
+      )}
+    </div>
+  )
+}
+
 // ─── MessageActions ───────────────────────────────────────────────────────────
 
 function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
@@ -410,7 +489,10 @@ function MessageBubble({ msg }: { msg: Message }) {
       <div className="flex justify-end">
         <div className="relative group/msg max-w-[75%] pb-7">
           <div className="rounded-2xl rounded-br-sm px-4 py-2.5 text-sm bg-primary text-primary-foreground">
-            <p className="whitespace-pre-wrap">{msg.content}</p>
+            {msg.attachments && msg.attachments.length > 0 && (
+              <MessageAttachments attachments={msg.attachments} />
+            )}
+            {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
           </div>
           <MessageActions msg={msg} isUser={true} />
         </div>
@@ -493,6 +575,45 @@ export function ChatWindow() {
 
   const { send } = useStream()
   const [input, setInput] = useState('')
+
+  // ── Attachments ───────────────────────────────────────────────────────
+  const [attachments, setAttachments] = useState<LocalAttachment[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const attachmentsRef = useRef<LocalAttachment[]>([])
+
+  // Keep ref in sync so the unmount cleanup always sees the latest list.
+  useEffect(() => { attachmentsRef.current = attachments }, [attachments])
+
+  // Revoke any remaining object URLs when the component unmounts.
+  useEffect(() => {
+    return () => {
+      attachmentsRef.current.forEach((a) => {
+        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl)
+      })
+    }
+  }, [])
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    setAttachments((prev) => [
+      ...prev,
+      ...files.map((f) => ({
+        id: crypto.randomUUID(),
+        file: f,
+        previewUrl: f.type.startsWith('image/') ? URL.createObjectURL(f) : null,
+      })),
+    ])
+    // Reset so the same file can be re-selected if removed and re-added.
+    e.target.value = ''
+  }, [])
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => {
+      const item = prev.find((a) => a.id === id)
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl)
+      return prev.filter((a) => a.id !== id)
+    })
+  }, [])
 
   // Pagination state
   const [hasMore, setHasMore]         = useState(false)
@@ -617,9 +738,24 @@ export function ChatWindow() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const msg = input.trim()
-    if (!msg || isStreaming) return
+    if ((!msg && attachments.length === 0) || isStreaming) return
+
+    // Convert files → data URLs (needed for display AND the API payload).
+    let msgAttachments: MessageAttachment[] | undefined
+    if (attachments.length > 0) {
+      const dataUrls = await Promise.all(attachments.map((a) => fileToDataUrl(a.file)))
+      msgAttachments = attachments.map((a, i) => ({
+        name: a.file.name,
+        type: a.file.type,
+        dataUrl: dataUrls[i],
+      }))
+      // Blob URLs are no longer needed — revoke to free memory.
+      attachments.forEach((a) => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl) })
+      setAttachments([])
+    }
+
     setInput('')
-    await send(msg)
+    await send(msg, msgAttachments)
   }
 
   // ─── render ───────────────────────────────────────────────────────────────
@@ -663,29 +799,97 @@ export function ChatWindow() {
           onSubmit={handleSubmit}
           className="mx-auto w-full max-w-4xl px-4 flex items-end gap-2"
         >
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleSubmit(e)
-              }
-            }}
-            placeholder="Message LyndonLLM…"
-            rows={1}
-            className={cn(
-              'flex-1 resize-none bg-input rounded-xl px-4 py-2.5 text-sm',
-              'focus:outline-none focus:ring-1 focus:ring-ring',
-              'min-h-[42px] max-h-40',
-            )}
+          {/* Hidden file picker */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*,.pdf,.txt,.md,.csv,.json,.py,.ts,.tsx,.js,.jsx,.java,.cpp,.c,.go,.rs,.html,.css"
+            className="hidden"
+            onChange={handleFileSelect}
           />
+
+          {/* Upload button + dropdown */}
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'p-2.5 rounded-xl text-muted-foreground transition-colors',
+                  'hover:text-foreground hover:bg-accent',
+                  attachments.length > 0 && 'text-primary hover:text-primary',
+                )}
+                title="Attach files or photos"
+              >
+                <Paperclip size={16} />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                sideOffset={8}
+                align="start"
+                className={cn(
+                  'z-50 min-w-[180px] rounded-xl border border-border',
+                  'bg-popover shadow-lg p-1',
+                  'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                  'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+                  'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+                )}
+              >
+                <DropdownMenu.Item
+                  onSelect={() => fileInputRef.current?.click()}
+                  className={cn(
+                    'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm',
+                    'cursor-pointer outline-none select-none',
+                    'text-foreground hover:bg-accent transition-colors',
+                  )}
+                >
+                  <ImageIcon size={14} className="text-muted-foreground shrink-0" />
+                  Add files or photos
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+
+          {/* Textarea + attachment chips — wrapped so they share one visual container */}
+          <div
+            className={cn(
+              'flex-1 flex flex-col rounded-xl bg-input',
+              'ring-1 ring-transparent focus-within:ring-ring transition-shadow',
+              'overflow-hidden',
+            )}
+          >
+            {/* Attachment chip strip */}
+            {attachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
+                {attachments.map((a) => (
+                  <AttachmentChip key={a.id} attachment={a} onRemove={removeAttachment} />
+                ))}
+              </div>
+            )}
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSubmit(e)
+                }
+              }}
+              placeholder="Message LyndonLLM…"
+              rows={1}
+              className="resize-none bg-transparent px-4 py-2.5 text-sm focus:outline-none min-h-[42px] max-h-40"
+            />
+          </div>
+
+          {/* Send button */}
           <button
             type="submit"
-            disabled={isStreaming || !input.trim()}
+            disabled={isStreaming || (!input.trim() && attachments.length === 0)}
             className={cn(
               'p-2.5 rounded-xl bg-primary text-primary-foreground transition-opacity',
-              (isStreaming || !input.trim()) && 'opacity-40 cursor-not-allowed',
+              (isStreaming || (!input.trim() && attachments.length === 0)) &&
+                'opacity-40 cursor-not-allowed',
             )}
           >
             <Send size={16} />
