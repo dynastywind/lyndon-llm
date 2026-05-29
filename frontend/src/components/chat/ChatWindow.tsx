@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, Component } from 'react'
 import { flushSync, createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import type { ReactNode, ErrorInfo } from 'react'
 import { Send, Loader2, Check, AlertCircle, Copy, Paperclip, X, FileText, Image as ImageIcon, PanelRight } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
@@ -632,7 +633,7 @@ function ContextPanel({ items }: { items: MessageAttachment[] }) {
 
   return (
     <>
-      <div className="w-52 shrink-0 border-l border-border flex flex-col">
+      <div className="w-52 h-full flex flex-col">
         {/* Header */}
         <div className="px-3.5 py-3 border-b border-border shrink-0">
           <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none">
@@ -1027,12 +1028,9 @@ export function ChatWindow() {
   // ─── render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full">
+    <div className="flex flex-col h-full">
 
-    {/* ── Chat area ─────────────────────────────────────────────────── */}
-    <div className="flex flex-col flex-1 min-w-0">
-
-      {/* Title bar */}
+      {/* ── Title bar (full width) ────────────────────────────────────── */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
         <h1 className="text-sm font-medium truncate text-foreground">
           {sessionTitle ?? 'New chat'}
@@ -1042,16 +1040,19 @@ export function ChatWindow() {
           onClick={() => setShowContext((v) => !v)}
           title="Toggle context panel"
           className={cn(
-            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
+            'p-1.5 rounded-lg transition-colors',
             showContext
               ? 'bg-accent text-foreground'
               : 'text-muted-foreground hover:text-foreground hover:bg-accent',
           )}
         >
-          <PanelRight size={14} />
-          Context
+          <PanelRight size={15} />
         </button>
       </div>
+
+    {/* ── Body: messages + optional context column ─────────────────── */}
+    <div className="flex flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-w-0">
 
       {/* Messages */}
       <div
@@ -1189,9 +1190,24 @@ export function ChatWindow() {
       </div>
     </div>
 
-    {/* ── Context panel (toggled by title-bar button) ───────────────── */}
-    {showContext && <ContextPanel items={contextAttachments} />}
+    {/* Context panel — slides in from right, sits below the title bar */}
+    <AnimatePresence>
+      {showContext && (
+        <motion.div
+          key="context-panel"
+          className="shrink-0 overflow-hidden border-l border-border"
+          style={{ width: 208 }}
+          initial={{ x: '100%' }}
+          animate={{ x: 0 }}
+          exit={{ x: '100%' }}
+          transition={{ type: 'tween', duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+        >
+          <ContextPanel items={contextAttachments} />
+        </motion.div>
+      )}
+    </AnimatePresence>
 
+    </div>
     </div>
   )
 }
