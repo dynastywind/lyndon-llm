@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, Component } from 'react'
-import { flushSync } from 'react-dom'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, Component } from 'react'
+import { flushSync, createPortal } from 'react-dom'
 import type { ReactNode, ErrorInfo } from 'react'
-import { Send, Loader2, Check, AlertCircle, Copy, Paperclip, X, FileText, Image as ImageIcon } from 'lucide-react'
+import { Send, Loader2, Check, AlertCircle, Copy, Paperclip, X, FileText, Image as ImageIcon, PanelRight } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
@@ -404,31 +404,267 @@ function AttachmentChip({
   )
 }
 
+// ─── AttachmentPreviewModal ───────────────────────────────────────────────────
+
+/** Extension → Prism language identifier. */
+const EXT_LANG: Record<string, string> = {
+  py: 'python', js: 'javascript', ts: 'typescript', tsx: 'tsx', jsx: 'jsx',
+  java: 'java', cpp: 'cpp', c: 'c', go: 'go', rs: 'rust',
+  html: 'html', css: 'css', json: 'json', md: 'markdown',
+  sh: 'bash', bash: 'bash', yaml: 'yaml', yml: 'yaml',
+  toml: 'toml', sql: 'sql', txt: 'plaintext', csv: 'plaintext',
+}
+
+function AttachmentPreviewModal({
+  attachment,
+  onClose,
+}: {
+  attachment: MessageAttachment
+  onClose: () => void
+}) {
+  const isImage = attachment.type.startsWith('image/')
+  const isPdf   = attachment.type === 'application/pdf'
+
+  // Decode text / code content from the data URL.
+  const { text, lang } = useMemo(() => {
+    if (isImage || isPdf) return { text: null, lang: 'plaintext' }
+    try {
+      const b64   = attachment.dataUrl.split(',')[1] ?? ''
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+      const str   = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
+      const ext   = attachment.name.split('.').pop()?.toLowerCase() ?? ''
+      return { text: str, lang: EXT_LANG[ext] ?? 'plaintext' }
+    } catch {
+      return { text: null, lang: 'plaintext' }
+    }
+  }, [attachment, isImage, isPdf])
+
+  const themeName = useAppStore((s) => s.codeTheme)
+  const theme     = CODE_THEMES[themeName] ?? CODE_THEMES[CODE_THEME_DEFAULT]
+
+  // Close on Escape.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className={cn(
+          'relative flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden',
+          isImage
+            ? 'max-w-[92vw] max-h-[92vh]'
+            : 'w-[740px] max-w-[95vw] max-h-[88vh]',
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border shrink-0">
+          {isImage
+            ? <ImageIcon size={14} className="text-muted-foreground shrink-0" />
+            : <FileText  size={14} className="text-muted-foreground shrink-0" />
+          }
+          <span className="flex-1 text-sm font-medium truncate">{attachment.name}</span>
+          <button
+            onClick={onClose}
+            className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <X size={15} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-auto flex-1">
+          {isImage ? (
+            <div className="flex items-center justify-center p-4 bg-black/20">
+              <img
+                src={attachment.dataUrl}
+                alt={attachment.name}
+                className="max-w-full max-h-[82vh] object-contain rounded-lg"
+              />
+            </div>
+          ) : isPdf ? (
+            <embed
+              src={attachment.dataUrl}
+              type="application/pdf"
+              className="w-full h-[72vh]"
+            />
+          ) : text !== null ? (
+            <SyntaxHighlighter
+              language={lang}
+              style={theme}
+              PreTag="div"
+              showLineNumbers
+              customStyle={{
+                margin: 0,
+                borderRadius: 0,
+                fontSize: '0.78rem',
+                lineHeight: '1.6',
+                padding: '1rem 1rem 1rem 0.5rem',
+              }}
+              codeTagProps={{ style: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }}
+            >
+              {text}
+            </SyntaxHighlighter>
+          ) : (
+            <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
+              Binary file — cannot preview
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 // ─── MessageAttachments ───────────────────────────────────────────────────────
 
 function MessageAttachments({ attachments }: { attachments: MessageAttachment[] }) {
+  const [previewing, setPreviewing] = useState<MessageAttachment | null>(null)
+
   if (!attachments.length) return null
   return (
-    <div className="flex flex-wrap gap-1.5 mb-2">
-      {attachments.map((a, i) =>
-        a.type.startsWith('image/') ? (
-          <img
-            key={i}
-            src={a.dataUrl}
-            alt={a.name}
-            className="max-w-[220px] max-h-[160px] rounded-xl object-cover"
-          />
-        ) : (
-          <div
-            key={i}
-            className="flex items-center gap-1.5 rounded-lg bg-white/15 px-2 py-1 text-xs"
-          >
-            <FileText size={12} className="shrink-0" />
-            <span className="truncate max-w-[140px]">{a.name}</span>
-          </div>
-        ),
+    <>
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {attachments.map((a, i) =>
+          a.type.startsWith('image/') ? (
+            <img
+              key={i}
+              src={a.dataUrl}
+              alt={a.name}
+              onClick={() => setPreviewing(a)}
+              className="max-w-[220px] max-h-[160px] rounded-xl object-cover cursor-pointer hover:opacity-80 transition-opacity"
+            />
+          ) : (
+            <div
+              key={i}
+              onClick={() => setPreviewing(a)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-lg bg-white/15 px-2 py-1 text-xs',
+                'cursor-pointer hover:bg-white/25 transition-colors',
+              )}
+            >
+              <FileText size={12} className="shrink-0" />
+              <span className="truncate max-w-[140px]">{a.name}</span>
+            </div>
+          ),
+        )}
+      </div>
+      {previewing && (
+        <AttachmentPreviewModal
+          attachment={previewing}
+          onClose={() => setPreviewing(null)}
+        />
       )}
-    </div>
+    </>
+  )
+}
+
+// ─── ContextPanel ────────────────────────────────────────────────────────────
+
+function formatFileSize(dataUrl: string): string {
+  const b64   = dataUrl.split(',')[1] ?? ''
+  const bytes = Math.floor(b64.length * 0.75)
+  if (bytes < 1024)        return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function ContextItem({
+  attachment,
+  onClick,
+}: {
+  attachment: MessageAttachment
+  onClick: () => void
+}) {
+  const isImage = attachment.type.startsWith('image/')
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'w-full text-left rounded-xl overflow-hidden',
+        'border border-border/50 hover:border-border',
+        'bg-background/40 hover:bg-background/70',
+        'transition-colors cursor-pointer',
+      )}
+    >
+      {isImage ? (
+        <>
+          <img
+            src={attachment.dataUrl}
+            alt={attachment.name}
+            className="w-full h-28 object-cover"
+          />
+          <div className="px-2 py-1.5">
+            <p className="text-[11px] text-muted-foreground truncate leading-tight">
+              {attachment.name}
+            </p>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center gap-2 px-2.5 py-2.5">
+          <div className="shrink-0 w-7 h-7 rounded-lg bg-muted/50 flex items-center justify-center">
+            <FileText size={13} className="text-muted-foreground" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-foreground/80 truncate leading-tight">
+              {attachment.name}
+            </p>
+            <p className="text-[10px] text-muted-foreground/50 mt-0.5">
+              {formatFileSize(attachment.dataUrl)}
+            </p>
+          </div>
+        </div>
+      )}
+    </button>
+  )
+}
+
+function ContextPanel({ items }: { items: MessageAttachment[] }) {
+  const [previewing, setPreviewing] = useState<MessageAttachment | null>(null)
+
+  return (
+    <>
+      <div className="w-52 shrink-0 border-l border-border flex flex-col">
+        {/* Header */}
+        <div className="px-3.5 py-3 border-b border-border shrink-0">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none">
+            Context
+          </h2>
+        </div>
+
+        {/* Items */}
+        <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
+          {items.length === 0 ? (
+            <p className="text-xs text-muted-foreground/40 text-center pt-6 select-none leading-relaxed">
+              Files and photos you<br />share will appear here
+            </p>
+          ) : (
+            items.map((att, i) => (
+              <ContextItem
+                key={i}
+                attachment={att}
+                onClick={() => setPreviewing(att)}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
+      {previewing && (
+        <AttachmentPreviewModal
+          attachment={previewing}
+          onClose={() => setPreviewing(null)}
+        />
+      )}
+    </>
   )
 }
 
@@ -570,11 +806,33 @@ export function ChatWindow() {
     prependMessages,
     isStreaming,
     sessionId,
+    sessionTitle,
     scrollToBottomTick,
   } = useAppStore()
 
+  // ── Context panel visibility (hidden by default) ──────────────────────
+  const [showContext, setShowContext] = useState(false)
+
   const { send } = useStream()
   const [input, setInput] = useState('')
+
+  // ── Context panel — collect all attachments from current session ──────
+  // Newest-first; deduplicated by data URL prefix so identical files are
+  // not listed twice even if sent in multiple messages.
+  const contextAttachments = useMemo<MessageAttachment[]>(() => {
+    const result: MessageAttachment[] = []
+    const seen = new Set<string>()
+    for (let i = messages.length - 1; i >= 0; i--) {
+      for (const att of messages[i].attachments ?? []) {
+        const key = att.dataUrl.slice(0, 80)
+        if (!seen.has(key)) {
+          seen.add(key)
+          result.push(att)
+        }
+      }
+    }
+    return result
+  }, [messages])
 
   // ── Attachments ───────────────────────────────────────────────────────
   const [attachments, setAttachments] = useState<LocalAttachment[]>([])
@@ -761,7 +1019,32 @@ export function ChatWindow() {
   // ─── render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full">
+
+    {/* ── Chat area ─────────────────────────────────────────────────── */}
+    <div className="flex flex-col flex-1 min-w-0">
+
+      {/* Title bar */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
+        <h1 className="text-sm font-medium truncate text-foreground">
+          {sessionTitle ?? 'New chat'}
+        </h1>
+        <button
+          type="button"
+          onClick={() => setShowContext((v) => !v)}
+          title="Toggle context panel"
+          className={cn(
+            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors',
+            showContext
+              ? 'bg-accent text-foreground'
+              : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+          )}
+        >
+          <PanelRight size={14} />
+          Context
+        </button>
+      </div>
+
       {/* Messages */}
       <div
         ref={scrollRef}
@@ -896,6 +1179,11 @@ export function ChatWindow() {
           </button>
         </form>
       </div>
+    </div>
+
+    {/* ── Context panel (toggled by title-bar button) ───────────────── */}
+    {showContext && <ContextPanel items={contextAttachments} />}
+
     </div>
   )
 }

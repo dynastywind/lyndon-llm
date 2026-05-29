@@ -46,6 +46,7 @@ export function Sidebar() {
   const {
     mode, setMode,
     sessionId, setSessionId,
+    setSessionTitle,
     clearMessages,
     bumpSessionVersion,
   } = useAppStore()
@@ -61,6 +62,14 @@ export function Sidebar() {
   const { sessions, loading, loadingMore, hasMore, sentinelRef, removeSession } =
     useChatHistory(mode === 'chat' ? 'chat' : 'code')
 
+  // Keep the title fresh: the backend sets it after the first exchange, so
+  // whenever the sessions list reloads we sync the current session's title.
+  useEffect(() => {
+    if (!sessionId) return
+    const current = sessions.find((s) => s.session_id === sessionId)
+    if (current) setSessionTitle(current.title)
+  }, [sessions, sessionId, setSessionTitle])
+
   // ── new chat ───────────────────────────────────────────────────────────────
   // Don't create a DB session until the user actually sends a message.
 
@@ -68,6 +77,7 @@ export function Sidebar() {
     if (!sessionId) return   // already in the "no thread" state — do nothing
     clearMessages()
     setSessionId(null)
+    setSessionTitle(null)
   }
 
   // ── resume session ─────────────────────────────────────────────────────────
@@ -76,7 +86,9 @@ export function Sidebar() {
   const handleResumeSession = (session: ChatSession) => {
     clearMessages()           // clear immediately to avoid flash of stale content
     setSessionId(session.session_id)
+    setSessionTitle(session.title)
   }
+
 
   // ── delete session ─────────────────────────────────────────────────────────
 

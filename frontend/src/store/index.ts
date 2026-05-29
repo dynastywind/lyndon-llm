@@ -9,6 +9,8 @@ interface AppState {
   // Session
   sessionId: string | null
   setSessionId: (id: string | null) => void
+  sessionTitle: string | null
+  setSessionTitle: (title: string | null) => void
   mode: Mode
   setMode: (mode: Mode) => void
 
@@ -50,6 +52,8 @@ export const useAppStore = create<AppState>()(
       // Session
       sessionId: null,
       setSessionId: (id) => set({ sessionId: id }),
+      sessionTitle: null,
+      setSessionTitle: (title) => set({ sessionTitle: title }),
       mode: 'chat',
       setMode: (mode) => set({ mode }),
 
