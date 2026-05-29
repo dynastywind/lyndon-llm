@@ -103,12 +103,15 @@ class ChatEngine:
             "message": user_message,
         })
 
-        # Persist user message
+        # Persist user message (with attachments so they survive a reload)
         if self._db:
             from db.repos.chat import ChatRepo
             _repo = ChatRepo(self._db)
             await _repo.ensure_session(self.session.session_id, "chat")
-            await _repo.add_message(self.session.session_id, "user", user_message)
+            await _repo.add_message(
+                self.session.session_id, "user", user_message,
+                attachments=attachments or None,
+            )
 
         # 1. Route: direct | rag | tools | rag_and_tools
         if settings.orchestrator_enabled:

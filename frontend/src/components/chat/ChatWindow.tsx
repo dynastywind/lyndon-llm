@@ -794,6 +794,14 @@ function toStoreMessage(m: ChatSessionMessage): Message {
     content: m.content,
     timestamp: new Date(m.created_at),
     toolName: m.tool_name ?? undefined,
+    // Reconstruct full data URLs from the stored {name, type, data} payloads.
+    attachments: m.attachments?.length
+      ? m.attachments.map((a) => ({
+          name: a.name,
+          type: a.type,
+          dataUrl: `data:${a.type};base64,${a.data}`,
+        }))
+      : undefined,
   }
 }
 

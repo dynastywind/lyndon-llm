@@ -52,6 +52,9 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String(16), nullable=False)   # user|assistant|tool
     content: Mapped[str] = mapped_column(Text, nullable=False)
     tool_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # JSON-encoded list of {name, type, data} attachment dicts (base64 payload).
+    # Null for messages that carry no attachments.
+    attachments_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

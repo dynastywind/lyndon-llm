@@ -25,11 +25,29 @@ async def lifespan(app: FastAPI):
 
 
 async def _init_db() -> None:
-    """Create all tables if they don't exist yet (idempotent)."""
+    """Create all tables if they don't exist yet, then apply incremental migrations."""
     from db.base import engine, Base
     import db.models  # noqa: F401 — side-effect: registers all models with Base.metadata
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _migrate(conn)
+
+
+async def _migrate(conn) -> None:
+    """
+    Lightweight forward-only migrations for columns added after initial release.
+    Each ALTER TABLE is wrapped in a try/except so running it twice is harmless.
+    """
+    from sqlalchemy import text
+    migrations = [
+        # v2 — persist file/image attachments with each user message
+        "ALTER TABLE chat_messages ADD COLUMN attachments_json TEXT",
+    ]
+    for stmt in migrations:
+        try:
+            await conn.execute(text(stmt))
+        except Exception:
+            pass  # column already exists — safe to ignore
 
 
 def _register_all_tools() -> None:

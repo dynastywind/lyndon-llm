@@ -119,6 +119,7 @@ async def get_all_session_messages(
                 "content": m.content,
                 "tool_name": m.tool_name,
                 "created_at": m.created_at.isoformat(),
+                "attachments": repo._attachments(m),
             }
             for m in messages
         ]
@@ -147,6 +148,7 @@ async def get_session_messages(
                 "content": m.content,
                 "tool_name": m.tool_name,
                 "created_at": m.created_at.isoformat(),
+                "attachments": repo._attachments(m),
             }
             for m in messages
         ],

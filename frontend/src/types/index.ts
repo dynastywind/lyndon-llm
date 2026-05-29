@@ -129,6 +129,8 @@ export interface ChatSessionMessage {
   content: string
   tool_name: string | null
   created_at: string
+  /** Raw attachment payloads as stored in the DB (base64 data, no prefix). */
+  attachments: Array<{ name: string; type: string; data: string }>
 }
 
 // ── Tool registry (Settings) ──────────────────────────────────────────────────

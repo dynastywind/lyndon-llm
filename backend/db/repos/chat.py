@@ -3,6 +3,7 @@ CRUD operations for chat sessions and messages.
 """
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -107,18 +108,34 @@ class ChatRepo:
         role: str,
         content: str,
         tool_name: str | None = None,
+        attachments: list[dict] | None = None,
     ) -> ChatMessage:
+        """
+        Persist a message.  `attachments` is a list of
+        ``{name, type, data}`` dicts (``data`` is raw base64).
+        """
         row = ChatMessage(
             id=str(uuid.uuid4()),
             session_id=session_id,
             role=role,
             content=content,
             tool_name=tool_name,
+            attachments_json=json.dumps(attachments) if attachments else None,
         )
         self._db.add(row)
         await self._db.commit()
         await self._db.refresh(row)
         return row
+
+    @staticmethod
+    def _attachments(msg: ChatMessage) -> list[dict]:
+        """Decode the JSON attachment list, returning [] when absent."""
+        if not msg.attachments_json:
+            return []
+        try:
+            return json.loads(msg.attachments_json)
+        except (ValueError, TypeError):
+            return []
 
     async def get_messages(self, session_id: str) -> list[ChatMessage]:
         rows = list(
