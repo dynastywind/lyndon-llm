@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { streamChat } from '@/api/client'
+import { createChatSession, streamChat } from '@/api/client'
 import { useAppStore } from '@/store'
 import { generateId } from '@/lib/utils'
 import type { ToolCallRecord, ChartSpec } from '@/types'
@@ -9,10 +9,23 @@ function chartSpecToMarkdown(spec: ChartSpec): string {
 }
 
 export function useStream() {
-  const { sessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom } = useAppStore()
+  const { sessionId, setSessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom } = useAppStore()
 
   const send = useCallback(
     async (userMessage: string) => {
+      // Lazily create a session on the very first message.
+      let activeSessionId = sessionId
+      if (!activeSessionId) {
+        try {
+          const session = await createChatSession()
+          activeSessionId = session.session_id
+          setSessionId(activeSessionId)
+          bumpSessionVersion()   // show the new session in the sidebar
+        } catch {
+          return   // can't proceed without a session
+        }
+      }
+
       // 1. Add user bubble immediately
       addMessage({ role: 'user', content: userMessage })
       bumpScrollToBottom()
@@ -28,7 +41,7 @@ export function useStream() {
       }))
 
       try {
-        await streamChat(userMessage, sessionId, (type, data) => {
+        await streamChat(userMessage, activeSessionId, (type, data) => {
           switch (type) {
             // ── LLM token ─────────────────────────────────────────────
             case 'token': {
@@ -113,7 +126,7 @@ export function useStream() {
         bumpSessionVersion()
       }
     },
-    [sessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom],
+    [sessionId, setSessionId, addMessage, setStreaming, bumpSessionVersion, bumpScrollToBottom],
   )
 
   return { send }

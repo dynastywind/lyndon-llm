@@ -101,6 +101,19 @@ export async function getChatMessages(
   return res.json()
 }
 
+export async function getAllChatMessages(
+  sessionId: string,
+): Promise<{ messages: ChatSessionMessage[] }> {
+  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/messages/all`)
+  if (!res.ok) throw new Error(`Failed to load messages: ${res.statusText}`)
+  return res.json()
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  const res = await fetch(`${BASE}/chat/sessions/${sessionId}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(`Failed to delete session: ${res.statusText}`)
+}
+
 export async function ingestDocument(source: string): Promise<{ chunks_stored: number }> {
   const res = await fetch(`${BASE}/chat/ingest`, {
     method: 'POST',

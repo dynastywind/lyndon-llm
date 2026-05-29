@@ -75,6 +75,12 @@ export function useChatHistory(mode = 'chat') {
     return () => observer.disconnect()
   }, [loadMore])
 
+  // Optimistically remove one session from local state without a round-trip.
+  const removeSession = useCallback((sessionId: string) => {
+    setSessions((prev) => prev.filter((s) => s.session_id !== sessionId))
+    setTotal((prev) => Math.max(0, prev - 1))
+  }, [])
+
   return {
     sessions,
     loading,
@@ -82,5 +88,6 @@ export function useChatHistory(mode = 'chat') {
     hasMore,
     sentinelRef,
     refresh: fetchInitial,
+    removeSession,
   }
 }

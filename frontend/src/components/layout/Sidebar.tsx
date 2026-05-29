@@ -1,27 +1,27 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   MessageSquare,
-  Wrench,
   Code2,
   Settings,
   Plus,
   Loader2,
   Upload,
+  Trash2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
-import { createChatSession } from '@/api/client'
+import { createChatSession, deleteChatSession } from '@/api/client'
 import { SettingsDialog } from './SettingsDialog'
 import type { Mode, ChatSession } from '@/types'
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
 const MODES: { id: Mode; label: string; icon: React.ElementType }[] = [
-  { id: 'chat',   label: 'Chat',   icon: MessageSquare },
-  { id: 'cowork', label: 'Cowork', icon: Wrench },
-  { id: 'code',   label: 'Code',   icon: Code2 },
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
+  { id: 'code', label: 'Code', icon: Code2 },
 ]
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -51,20 +51,16 @@ export function Sidebar() {
 
   const [uploadOpen, setUploadOpen] = useState(false)
 
-  const { sessions, loading, loadingMore, hasMore, sentinelRef } =
-    useChatHistory(mode === 'chat' ? 'chat' : mode === 'cowork' ? 'cowork' : 'code')
+  const { sessions, loading, loadingMore, hasMore, sentinelRef, removeSession } =
+    useChatHistory(mode === 'chat' ? 'chat' : 'code')
 
   // ── new chat ───────────────────────────────────────────────────────────────
+  // Don't create a DB session until the user actually sends a message.
 
-  const handleNewChat = async () => {
-    try {
-      const session = await createChatSession()
-      setSessionId(session.session_id)
-      clearMessages()
-      bumpSessionVersion()
-    } catch {
-      clearMessages()
-    }
+  const handleNewChat = () => {
+    if (!sessionId) return   // already in the "no thread" state — do nothing
+    clearMessages()
+    setSessionId(null)
   }
 
   // ── resume session ─────────────────────────────────────────────────────────
@@ -73,6 +69,28 @@ export function Sidebar() {
   const handleResumeSession = (session: ChatSession) => {
     clearMessages()           // clear immediately to avoid flash of stale content
     setSessionId(session.session_id)
+  }
+
+  // ── delete session ─────────────────────────────────────────────────────────
+
+  const handleDeleteSession = async (session: ChatSession) => {
+    // Optimistic removal so the row disappears immediately.
+    removeSession(session.session_id)
+
+    // If deleting the currently active session, start a fresh one.
+    if (session.session_id === sessionId) {
+      clearMessages()
+      try {
+        const fresh = await createChatSession()
+        setSessionId(fresh.session_id)
+        bumpSessionVersion()
+      } catch {
+        clearMessages()
+      }
+    }
+
+    // Fire-and-forget the actual delete; ignore 404 (already gone).
+    deleteChatSession(session.session_id).catch(() => {})
   }
 
   // ─── render ───────────────────────────────────────────────────────────────
@@ -86,7 +104,7 @@ export function Sidebar() {
       </div>
 
       {/* Horizontal mode tabs */}
-      <div className="grid grid-cols-3 border-b border-border shrink-0">
+      <div className="grid grid-cols-2 border-b border-border shrink-0">
         {MODES.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -116,12 +134,6 @@ export function Sidebar() {
             >
               <Plus size={15} />
               New Chat
-            </button>
-          )}
-          {mode === 'cowork' && (
-            <button disabled className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground opacity-50 cursor-not-allowed">
-              <Plus size={15} />
-              New Task
             </button>
           )}
           {mode === 'code' && (
@@ -154,6 +166,7 @@ export function Sidebar() {
                     session={s}
                     active={sessionId === s.session_id}
                     onSelect={handleResumeSession}
+                    onDelete={handleDeleteSession}
                   />
                 ))}
               </ul>
@@ -222,29 +235,117 @@ function SessionRow({
   session,
   active,
   onSelect,
+  onDelete,
 }: {
   session: ChatSession
   active: boolean
   onSelect: (s: ChatSession) => void
+  onDelete: (s: ChatSession) => void
 }) {
+  const [confirming, setConfirming] = useState(false)
+  const trashRef  = useRef<HTMLButtonElement>(null)
+  const bubbleRef = useRef<HTMLDivElement>(null)
+
+  // Close on outside click or any scroll (position would be stale after scroll).
+  useEffect(() => {
+    if (!confirming) return
+    const onDown = (e: MouseEvent) => {
+      if (
+        !trashRef.current?.contains(e.target as Node) &&
+        !bubbleRef.current?.contains(e.target as Node)
+      ) {
+        setConfirming(false)
+      }
+    }
+    const onScroll = () => setConfirming(false)
+    document.addEventListener('mousedown', onDown)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [confirming])
+
+  // Compute fixed position below the trash button.
+  const bubbleStyle = (): React.CSSProperties => {
+    if (!trashRef.current) return {}
+    const r = trashRef.current.getBoundingClientRect()
+    return {
+      position: 'fixed',
+      bottom: window.innerHeight - r.top + 6,
+      left:   r.right + 6,
+    }
+  }
+
   return (
     <li>
-      <button
-        onClick={() => onSelect(session)}
+      <div
         className={cn(
-          'w-full text-left px-2.5 py-2 rounded-lg transition-colors',
+          'group flex items-center rounded-lg transition-colors',
           active
             ? 'bg-accent text-accent-foreground'
             : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
         )}
       >
-        <p className="text-xs font-medium truncate leading-tight">
-          {session.title ?? 'New chat'}
-        </p>
-        <p className="text-[10px] text-muted-foreground/60 mt-0.5">
-          {relativeTime(session.updated_at)}
-        </p>
-      </button>
+        {/* Session info */}
+        <button
+          onClick={() => onSelect(session)}
+          className="flex-1 min-w-0 text-left px-2.5 py-2"
+        >
+          <p className="text-xs font-medium truncate leading-tight">
+            {session.title ?? 'New chat'}
+          </p>
+          <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+            {relativeTime(session.updated_at)}
+          </p>
+        </button>
+
+        {/* Trash button — stays highlighted while bubble is open */}
+        <button
+          ref={trashRef}
+          onClick={(e) => { e.stopPropagation(); setConfirming((v) => !v) }}
+          title="Delete chat"
+          className={cn(
+            'shrink-0 mr-1.5 p-1 rounded-md transition-all duration-150',
+            'opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto',
+            'text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10',
+            confirming && 'opacity-100 pointer-events-auto text-destructive bg-destructive/10',
+          )}
+        >
+          <Trash2 size={13} />
+        </button>
+      </div>
+
+      {/* Confirmation bubble — portalled to <body> to escape overflow clipping */}
+      {confirming && createPortal(
+        <div
+          ref={bubbleRef}
+          style={bubbleStyle()}
+          className="z-[200] w-56 rounded-lg border border-border bg-card shadow-xl p-4"
+        >
+          <p className="text-xs text-muted-foreground mb-3 leading-snug">
+            Delete{' '}
+            <span className="font-medium text-foreground">
+              "{session.title ?? 'New chat'}"
+            </span>?
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setConfirming(false)}
+              className="flex-1 py-1.5 rounded-md text-xs font-medium bg-accent text-accent-foreground hover:bg-accent/80 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => { setConfirming(false); onDelete(session) }}
+              className="flex-1 py-1.5 rounded-md text-xs font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
     </li>
   )
 }

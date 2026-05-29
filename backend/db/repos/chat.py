@@ -81,6 +81,15 @@ class ChatRepo:
         else:
             await self.touch_session(session_id)
 
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a session and all its messages (cascade). Returns True if it existed."""
+        row = await self.get_session(session_id)
+        if row is None:
+            return False
+        await self._db.delete(row)
+        await self._db.commit()
+        return True
+
     async def touch_session(self, session_id: str) -> None:
         """Update updated_at so the session floats to the top of recents."""
         await self._db.execute(

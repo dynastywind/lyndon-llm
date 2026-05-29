@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, Component } from 'react'
+import { flushSync } from 'react-dom'
 import type { ReactNode, ErrorInfo } from 'react'
 import { Send, Loader2, Check, AlertCircle, Copy } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
@@ -366,7 +367,7 @@ function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
   return (
     <div
       className={cn(
-        'absolute -bottom-7 flex items-center gap-1',
+        'absolute bottom-0 flex items-center gap-1',
         isUser ? 'right-0' : 'left-0',
         'opacity-0 group-hover/msg:opacity-100',
         'pointer-events-none group-hover/msg:pointer-events-auto',
@@ -406,8 +407,8 @@ function MessageBubble({ msg }: { msg: Message }) {
 
   if (isUser) {
     return (
-      <div className="flex justify-end pb-7">
-        <div className="relative group/msg max-w-[75%]">
+      <div className="flex justify-end">
+        <div className="relative group/msg max-w-[75%] pb-7">
           <div className="rounded-2xl rounded-br-sm px-4 py-2.5 text-sm bg-primary text-primary-foreground">
             <p className="whitespace-pre-wrap">{msg.content}</p>
           </div>
@@ -418,8 +419,8 @@ function MessageBubble({ msg }: { msg: Message }) {
   }
 
   return (
-    <div className="flex justify-start pb-7">
-      <div className={cn('relative group/msg', hasCharts ? 'w-[85%]' : 'max-w-[75%]')}>
+    <div className="flex justify-start">
+      <div className={cn('relative group/msg pb-7', hasCharts ? 'w-[85%]' : 'max-w-[75%]')}>
         <div className="rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm bg-card border border-border">
           {msg.toolCalls && msg.toolCalls.length > 0 && (
             <ToolCallsSection calls={msg.toolCalls} />
@@ -446,9 +447,15 @@ function MessageBubble({ msg }: { msg: Message }) {
 
 // ─── MoreDivider ──────────────────────────────────────────────────────────────
 
-function MoreDivider({ loading }: { loading: boolean }) {
+function MoreDivider({ loading, onClick }: { loading: boolean; onClick?: () => void }) {
   return (
-    <div className="flex items-center gap-3 py-1 select-none">
+    <div
+      onClick={!loading ? onClick : undefined}
+      className={cn(
+        'flex items-center gap-3 py-1 select-none',
+        !loading && onClick && 'cursor-pointer',
+      )}
+    >
       <div className="flex-1 h-px bg-border" />
       <span className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
         {loading
@@ -487,31 +494,37 @@ export function ChatWindow() {
   const { send } = useStream()
   const [input, setInput] = useState('')
 
-  // Pagination state — reset whenever sessionId changes
-  const [hasMore, setHasMore] = useState(false)
+  // Pagination state
+  const [hasMore, setHasMore]         = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
-  // ISO cursor: the created_at of the oldest currently-displayed message
   const cursorRef = useRef<string | undefined>(undefined)
 
   // DOM refs
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const sentinelRef = useRef<HTMLDivElement>(null)
-  // Saved scroll height before a prepend, so we can restore position
+  // Saved scroll height before a prepend so we can restore position after.
   const savedScrollHeightRef = useRef(0)
-  // Set while loading/resuming a session so history opens at the newest turn.
-  const pendingInitialScrollRef = useRef(false)
+  // Stays false until the post-load rAF fires. Blocks onWheel during the
+  // brief inertia window after a session switch.
+  const canLoadRef = useRef(false)
 
   const scrollToLatest = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
     el.scrollTop = el.scrollHeight
     requestAnimationFrame(() => {
-      if (scrollRef.current) {
-        scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-      }
+      if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     })
   }, [])
+
+  // ── Reset state synchronously on session change ──────────────────────────
+  // useLayoutEffect runs before paint so these refs can never bleed stale
+  // values from a previous session into the new session's first render.
+
+  useLayoutEffect(() => {
+    savedScrollHeightRef.current = 0
+    canLoadRef.current = false
+  }, [sessionId])
 
   // ── Load initial 5 messages when sessionId changes ────────────────────────
 
@@ -521,21 +534,34 @@ export function ChatWindow() {
     const loadInitial = async () => {
       cursorRef.current = undefined
       setHasMore(false)
-      pendingInitialScrollRef.current = true
+
+      if (!sessionId) return
+
+      // When a new session is lazily created on the first send(), setSessionId()
+      // is batched with addMessage() in the same render, so messages are already
+      // present when this effect fires.  History loads always call clearMessages()
+      // first, so messages.length === 0 for those — safe to proceed.
+      if (useAppStore.getState().messages.length > 0) return
 
       try {
         const { messages: raw, has_more } = await getChatMessages(sessionId, 5)
         if (cancelled) return
 
         const converted = raw.map(toStoreMessage)
-        setMessages(converted)
-        setHasMore(has_more)
-        if (converted.length > 0) {
-          cursorRef.current = raw[0].created_at   // oldest message = cursor for next fetch
-        }
+        flushSync(() => {
+          setMessages(converted)
+          setHasMore(has_more)
+        })
+        if (converted.length > 0) cursorRef.current = raw[0].created_at
+
+        if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+        requestAnimationFrame(() => {
+          if (cancelled) return   // session changed before rAF fired — don't unlock
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+          canLoadRef.current = true
+        })
       } catch {
-        // new / empty session — messages already cleared by Sidebar
-        pendingInitialScrollRef.current = false
+        if (!cancelled) canLoadRef.current = true
       }
     }
 
@@ -544,51 +570,40 @@ export function ChatWindow() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
-  // ── Scroll to bottom when signalled ───────────────────────────────────────
-  // useLayoutEffect fires before the browser paints, so there is no visible
-  // flash of the top of the conversation when opening history.
+  // ── Scroll to bottom when signalled (during streaming) ───────────────────
 
   useLayoutEffect(() => {
-    if (scrollToBottomTick > 0) {
-      scrollToLatest()
-    }
+    if (scrollToBottomTick > 0) scrollToLatest()
   }, [scrollToBottomTick, scrollToLatest])
 
-  useLayoutEffect(() => {
-    if (pendingInitialScrollRef.current && messages.length > 0) {
-      scrollToLatest()
-      pendingInitialScrollRef.current = false
-    }
-  }, [messages.length, sessionId, scrollToLatest])
-
-  // ── Restore scroll position after prepend ─────────────────────────────────
+  // ── Restore scroll position after prepend ────────────────────────────────
+  // Keyed on messages.length so this only runs when the list actually grows,
+  // not on every render (e.g. setLoadingMore(true) would fire the no-dep
+  // version before prependMessages, clearing savedScrollHeightRef too early).
 
   useLayoutEffect(() => {
-    if (savedScrollHeightRef.current && scrollRef.current) {
-      scrollRef.current.scrollTop +=
-        scrollRef.current.scrollHeight - savedScrollHeightRef.current
-      savedScrollHeightRef.current = 0
-    }
-  })
+    if (!savedScrollHeightRef.current || !scrollRef.current) return
+    const delta = scrollRef.current.scrollHeight - savedScrollHeightRef.current
+    if (delta > 0) scrollRef.current.scrollTop += delta
+    savedScrollHeightRef.current = 0
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length])
 
   // ── Load more (older) messages ────────────────────────────────────────────
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore || pendingInitialScrollRef.current) return
+    if (loadingMore || !hasMore || !sessionId) return
+    const sid = sessionId
     setLoadingMore(true)
-    // Save scroll height before React re-renders with new messages
     savedScrollHeightRef.current = scrollRef.current?.scrollHeight ?? 0
 
     try {
-      const { messages: raw, has_more } = await getChatMessages(
-        sessionId, 5, cursorRef.current,
-      )
+      const { messages: raw, has_more } = await getChatMessages(sid, 5, cursorRef.current)
+      if (useAppStore.getState().sessionId !== sid) return
       const converted = raw.map(toStoreMessage)
       prependMessages(converted)
       setHasMore(has_more)
-      if (converted.length > 0) {
-        cursorRef.current = raw[0].created_at
-      }
+      if (converted.length > 0) cursorRef.current = raw[0].created_at
     } catch {
       // ignore
     } finally {
@@ -596,18 +611,6 @@ export function ChatWindow() {
     }
   }, [loadingMore, hasMore, sessionId, prependMessages])
 
-  // ── IntersectionObserver on the top sentinel ──────────────────────────────
-
-  useEffect(() => {
-    const el = sentinelRef.current
-    if (!el || !hasMore) return
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) loadMore() },
-      { threshold: 0.1 },
-    )
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [hasMore, loadMore])
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
@@ -624,15 +627,19 @@ export function ChatWindow() {
   return (
     <div className="flex flex-col h-full">
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto py-6">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto py-6"
+        onWheel={(e) => {
+          // deltaY < 0 = scrolling up. onWheel fires even when content doesn't
+          // overflow (onScroll would silently miss that case).
+          // canLoadRef blocks inertia-scroll carry-over from the previous session.
+          if (e.deltaY < 0 && hasMore && canLoadRef.current) loadMore()
+        }}
+      >
         <div className="mx-auto w-full max-w-4xl px-4 space-y-1">
 
-          {/* Top sentinel — triggers loadMore when scrolled into view */}
-          {hasMore && (
-            <div ref={sentinelRef}>
-              <MoreDivider loading={loadingMore} />
-            </div>
-          )}
+          {hasMore && <MoreDivider loading={loadingMore} onClick={loadMore} />}
 
           {messages.length === 0 && !hasMore && (
             <div className="flex items-center justify-center h-64">

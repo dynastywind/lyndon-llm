@@ -7,8 +7,8 @@ import type { CodeThemeName } from '@/config/codeThemes'
 
 interface AppState {
   // Session
-  sessionId: string
-  setSessionId: (id: string) => void
+  sessionId: string | null
+  setSessionId: (id: string | null) => void
   mode: Mode
   setMode: (mode: Mode) => void
 
@@ -48,7 +48,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       // Session
-      sessionId: generateId(),
+      sessionId: null,
       setSessionId: (id) => set({ sessionId: id }),
       mode: 'chat',
       setMode: (mode) => set({ mode }),

@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,6 +82,39 @@ async def list_chat_sessions(
     repo = ChatRepo(db)
     rows, total = await repo.list_sessions(mode=mode, limit=limit, offset=offset)
     return {"sessions": [_session_dict(r) for r in rows], "total": total}
+
+
+@router.delete("/sessions/{session_id}", status_code=204)
+async def delete_chat_session(session_id: str, db: AsyncSession = Depends(get_db)):
+    """Permanently delete a session and all its messages."""
+    repo = ChatRepo(db)
+    deleted = await repo.delete_session(session_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Session not found")
+    # Also evict from the in-memory session store
+    session_manager.destroy(session_id)
+
+
+@router.get("/sessions/{session_id}/messages/all")
+async def get_all_session_messages(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return every message for a session in chronological order (no limit)."""
+    repo = ChatRepo(db)
+    messages = await repo.get_messages(session_id)
+    return {
+        "messages": [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "tool_name": m.tool_name,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in messages
+        ]
+    }
 
 
 @router.get("/sessions/{session_id}/messages")
