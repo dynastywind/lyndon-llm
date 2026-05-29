@@ -23,7 +23,9 @@
       "Bash(curl -s -X POST http://localhost:11434/v1/embeddings -H 'Content-Type: application/json' -d '{\"model\": \"nomic-embed-text\", \"input\": \"test sentence\"}')",
       "Bash(.venv/bin/pip install *)",
       "Bash(.venv/bin/pip show *)",
-      "Bash(.venv/bin/python --version)"
+      "Bash(.venv/bin/python --version)",
+      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM status)",
+      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM log --oneline -3)"
     ]
   }
 }
