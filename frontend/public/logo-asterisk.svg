@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round">
+  <line x1="50.000" y1="39.000" x2="50.000" y2="10.000"></line>
+  <line x1="59.526" y1="44.500" x2="84.641" y2="30.000"></line>
+  <line x1="59.526" y1="55.500" x2="84.641" y2="70.000"></line>
+  <line x1="50.000" y1="61.000" x2="50.000" y2="90.000"></line>
+  <line x1="40.474" y1="55.500" x2="15.359" y2="70.000"></line>
+  <line x1="40.474" y1="44.500" x2="15.359" y2="30.000"></line>
+  <circle cx="50" cy="50" r="5.5" fill="currentColor" stroke="none"></circle>
+</svg>

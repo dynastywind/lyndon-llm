@@ -2,41 +2,144 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Lyndon Vision design tokens ──────────────────────────────────────────── */
 @layer base {
   :root {
-    --background: 224 71% 4%;
-    --foreground: 213 31% 91%;
-    --card: 224 71% 6%;
-    --card-foreground: 213 31% 91%;
-    --primary: 210 100% 56%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 222 47% 11%;
-    --secondary-foreground: 213 31% 91%;
-    --muted: 223 47% 11%;
-    --muted-foreground: 215 20% 55%;
-    --accent: 216 34% 17%;
-    --accent-foreground: 213 31% 91%;
-    --border: 216 34% 17%;
-    --input: 216 34% 13%;
-    --ring: 210 100% 56%;
-    --radius: 0.75rem;
+    /* Surfaces */
+    --lv-bg:          #0a0a0a;
+    --lv-elev:        #131313;
+    --lv-card:        #181818;
+    --lv-card-elev:   #1f1f1f;
+
+    /* Ink */
+    --lv-ink:         #f4f1ea;
+    --lv-soft:        #b8b3a8;
+    --lv-mute:        #6e695f;
+
+    /* Rules */
+    --lv-rule:        #232323;
+    --lv-rule-strong: #3a3a3a;
+
+    /* Accent */
+    --lv-gold:        #c8a86a;
+    --lv-gold-soft:   #b89656;
+
+    /* Type families */
+    --font-sans:    'Inter', system-ui, -apple-system, sans-serif;
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-mono:    ui-monospace, 'SF Mono', Menlo, monospace;
+
+    /* Motion */
+    --ease-snap:    cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    /* ── Tailwind token bridge ─────────────────────────────────────── */
+    /* All Tailwind color utilities stay working via these mappings.    */
+    --background:          0 0% 4%;         /* #0a0a0a */
+    --foreground:          40 15% 94%;      /* #f4f1ea */
+    --card:                0 0% 9%;         /* #181818 */
+    --card-foreground:     40 15% 94%;
+    --primary:             38 45% 60%;      /* #c8a86a gold */
+    --primary-foreground:  0 0% 4%;
+    --secondary:           0 0% 7%;         /* #131313 elev */
+    --secondary-foreground: 40 15% 94%;
+    --muted:               0 0% 7%;
+    --muted-foreground:    30 8% 44%;       /* #6e695f */
+    --accent:              0 0% 12%;        /* #1f1f1f */
+    --accent-foreground:   40 9% 70%;       /* #b8b3a8 */
+    --border:              0 0% 14%;        /* #232323 */
+    --input:               0 0% 7%;
+    --ring:                38 45% 60%;
+    --radius:              0px;             /* hard edges everywhere */
+
+    /* destructive kept for delete confirmations */
+    --destructive:         0 62% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --popover:             0 0% 9%;
+    --popover-foreground:  40 15% 94%;
   }
 }
 
 @layer base {
-  * { @apply border-border; }
+  * { @apply border-border; box-sizing: border-box; }
+  html, body, #root { height: 100%; }
   body {
-    @apply bg-background text-foreground;
+    background: var(--lv-bg);
+    color: var(--lv-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+  ::selection { background: var(--lv-gold); color: var(--lv-bg); }
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+/* ── Typography helpers ─────────────────────────────────────────────────── */
+.lv-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--lv-mute);
+  font-weight: 500;
+}
+.lv-eyebrow--gold { color: var(--lv-gold); }
 
-/* Prose overrides for dark mode */
-.prose { --tw-prose-body: hsl(var(--foreground)); --tw-prose-headings: hsl(var(--foreground)); }
-.prose code { @apply bg-muted px-1 py-0.5 rounded text-sm; }
-.prose pre { @apply bg-black/40 border border-border rounded-lg; }
+.lv-display {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--lv-ink);
+}
+
+.lv-mono {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--lv-mute);
+}
+
+/* ── Animated asterisk keyframes (logo-asterisk-animated.svg) ───────────── */
+/* emit: spoke grows outward (stroke-dashoffset animates from full-len to 0) */
+@keyframes emit {
+  0%   { stroke-dashoffset: var(--len); opacity: var(--opmin); }
+  60%  { stroke-dashoffset: 0;          opacity: 1; }
+  100% { stroke-dashoffset: 0;          opacity: 1; }
+}
+/* flicker: subtle opacity pulse per-spoke */
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: var(--opmin); }
+}
+/* core dot breathes */
+@keyframes core-breathe {
+  0%, 100% { r: 5.5; opacity: 1; }
+  50%       { r: 4;   opacity: 0.6; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lv-asterisk-animated .spoke,
+  .lv-asterisk-animated .core { animation: none !important; }
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--lv-rule-strong); }
+
+/* ── Prose overrides ─────────────────────────────────────────────────────── */
+.prose {
+  --tw-prose-body:     var(--lv-soft);
+  --tw-prose-headings: var(--lv-ink);
+  --tw-prose-bold:     var(--lv-ink);
+  --tw-prose-links:    var(--lv-gold);
+  --tw-prose-code:     var(--lv-ink);
+}
+.prose code {
+  font-family: var(--font-mono);
+  background: rgba(255,255,255,0.06);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.84em;
+}
+.prose pre { background: #0d0d0d; border: 1px solid var(--lv-rule); border-radius: 0; }

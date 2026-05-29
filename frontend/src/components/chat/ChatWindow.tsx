@@ -26,6 +26,67 @@ import { useStream } from '@/hooks/useStream'
 import { getChatMessages } from '@/api/client'
 import type { Message, ToolCallRecord, ChartSpec, ChartSeries, ChatSessionMessage, MessageAttachment } from '@/types'
 
+// ─── Asterisk mark components ─────────────────────────────────────────────────
+
+/** Static mark — logo-asterisk.svg geometry, currentColor. */
+function AsteriskMark({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none"
+         stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"
+         style={{ flex: 'none' }}>
+      <line x1="50"     y1="39"    x2="50"     y2="10" />
+      <line x1="59.526" y1="44.5"  x2="84.641" y2="30" />
+      <line x1="59.526" y1="55.5"  x2="84.641" y2="70" />
+      <line x1="50"     y1="61"    x2="50"     y2="90" />
+      <line x1="40.474" y1="55.5"  x2="15.359" y2="70" />
+      <line x1="40.474" y1="44.5"  x2="15.359" y2="30" />
+      <circle cx="50" cy="50" r="5.5" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/** Animated mark — logo-asterisk-animated.svg. Use for "agent is thinking" only. */
+function AsteriskAnimated({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none"
+         stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"
+         className="lv-asterisk-animated"
+         style={{ flex: 'none' }}>
+      <line className="spoke" x1="50"     y1="39"    x2="50"     y2="10"
+        style={{ '--len': '29', '--opmin': '0.55', strokeDasharray: 29,
+          animationName: 'emit,flicker', animationDuration: '1.8s,1.1s',
+          animationDelay: '0s,0.2s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
+      <line className="spoke" x1="59.526" y1="44.5"  x2="84.641" y2="30"
+        style={{ '--len': '29', '--opmin': '0.7',  strokeDasharray: 29,
+          animationName: 'emit,flicker', animationDuration: '2.1s,1.7s',
+          animationDelay: '0.35s,0.8s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
+      <line className="spoke" x1="59.526" y1="55.5"  x2="84.641" y2="70"
+        style={{ '--len': '29', '--opmin': '0.4',  strokeDasharray: 29,
+          animationName: 'emit,flicker', animationDuration: '1.65s,0.95s',
+          animationDelay: '1.2s,0.05s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
+      <line className="spoke" x1="50"     y1="61"    x2="50"     y2="90"
+        style={{ '--len': '29', '--opmin': '0.65', strokeDasharray: 29,
+          animationName: 'emit,flicker', animationDuration: '2.3s,2.4s',
+          animationDelay: '0.55s,1.3s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
+      <line className="spoke" x1="40.474" y1="55.5"  x2="15.359" y2="70"
+        style={{ '--len': '29', '--opmin': '0.5',  strokeDasharray: 29,
+          animationName: 'emit,flicker', animationDuration: '1.5s,1.25s',
+          animationDelay: '1.55s,0.5s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
+      <line className="spoke" x1="40.474" y1="44.5"  x2="15.359" y2="30"
+        style={{ '--len': '29', '--opmin': '0.75', strokeDasharray: 29,
+          animationName: 'emit,flicker', animationDuration: '1.95s,1.85s',
+          animationDelay: '0.85s,1.05s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
+      <circle className="core" cx="50" cy="50" r="5.5" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 // ─── CodeBlock ────────────────────────────────────────────────────────────────
 
 function CodeBlock({ language, code }: { language: string | undefined; code: string }) {
@@ -41,37 +102,33 @@ function CodeBlock({ language, code }: { language: string | undefined; code: str
   }
 
   return (
-    <div className="my-3 rounded-lg overflow-hidden border border-border/50 text-sm">
-      {/* Header bar */}
-      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-900/80 border-b border-border/50">
-        <span className="text-[11px] font-mono text-muted-foreground/60 select-none">
-          {lang}
-        </span>
-        <button
-          onClick={handleCopy}
-          className={cn(
-            'flex items-center gap-1 text-[11px] transition-colors',
-            copied
-              ? 'text-green-400'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {copied ? <Check size={11} /> : <Copy size={11} />}
-          <span>{copied ? 'Copied!' : 'Copy'}</span>
+    <div style={{
+      margin: '12px 0', overflow: 'hidden',
+      border: '1px solid var(--lv-rule)', fontSize: 13,
+    }}>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '5px 12px', background: 'rgba(255,255,255,0.03)',
+        borderBottom: '1px solid var(--lv-rule)',
+      }}>
+        <span style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em',
+          color: 'var(--lv-mute)', userSelect: 'none',
+        }}>{lang}</span>
+        <button onClick={handleCopy} style={{
+          display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
+          cursor: 'pointer', fontSize: 10, fontFamily: 'var(--font-mono)',
+          color: copied ? 'var(--lv-gold)' : 'var(--lv-mute)',
+          transition: 'color 0.15s',
+        }}>
+          {copied ? <Check size={10} /> : <Copy size={10} />}
+          {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
-      {/* Syntax-highlighted code */}
       <SyntaxHighlighter
-        language={lang}
-        style={theme}
-        PreTag="div"
-        customStyle={{
-          margin: 0,
-          borderRadius: 0,
-          fontSize: '0.8rem',
-          lineHeight: '1.6',
-          padding: '0.85rem 1rem',
-        }}
+        language={lang} style={theme} PreTag="div"
+        customStyle={{ margin: 0, borderRadius: 0, fontSize: '0.78rem', lineHeight: '1.6', padding: '0.8rem 1rem' }}
         codeTagProps={{ style: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }}
       >
         {code}
@@ -83,17 +140,18 @@ function CodeBlock({ language, code }: { language: string | undefined; code: str
 // ─── ChartBlock ───────────────────────────────────────────────────────────────
 
 const CHART_COLORS = [
-  '#6366f1', '#22d3ee', '#f59e0b', '#10b981', '#f43f5e', '#a78bfa', '#fb923c',
+  '#c8a86a', '#b8b3a8', '#6e695f', '#f4f1ea', '#8a7a5a', '#d4c090', '#a09070',
 ]
 
-const AXIS_STYLE  = { fill: '#71717a', fontSize: 11 }
-const LEGEND_STYLE = { fontSize: 11, color: '#71717a' }
+const AXIS_STYLE   = { fill: '#6e695f', fontSize: 11 }
+const LEGEND_STYLE = { fontSize: 11, color: '#6e695f' }
 const TOOLTIP_STYLE = {
-  backgroundColor: '#1c1c1e',
-  border: '1px solid #3f3f46',
-  borderRadius: 8,
-  color: '#e4e4e7',
+  backgroundColor: '#181818',
+  border: '1px solid #232323',
+  borderRadius: 0,
+  color: '#f4f1ea',
   fontSize: 12,
+  fontFamily: 'ui-monospace, SF Mono, Menlo, monospace',
 }
 
 /** Coerce string-number values in data rows to actual numbers (model quirk). */
@@ -140,7 +198,11 @@ class ChartErrorBoundary extends Component<
   render() {
     if (this.state.crashed) {
       return (
-        <div className="mt-3 rounded-xl bg-black/20 border border-border/40 p-4 text-xs text-muted-foreground">
+        <div style={{
+          marginTop: 12, background: 'rgba(255,255,255,0.015)',
+          border: '1px solid var(--lv-rule)', padding: 14,
+          fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--lv-mute)',
+        }}>
           Chart could not be rendered: {this.state.message}
         </div>
       )
@@ -224,13 +286,19 @@ function ChartInner({ spec }: { spec: ChartSpec }) {
     )
 
   return (
-    <div className="mt-3 rounded-xl bg-black/20 border border-border/40 p-3">
+    <div style={{
+      marginTop: 12, background: 'rgba(255,255,255,0.015)',
+      border: '1px solid var(--lv-rule)', padding: 12,
+    }}>
       {spec.title && (
-        <p className="text-xs font-semibold text-muted-foreground mb-3 text-center">
+        <p style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.2em',
+          textTransform: 'uppercase', color: 'var(--lv-mute)',
+          marginBottom: 12, textAlign: 'center',
+        }}>
           {spec.title}
         </p>
       )}
-      {/* Explicit height div — required by Recharts v3 ResponsiveContainer */}
       <div style={{ width: '100%', height: 220 }}>
         <ResponsiveContainer width="100%" height="100%">
           {inner}
@@ -250,36 +318,30 @@ function ChartBlock({ spec }: { spec: ChartSpec }) {
 
 // ─── ToolCallRow ──────────────────────────────────────────────────────────────
 
-const TOOL_ICONS: Record<string, string> = {
-  web_search:   '🔍',
-  rag_query:    '📚',
-  render_chart: '📊',
-}
-
 function ToolCallRow({ call }: { call: ToolCallRecord }) {
-  const icon = TOOL_ICONS[call.name] ?? '⚙️'
   const query = (call.args.query as string | undefined) ?? call.name
   const label =
-    call.name === 'web_search' ? `Searched "${query}"`
-    : call.name === 'rag_query' ? `Knowledge base "${query}"`
-    : query
+    call.name === 'web_search' ? `web.search  "${query}"`
+    : call.name === 'rag_query' ? `rag.query  "${query}"`
+    : call.name
+
+  const color = call.status === 'running'
+    ? 'var(--lv-soft)' : call.status === 'error'
+    ? 'hsl(var(--destructive))' : 'var(--lv-mute)'
 
   return (
-    <div
-      title={call.preview}
-      className={cn(
-        'flex items-center gap-1.5 text-xs select-none',
-        call.status === 'running' ? 'text-muted-foreground' : 'text-muted-foreground/50',
-      )}
-    >
+    <div title={call.preview} style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      fontFamily: 'var(--font-mono)', fontSize: 10.5, color, userSelect: 'none',
+    }}>
       {call.status === 'running' ? (
-        <Loader2 size={10} className="animate-spin shrink-0" />
+        <AsteriskAnimated size={14} />
       ) : call.status === 'error' ? (
-        <AlertCircle size={10} className="shrink-0 text-destructive/70" />
+        <AlertCircle size={10} style={{ flexShrink: 0 }} />
       ) : (
-        <Check size={10} className="shrink-0" />
+        <span style={{ color: 'var(--lv-gold)', flexShrink: 0 }}>→</span>
       )}
-      <span>{icon} {label}</span>
+      <span>{label}</span>
     </div>
   )
 }
@@ -289,7 +351,12 @@ function ToolCallRow({ call }: { call: ToolCallRecord }) {
 function ToolCallsSection({ calls }: { calls: ToolCallRecord[] }) {
   if (!calls.length) return null
   return (
-    <div className="mb-2.5 space-y-1.5 border-b border-border/40 pb-2.5">
+    <div style={{
+      marginBottom: 10,
+      borderLeft: '2px solid var(--lv-rule-strong)',
+      paddingLeft: 12, paddingBottom: 10,
+      display: 'flex', flexDirection: 'column', gap: 6,
+    }}>
       {calls.map((call) => (
         <ToolCallRow key={call.id} call={call} />
       ))}
@@ -335,7 +402,11 @@ const MD_COMPONENTS: Components = {
         return <ChartBlock spec={JSON.parse(code) as ChartSpec} />
       } catch {
         return (
-          <div className="mt-3 rounded-xl bg-black/20 border border-border/40 p-4 text-xs text-muted-foreground">
+          <div style={{
+            marginTop: 12, background: 'rgba(255,255,255,0.015)',
+            border: '1px solid var(--lv-rule)', padding: 14,
+            fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--lv-mute)',
+          }}>
             Chart could not be rendered: invalid chart spec
           </div>
         )
@@ -345,7 +416,11 @@ const MD_COMPONENTS: Components = {
     // Inline code: no language tag AND no newlines
     if (!match && !code.includes('\n')) {
       return (
-        <code className="rounded bg-zinc-800 px-1 py-0.5 text-[0.85em] font-mono text-zinc-200">
+        <code style={{
+          fontFamily: 'var(--font-mono)', fontSize: '0.84em',
+          background: 'rgba(255,255,255,0.06)', padding: '1px 5px',
+          color: 'var(--lv-ink)',
+        }}>
           {children}
         </code>
       )
@@ -375,30 +450,29 @@ function fileToDataUrl(file: File): Promise<string> {
   })
 }
 
-function AttachmentChip({
-  attachment,
-  onRemove,
-}: {
-  attachment: LocalAttachment
-  onRemove: (id: string) => void
-}) {
+function AttachmentChip({ attachment, onRemove }: { attachment: LocalAttachment; onRemove: (id: string) => void }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-border bg-background/60 px-2 py-1 text-xs max-w-[180px]">
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      border: '1px solid var(--lv-rule-strong)',
+      background: 'rgba(255,255,255,0.04)',
+      padding: '3px 8px 3px 4px', maxWidth: 180,
+    }}>
       {attachment.previewUrl ? (
-        <img
-          src={attachment.previewUrl}
-          alt={attachment.file.name}
-          className="w-6 h-6 rounded object-cover shrink-0"
-        />
+        <img src={attachment.previewUrl} alt={attachment.file.name}
+             style={{ width: 22, height: 22, objectFit: 'cover', flexShrink: 0 }} />
       ) : (
-        <FileText size={12} className="shrink-0 text-muted-foreground" />
+        <FileText size={12} style={{ flexShrink: 0, color: 'var(--lv-mute)' }} />
       )}
-      <span className="truncate text-foreground/70 select-none">{attachment.file.name}</span>
-      <button
-        type="button"
-        onClick={() => onRemove(attachment.id)}
-        className="ml-0.5 shrink-0 rounded p-0.5 text-muted-foreground/50 hover:text-foreground hover:bg-accent transition-colors"
-      >
+      <span style={{
+        fontFamily: 'var(--font-mono)', fontSize: 10.5,
+        color: 'var(--lv-soft)', overflow: 'hidden', textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap', userSelect: 'none',
+      }}>{attachment.file.name}</span>
+      <button type="button" onClick={() => onRemove(attachment.id)} style={{
+        marginLeft: 2, flexShrink: 0, background: 'none', border: 'none',
+        cursor: 'pointer', color: 'var(--lv-mute)', padding: 2, lineHeight: 0,
+      }}>
         <X size={10} />
       </button>
     </div>
@@ -452,68 +526,70 @@ function AttachmentPreviewModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
+      }}
       onClick={onClose}
     >
       <div
-        className={cn(
-          'relative flex flex-col bg-card border border-border rounded-2xl shadow-2xl overflow-hidden',
-          isImage
-            ? 'max-w-[92vw] max-h-[92vh]'
-            : 'w-[740px] max-w-[95vw] max-h-[88vh]',
-        )}
+        style={{
+          position: 'relative', display: 'flex', flexDirection: 'column',
+          background: 'var(--lv-card)', border: '1px solid var(--lv-rule-strong)',
+          boxShadow: '0 8px 48px rgba(0,0,0,0.8)', overflow: 'hidden',
+          ...(isImage
+            ? { maxWidth: '92vw', maxHeight: '92vh' }
+            : { width: 740, maxWidth: '95vw', maxHeight: '88vh' }),
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border shrink-0">
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 14px', borderBottom: '1px solid var(--lv-rule)', flexShrink: 0,
+        }}>
           {isImage
-            ? <ImageIcon size={14} className="text-muted-foreground shrink-0" />
-            : <FileText  size={14} className="text-muted-foreground shrink-0" />
+            ? <ImageIcon size={13} style={{ color: 'var(--lv-mute)', flexShrink: 0 }} />
+            : <FileText  size={13} style={{ color: 'var(--lv-mute)', flexShrink: 0 }} />
           }
-          <span className="flex-1 text-sm font-medium truncate">{attachment.name}</span>
-          <button
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          >
-            <X size={15} />
+          <span style={{
+            flex: 1, fontFamily: 'var(--font-mono)', fontSize: 11.5,
+            color: 'var(--lv-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{attachment.name}</span>
+          <button onClick={onClose} style={{
+            flexShrink: 0, background: 'none', border: 'none',
+            cursor: 'pointer', color: 'var(--lv-mute)', padding: 4, lineHeight: 0,
+          }}>
+            <X size={14} />
           </button>
         </div>
 
         {/* Body */}
-        <div className="overflow-auto flex-1">
+        <div style={{ overflow: 'auto', flex: 1 }}>
           {isImage ? (
-            <div className="flex items-center justify-center p-4 bg-black/20">
-              <img
-                src={attachment.dataUrl}
-                alt={attachment.name}
-                className="max-w-full max-h-[82vh] object-contain rounded-lg"
-              />
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 16, background: 'rgba(0,0,0,0.2)',
+            }}>
+              <img src={attachment.dataUrl} alt={attachment.name}
+                   style={{ maxWidth: '100%', maxHeight: '82vh', objectFit: 'contain' }} />
             </div>
           ) : isPdf ? (
-            <embed
-              src={attachment.dataUrl}
-              type="application/pdf"
-              className="w-full h-[72vh]"
-            />
+            <embed src={attachment.dataUrl} type="application/pdf" style={{ width: '100%', height: '72vh' }} />
           ) : text !== null ? (
             <SyntaxHighlighter
-              language={lang}
-              style={theme}
-              PreTag="div"
-              showLineNumbers
-              customStyle={{
-                margin: 0,
-                borderRadius: 0,
-                fontSize: '0.78rem',
-                lineHeight: '1.6',
-                padding: '1rem 1rem 1rem 0.5rem',
-              }}
+              language={lang} style={theme} PreTag="div" showLineNumbers
+              customStyle={{ margin: 0, borderRadius: 0, fontSize: '0.78rem', lineHeight: '1.6', padding: '1rem 1rem 1rem 0.5rem' }}
               codeTagProps={{ style: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }}
             >
               {text}
             </SyntaxHighlighter>
           ) : (
-            <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              height: 160, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--lv-mute)',
+            }}>
               Binary file — cannot preview
             </div>
           )}
@@ -532,36 +608,32 @@ function MessageAttachments({ attachments }: { attachments: MessageAttachment[] 
   if (!attachments.length) return null
   return (
     <>
-      <div className="flex flex-wrap gap-1.5 mb-2">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
         {attachments.map((a, i) =>
           a.type.startsWith('image/') ? (
             <img
-              key={i}
-              src={a.dataUrl}
-              alt={a.name}
+              key={i} src={a.dataUrl} alt={a.name}
               onClick={() => setPreviewing(a)}
-              className="max-w-[220px] max-h-[160px] rounded-xl object-cover cursor-pointer hover:opacity-80 transition-opacity"
+              style={{ maxWidth: 200, maxHeight: 150, objectFit: 'cover', cursor: 'pointer' }}
             />
           ) : (
             <div
-              key={i}
-              onClick={() => setPreviewing(a)}
-              className={cn(
-                'flex items-center gap-1.5 rounded-lg bg-white/15 px-2 py-1 text-xs',
-                'cursor-pointer hover:bg-white/25 transition-colors',
-              )}
+              key={i} onClick={() => setPreviewing(a)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: 'rgba(255,255,255,0.08)', padding: '4px 8px',
+                cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)',
+                fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--lv-soft)',
+              }}
             >
-              <FileText size={12} className="shrink-0" />
-              <span className="truncate max-w-[140px]">{a.name}</span>
+              <FileText size={11} style={{ flexShrink: 0 }} />
+              <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
             </div>
           ),
         )}
       </div>
       {previewing && (
-        <AttachmentPreviewModal
-          attachment={previewing}
-          onClose={() => setPreviewing(null)}
-        />
+        <AttachmentPreviewModal attachment={previewing} onClose={() => setPreviewing(null)} />
       )}
     </>
   )
@@ -577,50 +649,49 @@ function formatFileSize(dataUrl: string): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function ContextItem({
-  attachment,
-  onClick,
-}: {
-  attachment: MessageAttachment
-  onClick: () => void
-}) {
+function ContextItem({ attachment, onClick }: { attachment: MessageAttachment; onClick: () => void }) {
+  const [hov, setHov] = useState(false)
   const isImage = attachment.type.startsWith('image/')
   return (
     <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'w-full text-left rounded-xl overflow-hidden',
-        'border border-border/50 hover:border-border',
-        'bg-background/40 hover:bg-background/70',
-        'transition-colors cursor-pointer',
-      )}
+      type="button" onClick={onClick}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+        border: `1px solid ${hov ? 'var(--lv-rule-strong)' : 'var(--lv-rule)'}`,
+        background: hov ? 'rgba(255,255,255,0.04)' : 'transparent',
+        transition: 'border-color 0.15s, background 0.15s', overflow: 'hidden',
+      }}
     >
       {isImage ? (
         <>
-          <img
-            src={attachment.dataUrl}
-            alt={attachment.name}
-            className="w-full h-28 object-cover"
-          />
-          <div className="px-2 py-1.5">
-            <p className="text-[11px] text-muted-foreground truncate leading-tight">
-              {attachment.name}
-            </p>
+          <img src={attachment.dataUrl} alt={attachment.name}
+               style={{ width: '100%', height: 112, objectFit: 'cover', display: 'block' }} />
+          <div style={{ padding: '6px 8px' }}>
+            <p style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{attachment.name}</p>
           </div>
         </>
       ) : (
-        <div className="flex items-center gap-2 px-2.5 py-2.5">
-          <div className="shrink-0 w-7 h-7 rounded-lg bg-muted/50 flex items-center justify-center">
-            <FileText size={13} className="text-muted-foreground" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px' }}>
+          <div style={{
+            flexShrink: 0, width: 28, height: 28,
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid var(--lv-rule)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <FileText size={12} style={{ color: 'var(--lv-mute)' }} />
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-foreground/80 truncate leading-tight">
-              {attachment.name}
-            </p>
-            <p className="text-[10px] text-muted-foreground/50 mt-0.5">
-              {formatFileSize(attachment.dataUrl)}
-            </p>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--lv-soft)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{attachment.name}</p>
+            <p style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)', marginTop: 2,
+            }}>{formatFileSize(attachment.dataUrl)}</p>
           </div>
         </div>
       )}
@@ -633,43 +704,59 @@ function ContextPanel({ items }: { items: MessageAttachment[] }) {
 
   return (
     <>
-      <div className="w-52 h-full flex flex-col">
+      <div style={{ width: 208, height: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
-        <div className="px-3.5 py-3 border-b border-border shrink-0">
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none">
-            Context
-          </h2>
+        <div style={{
+          padding: '18px 20px 14px', borderBottom: '1px solid var(--lv-rule)', flexShrink: 0,
+        }}>
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.28em',
+            textTransform: 'uppercase', color: 'var(--lv-gold)', fontWeight: 500,
+          }}>Context</span>
         </div>
 
         {/* Items */}
-        <div className="flex-1 overflow-y-auto p-2.5 space-y-2">
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {items.length === 0 ? (
-            <p className="text-xs text-muted-foreground/40 text-center pt-6 select-none leading-relaxed">
-              Files and photos you<br />share will appear here
-            </p>
+            <p style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
+              textAlign: 'center', paddingTop: 24, lineHeight: 1.8, userSelect: 'none',
+            }}>Files and photos<br />you share will<br />appear here</p>
           ) : (
             items.map((att, i) => (
-              <ContextItem
-                key={i}
-                attachment={att}
-                onClick={() => setPreviewing(att)}
-              />
+              <ContextItem key={i} attachment={att} onClick={() => setPreviewing(att)} />
             ))
           )}
         </div>
       </div>
 
       {previewing && (
-        <AttachmentPreviewModal
-          attachment={previewing}
-          onClose={() => setPreviewing(null)}
-        />
+        <AttachmentPreviewModal attachment={previewing} onClose={() => setPreviewing(null)} />
       )}
     </>
   )
 }
 
 // ─── MessageActions ───────────────────────────────────────────────────────────
+
+// Individual action button for message toolbar
+function MsgActionBtn({
+  onClick, title, children,
+}: { onClick: () => void; title: string; children: React.ReactNode }) {
+  const [h, setH] = useState(false)
+  return (
+    <button
+      onClick={onClick} title={title}
+      onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
+      style={{
+        background: 'transparent', border: 'none', cursor: 'pointer', padding: 4,
+        lineHeight: 0, display: 'flex', alignItems: 'center',
+        color: h ? 'var(--lv-ink)' : 'var(--lv-mute)',
+        transition: 'color 0.2s var(--ease-snap)',
+      }}
+    >{children}</button>
+  )
+}
 
 function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
   const [copied, setCopied] = useState(false)
@@ -683,81 +770,135 @@ function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
   return (
     <div
       className={cn(
-        'absolute bottom-0 flex items-center gap-1',
         isUser ? 'right-0' : 'left-0',
+        'absolute bottom-0 flex items-center gap-1',
         'opacity-0 group-hover/msg:opacity-100',
         'pointer-events-none group-hover/msg:pointer-events-auto',
-        'transition-opacity duration-150',
       )}
+      style={{
+        transition: 'opacity 0.2s var(--ease-snap), transform 0.2s var(--ease-snap)',
+      }}
     >
       {isUser && (
-        <span className="text-[11px] text-muted-foreground/60 px-1 select-none">
+        <span style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
+          paddingRight: 4, userSelect: 'none',
+        }}>
           {formatTimestamp(msg.timestamp)}
         </span>
       )}
-      <button
-        onClick={handleCopy}
-        title={copied ? 'Copied!' : 'Copy'}
-        className={cn(
-          'flex items-center justify-center w-6 h-6 rounded-md',
-          'bg-popover border border-border shadow-sm',
-          'text-muted-foreground hover:text-foreground hover:bg-accent',
-          'transition-colors',
-        )}
-      >
-        {copied ? <Check size={12} /> : <Copy size={12} />}
-      </button>
+      <MsgActionBtn onClick={handleCopy} title={copied ? 'Copied!' : 'Copy'}>
+        {copied ? <Check size={13} /> : <Copy size={13} />}
+      </MsgActionBtn>
     </div>
   )
 }
 
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: Message }) {
+function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean }) {
+  const [hover, setHover] = useState(false)
   const isUser    = msg.role === 'user'
   const hasCharts = (msg.charts?.length ?? 0) > 0 || msg.content.includes('```chart')
-
-  // Show blinking cursor only when: no content yet AND no tool is actively running
   const hasRunningTool = msg.toolCalls?.some((tc) => tc.status === 'running') ?? false
   const placeholder    = hasRunningTool ? '' : '▌'
 
   if (isUser) {
     return (
-      <div className="flex justify-end">
-        <div className="relative group/msg max-w-[75%] pb-7">
-          <div className="rounded-2xl rounded-br-sm px-4 py-2.5 text-sm bg-primary text-primary-foreground">
+      <div
+        style={{ display: 'flex', justifyContent: 'flex-end' }}
+        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      >
+        <div className="group/msg" style={{ position: 'relative', maxWidth: '72%', paddingBottom: 28 }}>
+          {/* Label row — "You" + time fades in on hover */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end',
+            marginBottom: 8,
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
+              opacity: hover ? 1 : 0,
+              transition: 'opacity 0.2s var(--ease-snap)',
+            }}>{formatTimestamp(msg.timestamp)}</span>
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.28em',
+              textTransform: 'uppercase', color: 'var(--lv-mute)', fontWeight: 500,
+            }}>You</span>
+          </div>
+          {/* Bubble */}
+          <div style={{
+            fontFamily: 'var(--font-sans)', fontSize: 14.5, lineHeight: 1.6,
+            color: 'var(--lv-ink)', fontWeight: 400,
+            background: 'rgba(255,255,255,0.04)', border: '1px solid var(--lv-rule)',
+            padding: '12px 16px', borderRadius: 4, textAlign: 'left',
+          }}>
             {msg.attachments && msg.attachments.length > 0 && (
               <MessageAttachments attachments={msg.attachments} />
             )}
-            {msg.content && <p className="whitespace-pre-wrap">{msg.content}</p>}
+            {msg.content && <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{msg.content}</p>}
           </div>
-          <MessageActions msg={msg} isUser={true} />
+          {/* Hover action row */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 2,
+            marginTop: 6, justifyContent: 'flex-end', marginRight: -4,
+            opacity: hover ? 1 : 0,
+            transform: hover ? 'translateY(0)' : 'translateY(-3px)',
+            pointerEvents: hover ? 'auto' : 'none',
+            transition: 'opacity 0.2s var(--ease-snap), transform 0.2s var(--ease-snap)',
+          }}>
+            <MsgActionBtn onClick={() => { navigator.clipboard.writeText(msg.content).catch(() => {}) }} title="Copy">
+              <Copy size={13} />
+            </MsgActionBtn>
+          </div>
         </div>
       </div>
     )
   }
 
+  // Agent message — left-aligned, no bubble
   return (
-    <div className="flex justify-start">
-      <div className={cn('relative group/msg pb-7', hasCharts ? 'w-[85%]' : 'max-w-[75%]')}>
-        <div className="rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm bg-card border border-border">
-          {msg.toolCalls && msg.toolCalls.length > 0 && (
-            <ToolCallsSection calls={msg.toolCalls} />
-          )}
-          {msg.charts?.map((spec, i) => (
-            <ChartBlock key={i} spec={spec} />
-          ))}
-          {(msg.content || !hasCharts) && (
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm, remarkMath]}
-              rehypePlugins={[rehypeKatex]}
-              components={MD_COMPONENTS}
-              className={cn('prose prose-sm prose-invert max-w-none', hasCharts && 'mt-2')}
-            >
-              {msg.content || placeholder}
-            </ReactMarkdown>
+    <div style={{ display: 'flex', justifyContent: 'flex-start' }}
+         onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <div
+        className="group/msg"
+        style={{ position: 'relative', paddingBottom: 28, maxWidth: hasCharts ? '90%' : '76%' }}
+      >
+        {/* Eyebrow */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          color: 'var(--lv-gold)', marginBottom: 10,
+        }}>
+          {isLive ? <AsteriskAnimated size={16} /> : <AsteriskMark size={14} />}
+          {!isLive && (
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.28em',
+              textTransform: 'uppercase', fontWeight: 500,
+            }}>
+              {formatTimestamp(msg.timestamp)}
+            </span>
           )}
         </div>
+
+        {/* Tool calls */}
+        {msg.toolCalls && msg.toolCalls.length > 0 && (
+          <ToolCallsSection calls={msg.toolCalls} />
+        )}
+
+        {/* Charts */}
+        {msg.charts?.map((spec, i) => <ChartBlock key={i} spec={spec} />)}
+
+        {/* Markdown body */}
+        {(msg.content || !hasCharts) && (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex]}
+            components={MD_COMPONENTS}
+            className={cn('prose prose-sm prose-invert max-w-none', hasCharts && 'mt-2')}
+          >
+            {msg.content || placeholder}
+          </ReactMarkdown>
+        )}
+
         <MessageActions msg={msg} isUser={false} />
       </div>
     </div>
@@ -770,18 +911,20 @@ function MoreDivider({ loading, onClick }: { loading: boolean; onClick?: () => v
   return (
     <div
       onClick={!loading ? onClick : undefined}
-      className={cn(
-        'flex items-center gap-3 py-1 select-none',
-        !loading && onClick && 'cursor-pointer',
-      )}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0',
+        userSelect: 'none', cursor: !loading && onClick ? 'pointer' : 'default',
+        marginBottom: 8,
+      }}
     >
-      <div className="flex-1 h-px bg-border" />
-      <span className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
-        {loading
-          ? <><Loader2 size={11} className="animate-spin" /> loading</>
-          : '— more —'}
+      <div style={{ flex: 1, height: 1, background: 'var(--lv-rule)' }} />
+      <span style={{
+        fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
+        display: 'flex', alignItems: 'center', gap: 5,
+      }}>
+        {loading ? <><Loader2 size={10} className="animate-spin" /> loading</> : '— more —'}
       </span>
-      <div className="flex-1 h-px bg-border" />
+      <div style={{ flex: 1, height: 1, background: 'var(--lv-rule)' }} />
     </div>
   )
 }
@@ -1027,187 +1170,219 @@ export function ChatWindow() {
 
   // ─── render ───────────────────────────────────────────────────────────────
 
-  return (
-    <div className="flex flex-col h-full">
+  const canSend = !isStreaming && (!!input.trim() || attachments.length > 0)
 
-      {/* ── Title bar (full width) ────────────────────────────────────── */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
-        <h1 className="text-sm font-medium truncate text-foreground">
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--lv-bg)' }}>
+
+      {/* ── Title bar ────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex', alignItems: 'center',
+        paddingLeft: 56, height: 48,
+        borderBottom: '1px solid var(--lv-rule)', flexShrink: 0,
+      }}>
+        <div style={{
+          fontFamily: 'var(--font-sans)', fontStyle: 'normal', fontWeight: 500,
+          fontSize: 14, color: 'var(--lv-ink)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+        }}>
           {sessionTitle ?? 'New chat'}
-        </h1>
+        </div>
         <button
           type="button"
           onClick={() => setShowContext((v) => !v)}
           title="Toggle context panel"
-          className={cn(
-            'p-1.5 rounded-lg transition-colors',
-            showContext
-              ? 'bg-accent text-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-accent',
-          )}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '0 12px', height: '100%',
+            color: showContext ? 'var(--lv-gold)' : 'var(--lv-mute)',
+            lineHeight: 0, flexShrink: 0,
+            transition: 'color 0.15s',
+          }}
         >
           <PanelRight size={15} />
         </button>
       </div>
 
-    {/* ── Body: messages + optional context column ─────────────────── */}
-    <div className="flex flex-1 min-h-0">
-    <div className="flex flex-col flex-1 min-w-0">
+      {/* ── Body row ─────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
 
-      {/* Messages */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto py-6"
-        onWheel={(e) => {
-          // deltaY < 0 = scrolling up. onWheel fires even when content doesn't
-          // overflow (onScroll would silently miss that case).
-          // canLoadRef blocks inertia-scroll carry-over from the previous session.
-          if (e.deltaY < 0 && hasMore && canLoadRef.current) loadMore()
-        }}
-      >
-        <div className="mx-auto w-full max-w-4xl px-4 space-y-1">
+        {/* ── Main column ────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
 
-          {hasMore && <MoreDivider loading={loadingMore} onClick={loadMore} />}
-
-          {messages.length === 0 && !hasMore && (
-            <div className="flex items-center justify-center h-64">
-              <p className="text-muted-foreground text-sm">
-                Ask anything — I can search the web or query your knowledge base.
-              </p>
-            </div>
-          )}
-
-          {messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} />
-          ))}
-
-          <div ref={bottomRef} />
-        </div>
-      </div>
-
-      {/* Input */}
-      <div className="border-t border-border py-3">
-        <form
-          onSubmit={handleSubmit}
-          className="mx-auto w-full max-w-4xl px-4 flex items-end gap-2"
-        >
-          {/* Hidden file picker */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/*,.pdf,.txt,.md,.csv,.json,.py,.ts,.tsx,.js,.jsx,.java,.cpp,.c,.go,.rs,.html,.css"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-
-          {/* Upload button + dropdown */}
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <button
-                type="button"
-                className={cn(
-                  'p-2.5 rounded-xl text-muted-foreground transition-colors',
-                  'hover:text-foreground hover:bg-accent',
-                  attachments.length > 0 && 'text-primary hover:text-primary',
-                )}
-                title="Attach files or photos"
-              >
-                <Paperclip size={16} />
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                sideOffset={8}
-                align="start"
-                className={cn(
-                  'z-50 min-w-[180px] rounded-xl border border-border',
-                  'bg-popover shadow-lg p-1',
-                  'data-[state=open]:animate-in data-[state=closed]:animate-out',
-                  'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-                  'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-                )}
-              >
-                <DropdownMenu.Item
-                  onSelect={() => fileInputRef.current?.click()}
-                  className={cn(
-                    'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm',
-                    'cursor-pointer outline-none select-none',
-                    'text-foreground hover:bg-accent transition-colors',
-                  )}
-                >
-                  <ImageIcon size={14} className="text-muted-foreground shrink-0" />
-                  Add files or photos
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-
-          {/* Textarea + attachment chips — wrapped so they share one visual container */}
+          {/* Messages scroll area */}
           <div
-            className={cn(
-              'flex-1 flex flex-col rounded-xl bg-input',
-              'ring-1 ring-transparent focus-within:ring-ring transition-shadow',
-              'overflow-hidden',
-            )}
+            ref={scrollRef}
+            style={{ flex: 1, overflowY: 'auto', padding: '24px 56px' }}
+            onWheel={(e) => {
+              if (e.deltaY < 0 && hasMore && canLoadRef.current) loadMore()
+            }}
           >
-            {/* Attachment chip strip */}
-            {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
-                {attachments.map((a) => (
-                  <AttachmentChip key={a.id} attachment={a} onRemove={removeAttachment} />
-                ))}
+            {hasMore && <MoreDivider loading={loadingMore} onClick={loadMore} />}
+
+            {messages.length === 0 && !hasMore && (
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200,
+              }}>
+                <p style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--lv-mute)',
+                  letterSpacing: '0.1em',
+                }}>
+                  Ask anything
+                </p>
               </div>
             )}
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  handleSubmit(e)
-                }
-              }}
-              placeholder="Message LyndonLLM…"
-              rows={1}
-              className="resize-none bg-transparent px-4 py-2.5 text-sm focus:outline-none min-h-[42px] max-h-40"
-            />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              {messages.map((msg, i) => (
+                <MessageBubble
+                  key={msg.id} msg={msg}
+                  isLive={isStreaming && i === messages.length - 1 && msg.role === 'assistant'}
+                />
+              ))}
+            </div>
+
+            <div ref={bottomRef} />
           </div>
 
-          {/* Send button */}
-          <button
-            type="submit"
-            disabled={isStreaming || (!input.trim() && attachments.length === 0)}
-            className={cn(
-              'p-2.5 rounded-xl bg-primary text-primary-foreground transition-opacity',
-              (isStreaming || (!input.trim() && attachments.length === 0)) &&
-                'opacity-40 cursor-not-allowed',
-            )}
-          >
-            <Send size={16} />
-          </button>
-        </form>
+          {/* ── Input bar ──────────────────────────────────────────────── */}
+          <div style={{ borderTop: '1px solid var(--lv-rule)', padding: '14px 56px 18px', flexShrink: 0 }}>
+            <form onSubmit={handleSubmit}>
+              {/* Hidden file picker */}
+              <input
+                ref={fileInputRef} type="file" multiple
+                accept="image/*,.pdf,.txt,.md,.csv,.json,.py,.ts,.tsx,.js,.jsx,.java,.cpp,.c,.go,.rs,.html,.css"
+                style={{ display: 'none' }}
+                onChange={handleFileSelect}
+              />
+
+              {/* Attachment chips */}
+              {attachments.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                  {attachments.map((a) => (
+                    <AttachmentChip key={a.id} attachment={a} onRemove={removeAttachment} />
+                  ))}
+                </div>
+              )}
+
+              {/* Input row */}
+              <div style={{
+                display: 'flex', alignItems: 'flex-end', gap: 12,
+                borderBottom: '1px solid var(--lv-rule-strong)', paddingBottom: 10,
+              }}>
+                {/* @ / paperclip icon */}
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <button type="button" title="Attach files or photos" style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: attachments.length > 0 ? 'var(--lv-gold)' : 'var(--lv-mute)',
+                      padding: 0, lineHeight: 0, flexShrink: 0,
+                    }}>
+                      <Paperclip size={15} />
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      sideOffset={10} align="start"
+                      style={{
+                        zIndex: 200, minWidth: 180,
+                        background: 'var(--lv-card)', border: '1px solid var(--lv-rule-strong)',
+                        padding: 4, boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
+                      }}
+                      className={cn(
+                        'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+                      )}
+                    >
+                      <DropdownMenu.Item
+                        onSelect={() => fileInputRef.current?.click()}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '8px 12px', cursor: 'pointer', outline: 'none',
+                          fontFamily: 'var(--font-sans)', fontSize: 12.5, color: 'var(--lv-ink)',
+                        }}
+                        className="hover:bg-accent focus:bg-accent transition-colors"
+                      >
+                        <ImageIcon size={13} style={{ color: 'var(--lv-mute)' }} />
+                        Add files or photos
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+
+                {/* Textarea */}
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e) }
+                  }}
+                  placeholder="Reply, ask, or @reference a note…"
+                  rows={1}
+                  style={{
+                    flex: 1, background: 'transparent', border: 'none', resize: 'none',
+                    fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.5,
+                    color: 'var(--lv-ink)', outline: 'none',
+                    minHeight: 22, maxHeight: 160,
+                  }}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  onInput={(e: any) => {
+                    e.target.style.height = 'auto'
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`
+                  }}
+                />
+
+                {/* Send button — 28×28 ink fill with arrow */}
+                <button
+                  type="submit"
+                  disabled={!canSend}
+                  style={{
+                    width: 28, height: 28, flexShrink: 0,
+                    background: canSend ? 'var(--lv-ink)' : 'var(--lv-rule-strong)',
+                    color: 'var(--lv-bg)',
+                    border: 'none', cursor: canSend ? 'pointer' : 'not-allowed',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  {isStreaming
+                    ? <AsteriskAnimated size={16} />
+                    : <Send size={13} />}
+                </button>
+              </div>
+
+              {/* Hints row */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 14, marginTop: 8,
+              }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>⌘↵ send</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>@ reference</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>
+                  llm: claude-sonnet-4 · {sessionTitle ? 'active' : 'new chat'}
+                </span>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {/* ── Context panel — slides in from right ───────────────────── */}
+        <AnimatePresence>
+          {showContext && (
+            <motion.div
+              key="context-panel"
+              style={{ flexShrink: 0, overflow: 'hidden', borderLeft: '1px solid var(--lv-rule)' }}
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'tween', duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+            >
+              <ContextPanel items={contextAttachments} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
       </div>
-    </div>
-
-    {/* Context panel — slides in from right, sits below the title bar */}
-    <AnimatePresence>
-      {showContext && (
-        <motion.div
-          key="context-panel"
-          className="shrink-0 overflow-hidden border-l border-border"
-          style={{ width: 208 }}
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'tween', duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
-        >
-          <ContextPanel items={contextAttachments} />
-        </motion.div>
-      )}
-    </AnimatePresence>
-
-    </div>
     </div>
   )
 }

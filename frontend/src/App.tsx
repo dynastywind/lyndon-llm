@@ -8,9 +8,9 @@ export default function App() {
   const { mode, sessionId } = useAppStore()
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
+    <div style={{ display: 'flex', height: '100vh', background: 'var(--lv-bg)', color: 'var(--lv-ink)', overflow: 'hidden' }}>
       <Sidebar />
-      <main className="flex-1 overflow-hidden">
+      <main style={{ flex: 1, overflow: 'hidden' }}>
         {/*
           key=sessionId forces a full remount whenever the active session
           changes.  This guarantees all local state (scroll refs, pagination
@@ -25,5 +25,6 @@ export default function App() {
         {mode === 'code'   && <CodeWindow />}
       </main>
     </div>
+
   )
 }
