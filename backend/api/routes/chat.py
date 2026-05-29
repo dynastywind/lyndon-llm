@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -36,6 +36,21 @@ class IngestRequest(BaseModel):
 
 
 # ── Chat stream ───────────────────────────────────────────────────────────────
+
+def _iso(dt: datetime) -> str:
+    """
+    Return an ISO-8601 string with an explicit UTC offset (+00:00).
+
+    SQLite stores datetimes as naive strings, so SQLAlchemy returns naive
+    datetime objects.  Without an explicit offset, JavaScript's ``new Date()``
+    interprets the string as *local* time rather than UTC, shifting every
+    timestamp by the user's UTC offset.  Tagging the value as UTC here lets
+    the browser convert it correctly to the user's local time.
+    """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
 
 def _sse(event_type: str, data: dict) -> str:
     """Format a single SSE frame."""
@@ -118,7 +133,7 @@ async def get_all_session_messages(
                 "role": m.role,
                 "content": m.content,
                 "tool_name": m.tool_name,
-                "created_at": m.created_at.isoformat(),
+                "created_at": _iso(m.created_at),
                 "attachments": repo._attachments(m),
             }
             for m in messages
@@ -147,7 +162,7 @@ async def get_session_messages(
                 "role": m.role,
                 "content": m.content,
                 "tool_name": m.tool_name,
-                "created_at": m.created_at.isoformat(),
+                "created_at": _iso(m.created_at),
                 "attachments": repo._attachments(m),
             }
             for m in messages
@@ -181,6 +196,6 @@ def _session_dict(row) -> dict:
         "session_id": row.id,
         "mode": row.mode,
         "title": row.title,
-        "created_at": row.created_at.isoformat(),
-        "updated_at": row.updated_at.isoformat(),
+        "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at),
     }
