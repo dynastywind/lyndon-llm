@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import MonacoEditor, { DiffEditor } from '@monaco-editor/react'
+import { DiffEditor } from '@monaco-editor/react'
 import { GitCommit, Play, CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { editFile, runTests, commitFiles, reviewDiff } from '@/api/client'
+import { editFile, runTests, commitFiles } from '@/api/client'
 import type { TestResult } from '@/types'
 
 export function CodeWindow() {
@@ -20,7 +20,7 @@ export function CodeWindow() {
     if (!filePath || !instruction) return
     setLoading(true)
     try {
-      const diff = await editFile(filePath, instruction, sessionId)
+      const diff = await editFile(filePath, instruction, sessionId ?? '')
       setDiff(diff)
       setTab('review')
     } finally {
@@ -31,7 +31,7 @@ export function CodeWindow() {
   const handleTest = async () => {
     setLoading(true)
     try {
-      const result = await runTests(sessionId)
+      const result = await runTests(sessionId ?? '')
       setTestResult(result)
       setTab('test')
     } finally {
@@ -41,7 +41,7 @@ export function CodeWindow() {
 
   const handleCommit = async () => {
     if (!currentDiff || !commitMsg) return
-    await commitFiles([currentDiff.file_path], commitMsg, sessionId)
+    await commitFiles([currentDiff.file_path], commitMsg, sessionId ?? '')
     setDiff(null)
     setCommitMsg('')
   }

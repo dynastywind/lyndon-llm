@@ -49,7 +49,7 @@ export function CoworkWindow() {
     if (!goal.trim()) return
     setLoading(true)
     try {
-      const plan = await createPlan(goal, sessionId)
+      const plan = await createPlan(goal, sessionId ?? '')
       setPlan(plan)
     } finally {
       setLoading(false)
@@ -60,7 +60,7 @@ export function CoworkWindow() {
     if (!currentPlan) return
     setExecuting(true)
     try {
-      await executePlan(currentPlan.plan_id, sessionId)
+      await executePlan(currentPlan.plan_id, sessionId ?? '')
     } finally {
       setExecuting(false)
     }
