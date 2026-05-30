@@ -624,6 +624,86 @@ function formatTimestamp(date: Date): string {
   )
 }
 
+// ─── Input overlay renderer ───────────────────────────────────────────────────
+// Only renders inline code spans (backtick-wrapped text). Every other character
+// is emitted verbatim so the visual layout is pixel-identical to the textarea's
+// raw text — the caret never drifts and partial markdown syntax (*, **, #, -)
+// is shown as-is instead of being transformed into elements that shift layout.
+
+// Matches a complete inline code span (no newlines inside backticks)
+const INLINE_CODE_RE = /`([^`\n]+)`/g
+// Matches a bullet list marker at the start of a line (after optional spaces)
+const BULLET_RE = /^(\s*)([-*])([ \t])/
+
+/** Render a line's inline content: styled inline-code spans, plain text otherwise. */
+function renderLineContent(line: string, keyPrefix: string): React.ReactNode {
+  const nodes: React.ReactNode[] = []
+  let last = 0
+  let match: RegExpExecArray | null
+
+  INLINE_CODE_RE.lastIndex = 0
+  while ((match = INLINE_CODE_RE.exec(line)) !== null) {
+    if (match.index > last) nodes.push(line.slice(last, match.index))
+    nodes.push(
+      <code
+        key={`${keyPrefix}-c${match.index}`}
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.88em',
+          background: 'rgba(255,255,255,0.07)',
+          padding: '1px 4px',
+          borderRadius: 2,
+          color: 'var(--lv-ink)',
+        }}
+      >
+        {match[1]}
+      </code>,
+    )
+    last = match.index + match[0].length
+  }
+  if (last < line.length) nodes.push(line.slice(last))
+  return nodes
+}
+
+/**
+ * Renders the input overlay:
+ * - Bullet markers (* / -) at line starts are replaced with a styled • so
+ *   the visual looks like a list without adding block-level margin/padding
+ *   that would shift vertical layout and break cursor alignment.
+ * - Inline code spans (`text`) are styled with a monospace background.
+ * - Everything else is emitted verbatim to keep the layout pixel-identical
+ *   to the underlying textarea so the caret never drifts.
+ */
+function renderInputOverlay(text: string): React.ReactNode {
+  const lines = text.split('\n')
+  return lines.map((line, i) => {
+    const bulletMatch = BULLET_RE.exec(line)
+    let content: React.ReactNode
+
+    if (bulletMatch) {
+      const [, indent, , space] = bulletMatch
+      const rest = line.slice(indent.length + 1 + space.length)
+      content = (
+        <>
+          {indent}
+          <span style={{ color: 'var(--lv-gold)', fontWeight: 600 }}>•</span>
+          {space}
+          {renderLineContent(rest, `${i}-r`)}
+        </>
+      )
+    } else {
+      content = renderLineContent(line, `${i}`)
+    }
+
+    return (
+      <span key={i}>
+        {content}
+        {i < lines.length - 1 ? '\n' : null}
+      </span>
+    )
+  })
+}
+
 // ─── Markdown component overrides ────────────────────────────────────────────
 // Defined at module level so the object reference is stable across renders.
 
@@ -2057,15 +2137,15 @@ export function ChatWindow() {
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
 
-                {/* Input wrapper: markdown overlay behind a transparent textarea.
-                    The textarea always captures input (no focus-switching).
-                    The overlay renders backtick spans and inline code visually. */}
+                {/* Input wrapper: inline-code overlay behind a transparent textarea.
+                    Only backtick spans are rendered — all other syntax (*, **, #, -)
+                    is shown as-is so layout stays identical to the raw textarea text
+                    and the caret never drifts. */}
                 <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-                  {/* Markdown render layer — sits behind the textarea */}
+                  {/* Inline-code render layer — sits behind the textarea */}
                   {input && (
                     <div
                       aria-hidden
-                      className="prose prose-sm prose-invert max-w-none"
                       style={{
                         position: 'absolute',
                         inset: 0,
@@ -2076,26 +2156,13 @@ export function ChatWindow() {
                         fontSize: 14,
                         lineHeight: 1.5,
                         color: 'var(--lv-ink)',
-                        // Match textarea padding so rendered text aligns with the caret
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
                         padding: 0,
                         margin: 0,
                       }}
                     >
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          // Plain paragraphs: no extra margin, same line-height as textarea
-                          p: ({ children }) => (
-                            <p style={{ margin: 0, lineHeight: 1.5 }}>{children}</p>
-                          ),
-                          // Inline code: styled but no external padding that would shift layout
-                          code: MD_COMPONENTS.code,
-                          // Suppress block-level wrappers that would shift vertical alignment
-                          pre: ({ children }) => <>{children}</>,
-                        }}
-                      >
-                        {input}
-                      </ReactMarkdown>
+                      {renderInputOverlay(input)}
                     </div>
                   )}
 
