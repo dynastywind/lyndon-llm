@@ -1951,10 +1951,9 @@ export function ChatWindow() {
         style={{
           display: 'flex',
           alignItems: 'flex-end',
-          paddingLeft: 240,
+          paddingLeft: 32,
           paddingBottom: 12,
           height: 'var(--header-h)',
-          borderBottom: '1px solid var(--lv-rule)',
           flexShrink: 0,
         }}
       >
@@ -1983,13 +1982,14 @@ export function ChatWindow() {
             cursor: 'pointer',
             padding: '0 12px',
             height: '100%',
+            alignSelf: 'center',
             color: showContext ? 'var(--lv-gold)' : 'var(--lv-mute)',
             lineHeight: 0,
             flexShrink: 0,
             transition: 'color 0.15s',
           }}
         >
-          <PanelRight size={15} />
+          <PanelRight size={22} />
         </button>
       </div>
 
@@ -2290,7 +2290,13 @@ export function ChatWindow() {
           {showContext && (
             <motion.div
               key="context-panel"
-              style={{ flexShrink: 0, overflow: 'hidden', borderLeft: '1px solid var(--lv-rule)' }}
+              style={{
+                flexShrink: 0,
+                overflow: 'hidden',
+                border: '1px solid var(--lv-rule)',
+                borderRadius: 12,
+                margin: '8px 8px 8px 0',
+              }}
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
