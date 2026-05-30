@@ -318,30 +318,63 @@ function ChartBlock({ spec }: { spec: ChartSpec }) {
 
 // ─── ToolCallRow ──────────────────────────────────────────────────────────────
 
-function ToolCallRow({ call }: { call: ToolCallRecord }) {
-  const query = (call.args.query as string | undefined) ?? call.name
-  const label =
-    call.name === 'web_search' ? `web.search  "${query}"`
-    : call.name === 'rag_query' ? `rag.query  "${query}"`
-    : call.name
+function toolLabel(call: ToolCallRecord): string {
+  const args = call.args
+  switch (call.name) {
+    case 'web_search': {
+      const q = (args.query as string | undefined) ?? ''
+      return `web.search  "${q}"`
+    }
+    case 'rag_query': {
+      const q = (args.query as string | undefined) ?? ''
+      return `rag.query  "${q}"`
+    }
+    case 'run_code': {
+      const lang = (args.language as string | undefined) ?? 'code'
+      const code = ((args.code as string | undefined) ?? '').trim().split('\n')[0]
+      const preview = code.length > 40 ? code.slice(0, 40) + '…' : code
+      return `run.code  [${lang}]  ${preview}`
+    }
+    case 'render_chart': {
+      const title = (args.title as string | undefined) ?? ''
+      return title ? `render.chart  "${title}"` : 'render.chart'
+    }
+    default: {
+      // Generic: tool.name  key=value for first arg
+      const first = Object.entries(args)[0]
+      const hint = first ? `  ${first[0]}=${String(first[1]).slice(0, 30)}` : ''
+      return `${call.name}${hint}`
+    }
+  }
+}
 
-  const color = call.status === 'running'
-    ? 'var(--lv-soft)' : call.status === 'error'
-    ? 'hsl(var(--destructive))' : 'var(--lv-mute)'
+function ToolCallRow({ call }: { call: ToolCallRecord }) {
+  const isRunning = call.status === 'running'
+  const isError   = call.status === 'error'
+
+  const color = isRunning ? 'var(--lv-ink)'
+    : isError ? 'hsl(var(--destructive))'
+    : 'var(--lv-mute)'
 
   return (
     <div title={call.preview} style={{
       display: 'flex', alignItems: 'center', gap: 8,
-      fontFamily: 'var(--font-mono)', fontSize: 10.5, color, userSelect: 'none',
+      fontFamily: 'var(--font-mono)', fontSize: 10.5, color,
+      userSelect: 'none',
+      // Highlight the row while the tool is actively running
+      background: isRunning ? 'rgba(200,168,106,0.05)' : 'transparent',
+      padding: isRunning ? '3px 8px 3px 6px' : '0',
+      marginLeft: isRunning ? '-6px' : '0',
+      transition: 'background 0.2s',
     }}>
-      {call.status === 'running' ? (
-        <AsteriskAnimated size={14} />
-      ) : call.status === 'error' ? (
+      {isRunning ? (
+        <AsteriskAnimated size={13} />
+      ) : isError ? (
         <AlertCircle size={10} style={{ flexShrink: 0 }} />
       ) : (
-        <span style={{ color: 'var(--lv-gold)', flexShrink: 0 }}>→</span>
+        <span style={{ color: 'var(--lv-gold)', flexShrink: 0 }}>✓</span>
       )}
-      <span>{label}</span>
+      <span>{toolLabel(call)}</span>
     </div>
   )
 }
