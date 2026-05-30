@@ -16,7 +16,12 @@ import type {
   McpServerTool,
 } from '@/types'
 
-const BASE = '/api'
+// When the app runs inside Tauri (production desktop build) the frontend is
+// served from the tauri:// custom protocol — there is no Vite proxy, so
+// relative /api/* paths would resolve to tauri:///api/* (invalid).
+// Detect Tauri at runtime and point directly at the local backend.
+const IS_TAURI = typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== 'undefined'
+const BASE = IS_TAURI ? 'http://localhost:8000/api' : '/api'
 
 /** Attachment payload sent to the chat endpoint (base64 content, no prefix). */
 export interface AttachmentPayload {

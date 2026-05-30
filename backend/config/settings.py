@@ -91,7 +91,12 @@ class Settings(BaseSettings):
     # API
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    cors_origins: list[str] = [
+        "http://localhost:5173",   # Vite dev server
+        "http://localhost:3000",   # alternate dev port
+        "tauri://localhost",       # Tauri desktop app (production build)
+        "http://tauri.localhost",  # Tauri on some platforms
+    ]
 
     # Session
     session_ttl_seconds: int = 86400        # 24 hours
