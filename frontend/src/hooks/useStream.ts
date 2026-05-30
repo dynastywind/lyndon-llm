@@ -141,7 +141,12 @@ export function useStream() {
               break
             }
           }
-        }, apiAttachments, systemPrompt || undefined, appliedSessionPrompt)
+        // system_prompt is sent only on the first message so the model receives
+        // it as immutable context at the top of the conversation; the session
+        // prompt follows immediately after.
+        }, apiAttachments,
+           isFirstMessage ? (systemPrompt || undefined) : undefined,
+           appliedSessionPrompt)
       } finally {
         stopStreaming(activeSessionId)
         bumpScrollToBottom()

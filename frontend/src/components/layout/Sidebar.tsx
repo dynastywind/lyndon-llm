@@ -244,7 +244,7 @@ export function Sidebar() {
                 className="hover:bg-accent focus:bg-accent transition-colors"
               >
                 <MessageSquarePlus size={13} style={{ color: LV.mute }} />
-                {currentSessionPrompt ? 'Edit session prompt' : 'Add session prompt'}
+                {currentSessionPrompt ? 'Edit session prompt' : 'New chat with a prompt'}
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>

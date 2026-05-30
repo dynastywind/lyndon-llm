@@ -25,7 +25,15 @@
       "Bash(.venv/bin/pip show *)",
       "Bash(.venv/bin/python --version)",
       "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM status)",
-      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM log --oneline -3)"
+      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM log --oneline -3)",
+      "Bash(npx tsc *)",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('backend/api/routes/chat.py'\\).read\\(\\)\\); ast.parse\\(open\\('backend/db/repos/chat.py'\\).read\\(\\)\\); print\\('backend OK'\\)\")",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(python -c \"from backend.chat.engine import _inject_session_prompt; print\\('ok'\\)\")",
+      "Bash(python -m py_compile backend/chat/engine.py)",
+      "Bash(python3 -m py_compile backend/chat/engine.py)",
+      "Bash(python3 -m py_compile backend/api/routes/chat.py)",
+      "Bash(python3 -m py_compile /Users/lyndon/Documents/projects/lyndonLLM/backend/chat/engine.py)"
     ]
   }
 }

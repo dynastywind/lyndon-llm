@@ -158,10 +158,12 @@ class ChatEngine:
         if decision.needs_rag:
             timer.mark("rag_ms")
 
-        # 3. Build system prompt (base + optional user instructions + memories + optional RAG)
+        # 3. Build system prompt (base + memories + optional RAG)
+        #    The user-defined system prompt and session prompt are NOT put here;
+        #    they are injected into the first user turn (see step 4b) so the
+        #    model always sees them as immutable conversation-opening context
+        #    while the DB and memory manager store only the clean user message.
         system_prompt = BASE_SYSTEM_PROMPT
-        if custom_system_prompt:
-            system_prompt = f"{system_prompt}\n\n## User Instructions\n{custom_system_prompt.strip()}"
         if context_block:
             system_prompt = f"{system_prompt}\n\n{context_block}"
         await self.memory.build_system_prompt(system_prompt, user_message)
@@ -176,11 +178,18 @@ class ChatEngine:
         # updated so compression always operates on plain text.
         llm_messages = _inject_attachments(self.memory.get_messages(), attachments or [])
 
-        # If a one-off session prompt was provided, prepend it to the last user
-        # message *in the LLM copy only*.  The DB and memory manager always store
-        # the clean user message — the session prompt is invisible to the user.
-        if session_prompt:
-            llm_messages = _inject_session_prompt(llm_messages, session_prompt)
+        # 4b. First-message context injection (LLM copy only — invisible to user)
+        #   • custom_system_prompt: global rules the user set in Settings; arrives
+        #     only on the first message of a session. Wrapped with an instruction
+        #     to follow it throughout the entire conversation.
+        #   • session_prompt: one-off context set per session; also arrives only
+        #     on the first message.
+        #   Both are prepended to the last user message in the order:
+        #   [system guidelines] → [session context] → actual user message.
+        if custom_system_prompt or session_prompt:
+            llm_messages = _inject_first_message_context(
+                llm_messages, custom_system_prompt, session_prompt
+            )
 
         # 5. Tool loop or direct stream — collect text for memory
         full_response = ""
@@ -649,31 +658,58 @@ def _inject_attachments(messages: list[dict], attachments: list[dict]) -> list[d
     return patched
 
 
-def _inject_session_prompt(messages: list[dict], session_prompt: str) -> list[dict]:
+def _inject_first_message_context(
+    messages: list[dict],
+    system_prompt: str | None,
+    session_prompt: str | None,
+) -> list[dict]:
     """
-    Prepend a session-level instruction to the last user message in the LLM
-    message list.  The original user message is preserved verbatim in the DB
-    and memory manager — this function only modifies the copy sent to the LLM.
+    Prepend invisible context to the last user message in the LLM copy.
 
-    Format delivered to the model:
-        [Session instructions]
-        <prompt text>
+    Only the LLM sees this — the DB and memory manager always store the clean
+    user message.  Both prompts arrive only on the first message of a session.
 
-        <original user message>
+    Format:
+        [Always follow these guidelines throughout the entire conversation]
+        <system prompt>          ← only when system_prompt is provided
+
+        [Context for this session]
+        <session prompt>         ← only when session_prompt is provided
+
+        <actual user message>
     """
-    header = f"[Session instructions]\n{session_prompt.strip()}\n"
+    parts: list[str] = []
+    sys_text = (system_prompt or "").strip()
+    ses_text = (session_prompt or "").strip()
+
+    if sys_text:
+        parts.append(
+            "[Always follow these guidelines throughout the entire conversation]\n"
+            + sys_text
+        )
+    if ses_text:
+        parts.append(
+            "[Context for this session]\n"
+            + ses_text
+        )
+
+    if not parts:
+        return messages
+
+    header = "\n\n".join(parts)
+
     patched = list(messages)
     for i in range(len(patched) - 1, -1, -1):
         if patched[i].get("role") == "user":
             content = patched[i].get("content") or ""
             if isinstance(content, str):
-                patched[i] = {**patched[i], "content": f"{header}\n{content}"}
+                patched[i] = {**patched[i], "content": f"{header}\n\n{content}"}
             elif isinstance(content, list):
                 # Multimodal: prepend to the first text block
                 new_content = list(content)
                 for j, block in enumerate(new_content):
                     if isinstance(block, dict) and block.get("type") == "text":
-                        new_content[j] = {**block, "text": f"{header}\n{block['text']}"}
+                        new_content[j] = {**block, "text": f"{header}\n\n{block['text']}"}
                         break
                 patched[i] = {**patched[i], "content": new_content}
             break
