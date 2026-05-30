@@ -17,22 +17,22 @@ interface AppState {
   // Per-session messages — each session owns its own array.
   // ChatWindow derives its view as sessionMessages[sessionId ?? '__new__'] ?? []
   sessionMessages: Record<string, Message[]>
-  addSessionMessage:     (sid: string, msg: Omit<Message, 'id' | 'timestamp'>) => void
-  setSessionMessages:    (sid: string, msgs: Message[]) => void
-  prependSessionMessages:(sid: string, msgs: Message[]) => void
-  clearSessionMessages:  (sid: string) => void
+  addSessionMessage: (sid: string, msg: Omit<Message, 'id' | 'timestamp'>) => void
+  setSessionMessages: (sid: string, msgs: Message[]) => void
+  prependSessionMessages: (sid: string, msgs: Message[]) => void
+  clearSessionMessages: (sid: string) => void
 
   /** @deprecated use per-session helpers; kept for CoworkWindow / CodeWindow */
   messages: Message[]
-  /** @deprecated */ addMessage:     (msg: Omit<Message, 'id' | 'timestamp'>) => void
-  /** @deprecated */ setMessages:    (msgs: Message[]) => void
-  /** @deprecated */ prependMessages:(msgs: Message[]) => void
-  /** @deprecated */ clearMessages:  () => void
+  /** @deprecated */ addMessage: (msg: Omit<Message, 'id' | 'timestamp'>) => void
+  /** @deprecated */ setMessages: (msgs: Message[]) => void
+  /** @deprecated */ prependMessages: (msgs: Message[]) => void
+  /** @deprecated */ clearMessages: () => void
 
   /** Sessions currently receiving a streaming response, keyed by sessionId. */
   streamingSet: Record<string, boolean>
   startStreaming: (sessionId: string) => void
-  stopStreaming:  (sessionId: string) => void
+  stopStreaming: (sessionId: string) => void
   /** Kept for components that read isStreaming directly; auto-updated on session switch. */
   isStreaming: boolean
   /** @deprecated use startStreaming / stopStreaming */
@@ -58,8 +58,8 @@ interface AppState {
 
   // Per-session input drafts (keyed by sessionId or '__new__')
   drafts: Record<string, string>
-  setDraft:  (key: string, text: string) => void
-  clearDraft:(key: string) => void
+  setDraft: (key: string, text: string) => void
+  clearDraft: (key: string) => void
 
   // Prompts
   /** Global system prompt — appended to BASE_SYSTEM_PROMPT on every request. Persisted. */
@@ -67,7 +67,7 @@ interface AppState {
   setSystemPrompt: (text: string) => void
   /** Per-session prompts — quoted into the first message of each session. Not persisted. */
   sessionPrompts: Record<string, string>
-  setSessionPrompt:   (key: string, text: string) => void
+  setSessionPrompt: (key: string, text: string) => void
   clearSessionPrompt: (key: string) => void
   /**
    * Prompts that were actually applied to a session's first message.
@@ -131,9 +131,9 @@ export const useAppStore = create<AppState>()(
         set((s) => ({
           messages: [...s.messages, { ...msg, id: generateId(), timestamp: new Date() }],
         })),
-      setMessages:     (msgs) => set({ messages: msgs }),
+      setMessages: (msgs) => set({ messages: msgs }),
       prependMessages: (msgs) => set((s) => ({ messages: [...msgs, ...s.messages] })),
-      clearMessages:   ()     => set({ messages: [] }),
+      clearMessages: () => set({ messages: [] }),
 
       // ── Streaming state ───────────────────────────────────────────────
       streamingSet: {},
@@ -156,12 +156,10 @@ export const useAppStore = create<AppState>()(
       setStreaming: (v) => set({ isStreaming: v }),
 
       scrollToBottomTick: 0,
-      bumpScrollToBottom: () =>
-        set((s) => ({ scrollToBottomTick: s.scrollToBottomTick + 1 })),
+      bumpScrollToBottom: () => set((s) => ({ scrollToBottomTick: s.scrollToBottomTick + 1 })),
 
       sessionListVersion: 0,
-      bumpSessionVersion: () =>
-        set((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
+      bumpSessionVersion: () => set((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
 
       // ── Cowork ────────────────────────────────────────────────────────
       currentPlan: null,
@@ -175,8 +173,7 @@ export const useAppStore = create<AppState>()(
 
       // ── Per-session input drafts ──────────────────────────────────────
       drafts: {},
-      setDraft: (key, text) =>
-        set((s) => ({ drafts: { ...s.drafts, [key]: text } })),
+      setDraft: (key, text) => set((s) => ({ drafts: { ...s.drafts, [key]: text } })),
       clearDraft: (key) =>
         set((s) => {
           const drafts = { ...s.drafts }
@@ -209,10 +206,10 @@ export const useAppStore = create<AppState>()(
     {
       name: 'lyndon-llm-store',
       partialize: (s) => ({
-        sessionId:             s.sessionId,
-        repoPath:              s.repoPath,
-        codeTheme:             s.codeTheme,
-        systemPrompt:          s.systemPrompt,
+        sessionId: s.sessionId,
+        repoPath: s.repoPath,
+        codeTheme: s.codeTheme,
+        systemPrompt: s.systemPrompt,
         appliedSessionPrompts: s.appliedSessionPrompts,
       }),
     },

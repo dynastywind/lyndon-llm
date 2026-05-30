@@ -6,19 +6,19 @@ import { createPlan, executePlan } from '@/api/client'
 import type { PlanStep, RiskLevel } from '@/types'
 
 const RISK_BADGE: Record<RiskLevel, { label: string; className: string }> = {
-  low:    { label: 'Low',    className: 'bg-green-500/20 text-green-400' },
+  low: { label: 'Low', className: 'bg-green-500/20 text-green-400' },
   medium: { label: 'Medium', className: 'bg-yellow-500/20 text-yellow-400' },
-  high:   { label: 'High',   className: 'bg-red-500/20 text-red-400' },
+  high: { label: 'High', className: 'bg-red-500/20 text-red-400' },
 }
 
 function StepCard({ step }: { step: PlanStep }) {
   const badge = RISK_BADGE[step.risk]
   const statusIcon = {
-    pending:  null,
-    running:  <Loader2 size={14} className="animate-spin text-blue-400" />,
-    done:     <CheckCircle size={14} className="text-green-400" />,
-    failed:   <XCircle size={14} className="text-red-400" />,
-    skipped:  <AlertTriangle size={14} className="text-yellow-400" />,
+    pending: null,
+    running: <Loader2 size={14} className="animate-spin text-blue-400" />,
+    done: <CheckCircle size={14} className="text-green-400" />,
+    failed: <XCircle size={14} className="text-red-400" />,
+    skipped: <AlertTriangle size={14} className="text-yellow-400" />,
   }[step.status ?? 'pending']
 
   return (
@@ -71,7 +71,7 @@ export function CoworkWindow() {
       <div>
         <h2 className="text-base font-semibold">Cowork</h2>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Describe a goal — I'll plan it out for your approval, then execute.
+          Describe a goal — I&apos;ll plan it out for your approval, then execute.
         </p>
       </div>
 

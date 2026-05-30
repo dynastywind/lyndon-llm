@@ -9,12 +9,12 @@ import type { TestResult } from '@/types'
 export function CodeWindow() {
   const { sessionId, currentDiff, setDiff } = useAppStore()
 
-  const [filePath, setFilePath]       = useState('')
+  const [filePath, setFilePath] = useState('')
   const [instruction, setInstruction] = useState('')
-  const [loading, setLoading]         = useState(false)
-  const [testResult, setTestResult]   = useState<TestResult | null>(null)
-  const [commitMsg, setCommitMsg]     = useState('')
-  const [tab, setTab]                 = useState<'edit' | 'review' | 'test'>('edit')
+  const [loading, setLoading] = useState(false)
+  const [testResult, setTestResult] = useState<TestResult | null>(null)
+  const [commitMsg, setCommitMsg] = useState('')
+  const [tab, setTab] = useState<'edit' | 'review' | 'test'>('edit')
 
   const handleEdit = async () => {
     if (!filePath || !instruction) return
@@ -47,9 +47,9 @@ export function CodeWindow() {
   }
 
   const tabs = [
-    { id: 'edit' as const,   label: 'Edit' },
+    { id: 'edit' as const, label: 'Edit' },
     { id: 'review' as const, label: 'Review' },
-    { id: 'test' as const,   label: 'Tests' },
+    { id: 'test' as const, label: 'Tests' },
   ]
 
   return (
@@ -155,11 +155,14 @@ export function CodeWindow() {
             {testResult ? (
               <>
                 <div className="flex items-center gap-3">
-                  {testResult.success
-                    ? <CheckCircle size={16} className="text-green-400" />
-                    : <XCircle size={16} className="text-red-400" />}
+                  {testResult.success ? (
+                    <CheckCircle size={16} className="text-green-400" />
+                  ) : (
+                    <XCircle size={16} className="text-red-400" />
+                  )}
                   <span className="text-sm font-medium">
-                    {testResult.passed} passed · {testResult.failed} failed · {testResult.errors} errors
+                    {testResult.passed} passed · {testResult.failed} failed · {testResult.errors}{' '}
+                    errors
                   </span>
                 </div>
                 <div className="flex-1 overflow-auto rounded-lg border border-border bg-black/30 p-3">

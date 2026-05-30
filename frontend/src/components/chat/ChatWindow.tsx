@@ -1,8 +1,27 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, Component } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  Component,
+} from 'react'
 import { flushSync, createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import type { ReactNode, ErrorInfo } from 'react'
-import { Send, Loader2, Check, AlertCircle, Copy, Paperclip, X, FileText, Image as ImageIcon, PanelRight } from 'lucide-react'
+import {
+  Send,
+  Loader2,
+  Check,
+  AlertCircle,
+  Copy,
+  Paperclip,
+  X,
+  FileText,
+  Image as ImageIcon,
+  PanelRight,
+} from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import ReactMarkdown from 'react-markdown'
 import type { Components } from 'react-markdown'
@@ -13,33 +32,56 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { CODE_THEMES } from '@/config/codeThemes'
 import { CODE_THEME_DEFAULT } from '@/config/codeThemes'
 import {
-  BarChart, Bar,
-  LineChart, Line,
-  AreaChart, Area,
-  PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
   ResponsiveContainer,
 } from 'recharts'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
 import { getChatMessages } from '@/api/client'
-import type { Message, ToolCallRecord, ChartSpec, ChartSeries, ChatSessionMessage, MessageAttachment } from '@/types'
+import type {
+  Message,
+  ToolCallRecord,
+  ChartSpec,
+  ChartSeries,
+  ChatSessionMessage,
+  MessageAttachment,
+} from '@/types'
 
 // ─── Asterisk mark components ─────────────────────────────────────────────────
 
 /** Static mark — logo-asterisk.svg geometry, currentColor. */
 function AsteriskMark({ size = 20 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none"
-         stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"
-         style={{ flex: 'none' }}>
-      <line x1="50"     y1="39"    x2="50"     y2="10" />
-      <line x1="59.526" y1="44.5"  x2="84.641" y2="30" />
-      <line x1="59.526" y1="55.5"  x2="84.641" y2="70" />
-      <line x1="50"     y1="61"    x2="50"     y2="90" />
-      <line x1="40.474" y1="55.5"  x2="15.359" y2="70" />
-      <line x1="40.474" y1="44.5"  x2="15.359" y2="30" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3.5"
+      strokeLinecap="round"
+      style={{ flex: 'none' }}
+    >
+      <line x1="50" y1="39" x2="50" y2="10" />
+      <line x1="59.526" y1="44.5" x2="84.641" y2="30" />
+      <line x1="59.526" y1="55.5" x2="84.641" y2="70" />
+      <line x1="50" y1="61" x2="50" y2="90" />
+      <line x1="40.474" y1="55.5" x2="15.359" y2="70" />
+      <line x1="40.474" y1="44.5" x2="15.359" y2="30" />
       <circle cx="50" cy="50" r="5.5" fill="currentColor" stroke="none" />
     </svg>
   )
@@ -48,40 +90,131 @@ function AsteriskMark({ size = 20 }: { size?: number }) {
 /** Animated mark — logo-asterisk-animated.svg. Use for "agent is thinking" only. */
 function AsteriskAnimated({ size = 20 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none"
-         stroke="currentColor" strokeWidth="3.5" strokeLinecap="round"
-         className="lv-asterisk-animated"
-         style={{ flex: 'none' }}>
-      <line className="spoke" x1="50"     y1="39"    x2="50"     y2="10"
-        style={{ '--len': '29', '--opmin': '0.55', strokeDasharray: 29,
-          animationName: 'emit,flicker', animationDuration: '1.8s,1.1s',
-          animationDelay: '0s,0.2s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
-          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
-      <line className="spoke" x1="59.526" y1="44.5"  x2="84.641" y2="30"
-        style={{ '--len': '29', '--opmin': '0.7',  strokeDasharray: 29,
-          animationName: 'emit,flicker', animationDuration: '2.1s,1.7s',
-          animationDelay: '0.35s,0.8s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
-          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
-      <line className="spoke" x1="59.526" y1="55.5"  x2="84.641" y2="70"
-        style={{ '--len': '29', '--opmin': '0.4',  strokeDasharray: 29,
-          animationName: 'emit,flicker', animationDuration: '1.65s,0.95s',
-          animationDelay: '1.2s,0.05s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
-          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
-      <line className="spoke" x1="50"     y1="61"    x2="50"     y2="90"
-        style={{ '--len': '29', '--opmin': '0.65', strokeDasharray: 29,
-          animationName: 'emit,flicker', animationDuration: '2.3s,2.4s',
-          animationDelay: '0.55s,1.3s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
-          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
-      <line className="spoke" x1="40.474" y1="55.5"  x2="15.359" y2="70"
-        style={{ '--len': '29', '--opmin': '0.5',  strokeDasharray: 29,
-          animationName: 'emit,flicker', animationDuration: '1.5s,1.25s',
-          animationDelay: '1.55s,0.5s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
-          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
-      <line className="spoke" x1="40.474" y1="44.5"  x2="15.359" y2="30"
-        style={{ '--len': '29', '--opmin': '0.75', strokeDasharray: 29,
-          animationName: 'emit,flicker', animationDuration: '1.95s,1.85s',
-          animationDelay: '0.85s,1.05s', animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
-          animationIterationCount: 'infinite,infinite' } as React.CSSProperties} />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3.5"
+      strokeLinecap="round"
+      className="lv-asterisk-animated"
+      style={{ flex: 'none' }}
+    >
+      <line
+        className="spoke"
+        x1="50"
+        y1="39"
+        x2="50"
+        y2="10"
+        style={
+          {
+            '--len': '29',
+            '--opmin': '0.55',
+            strokeDasharray: 29,
+            animationName: 'emit,flicker',
+            animationDuration: '1.8s,1.1s',
+            animationDelay: '0s,0.2s',
+            animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+            animationIterationCount: 'infinite,infinite',
+          } as React.CSSProperties
+        }
+      />
+      <line
+        className="spoke"
+        x1="59.526"
+        y1="44.5"
+        x2="84.641"
+        y2="30"
+        style={
+          {
+            '--len': '29',
+            '--opmin': '0.7',
+            strokeDasharray: 29,
+            animationName: 'emit,flicker',
+            animationDuration: '2.1s,1.7s',
+            animationDelay: '0.35s,0.8s',
+            animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+            animationIterationCount: 'infinite,infinite',
+          } as React.CSSProperties
+        }
+      />
+      <line
+        className="spoke"
+        x1="59.526"
+        y1="55.5"
+        x2="84.641"
+        y2="70"
+        style={
+          {
+            '--len': '29',
+            '--opmin': '0.4',
+            strokeDasharray: 29,
+            animationName: 'emit,flicker',
+            animationDuration: '1.65s,0.95s',
+            animationDelay: '1.2s,0.05s',
+            animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+            animationIterationCount: 'infinite,infinite',
+          } as React.CSSProperties
+        }
+      />
+      <line
+        className="spoke"
+        x1="50"
+        y1="61"
+        x2="50"
+        y2="90"
+        style={
+          {
+            '--len': '29',
+            '--opmin': '0.65',
+            strokeDasharray: 29,
+            animationName: 'emit,flicker',
+            animationDuration: '2.3s,2.4s',
+            animationDelay: '0.55s,1.3s',
+            animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+            animationIterationCount: 'infinite,infinite',
+          } as React.CSSProperties
+        }
+      />
+      <line
+        className="spoke"
+        x1="40.474"
+        y1="55.5"
+        x2="15.359"
+        y2="70"
+        style={
+          {
+            '--len': '29',
+            '--opmin': '0.5',
+            strokeDasharray: 29,
+            animationName: 'emit,flicker',
+            animationDuration: '1.5s,1.25s',
+            animationDelay: '1.55s,0.5s',
+            animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+            animationIterationCount: 'infinite,infinite',
+          } as React.CSSProperties
+        }
+      />
+      <line
+        className="spoke"
+        x1="40.474"
+        y1="44.5"
+        x2="15.359"
+        y2="30"
+        style={
+          {
+            '--len': '29',
+            '--opmin': '0.75',
+            strokeDasharray: 29,
+            animationName: 'emit,flicker',
+            animationDuration: '1.95s,1.85s',
+            animationDelay: '0.85s,1.05s',
+            animationTimingFunction: 'cubic-bezier(.4,0,.2,1),ease-in-out',
+            animationIterationCount: 'infinite,infinite',
+          } as React.CSSProperties
+        }
+      />
       <circle className="core" cx="50" cy="50" r="5.5" fill="currentColor" stroke="none" />
     </svg>
   )
@@ -102,33 +235,66 @@ function CodeBlock({ language, code }: { language: string | undefined; code: str
   }
 
   return (
-    <div style={{
-      margin: '12px 0', overflow: 'hidden',
-      border: '1px solid var(--lv-rule)', fontSize: 13,
-    }}>
+    <div
+      style={{
+        margin: '12px 0',
+        overflow: 'hidden',
+        border: '1px solid var(--lv-rule)',
+        fontSize: 13,
+      }}
+    >
       {/* Header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '5px 12px', background: 'rgba(255,255,255,0.03)',
-        borderBottom: '1px solid var(--lv-rule)',
-      }}>
-        <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em',
-          color: 'var(--lv-mute)', userSelect: 'none',
-        }}>{lang}</span>
-        <button onClick={handleCopy} style={{
-          display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
-          cursor: 'pointer', fontSize: 10, fontFamily: 'var(--font-mono)',
-          color: copied ? 'var(--lv-gold)' : 'var(--lv-mute)',
-          transition: 'color 0.15s',
-        }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '5px 12px',
+          background: 'rgba(255,255,255,0.03)',
+          borderBottom: '1px solid var(--lv-rule)',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '0.1em',
+            color: 'var(--lv-mute)',
+            userSelect: 'none',
+          }}
+        >
+          {lang}
+        </span>
+        <button
+          onClick={handleCopy}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 10,
+            fontFamily: 'var(--font-mono)',
+            color: copied ? 'var(--lv-gold)' : 'var(--lv-mute)',
+            transition: 'color 0.15s',
+          }}
+        >
           {copied ? <Check size={10} /> : <Copy size={10} />}
           {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
       <SyntaxHighlighter
-        language={lang} style={theme} PreTag="div"
-        customStyle={{ margin: 0, borderRadius: 0, fontSize: '0.78rem', lineHeight: '1.6', padding: '0.8rem 1rem' }}
+        language={lang}
+        style={theme}
+        PreTag="div"
+        customStyle={{
+          margin: 0,
+          borderRadius: 0,
+          fontSize: '0.78rem',
+          lineHeight: '1.6',
+          padding: '0.8rem 1rem',
+        }}
         codeTagProps={{ style: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }}
       >
         {code}
@@ -139,11 +305,9 @@ function CodeBlock({ language, code }: { language: string | undefined; code: str
 
 // ─── ChartBlock ───────────────────────────────────────────────────────────────
 
-const CHART_COLORS = [
-  '#c8a86a', '#b8b3a8', '#6e695f', '#f4f1ea', '#8a7a5a', '#d4c090', '#a09070',
-]
+const CHART_COLORS = ['#c8a86a', '#b8b3a8', '#6e695f', '#f4f1ea', '#8a7a5a', '#d4c090', '#a09070']
 
-const AXIS_STYLE   = { fill: '#6e695f', fontSize: 11 }
+const AXIS_STYLE = { fill: '#6e695f', fontSize: 11 }
 const LEGEND_STYLE = { fontSize: 11, color: '#6e695f' }
 const TOOLTIP_STYLE = {
   backgroundColor: '#181818',
@@ -155,10 +319,7 @@ const TOOLTIP_STYLE = {
 }
 
 /** Coerce string-number values in data rows to actual numbers (model quirk). */
-function normaliseData(
-  data: Record<string, unknown>[],
-  xKey: string,
-): Record<string, unknown>[] {
+function normaliseData(data: Record<string, unknown>[], xKey: string): Record<string, unknown>[] {
   return data.map((row) => {
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(row)) {
@@ -198,11 +359,17 @@ class ChartErrorBoundary extends Component<
   render() {
     if (this.state.crashed) {
       return (
-        <div style={{
-          marginTop: 12, background: 'rgba(255,255,255,0.015)',
-          border: '1px solid var(--lv-rule)', padding: 14,
-          fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--lv-mute)',
-        }}>
+        <div
+          style={{
+            marginTop: 12,
+            background: 'rgba(255,255,255,0.015)',
+            border: '1px solid var(--lv-rule)',
+            padding: 14,
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--lv-mute)',
+          }}
+        >
           Chart could not be rendered: {this.state.message}
         </div>
       )
@@ -212,7 +379,7 @@ class ChartErrorBoundary extends Component<
 }
 
 function ChartInner({ spec }: { spec: ChartSpec }) {
-  const data   = normaliseData(spec.data ?? [], spec.x_key)
+  const data = normaliseData(spec.data ?? [], spec.x_key)
   const series = resolvedSeries({ ...spec, data })
 
   const colorOf = (i: number, override?: string) =>
@@ -225,14 +392,15 @@ function ChartInner({ spec }: { spec: ChartSpec }) {
           data={data}
           dataKey={series[0]?.key ?? 'value'}
           nameKey={spec.x_key}
-          cx="50%" cy="50%"
+          cx="50%"
+          cy="50%"
           outerRadius={80}
-          label={({ name, percent }) =>
-            `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
-          }
+          label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
           labelLine={false}
         >
-          {data.map((_, i) => <Cell key={i} fill={colorOf(i)} />)}
+          {data.map((_, i) => (
+            <Cell key={i} fill={colorOf(i)} />
+          ))}
         </Pie>
         <Tooltip contentStyle={TOOLTIP_STYLE} />
         <Legend wrapperStyle={LEGEND_STYLE} />
@@ -245,9 +413,15 @@ function ChartInner({ spec }: { spec: ChartSpec }) {
         <Tooltip contentStyle={TOOLTIP_STYLE} />
         <Legend wrapperStyle={LEGEND_STYLE} />
         {series.map((s, i) => (
-          <Line key={s.key} type="monotone" dataKey={s.key}
-            name={s.name ?? s.key} stroke={colorOf(i, s.color)}
-            strokeWidth={2} dot={false} />
+          <Line
+            key={s.key}
+            type="monotone"
+            dataKey={s.key}
+            name={s.name ?? s.key}
+            stroke={colorOf(i, s.color)}
+            strokeWidth={2}
+            dot={false}
+          />
         ))}
       </LineChart>
     ) : spec.type === 'area' ? (
@@ -255,8 +429,8 @@ function ChartInner({ spec }: { spec: ChartSpec }) {
         <defs>
           {series.map((s, i) => (
             <linearGradient key={s.key} id={`grad-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor={colorOf(i, s.color)} stopOpacity={0.3} />
-              <stop offset="95%" stopColor={colorOf(i, s.color)} stopOpacity={0}   />
+              <stop offset="5%" stopColor={colorOf(i, s.color)} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={colorOf(i, s.color)} stopOpacity={0} />
             </linearGradient>
           ))}
         </defs>
@@ -266,9 +440,15 @@ function ChartInner({ spec }: { spec: ChartSpec }) {
         <Tooltip contentStyle={TOOLTIP_STYLE} />
         <Legend wrapperStyle={LEGEND_STYLE} />
         {series.map((s, i) => (
-          <Area key={s.key} type="monotone" dataKey={s.key}
-            name={s.name ?? s.key} stroke={colorOf(i, s.color)}
-            fill={`url(#grad-${s.key})`} strokeWidth={2} />
+          <Area
+            key={s.key}
+            type="monotone"
+            dataKey={s.key}
+            name={s.name ?? s.key}
+            stroke={colorOf(i, s.color)}
+            fill={`url(#grad-${s.key})`}
+            strokeWidth={2}
+          />
         ))}
       </AreaChart>
     ) : (
@@ -279,23 +459,38 @@ function ChartInner({ spec }: { spec: ChartSpec }) {
         <Tooltip contentStyle={TOOLTIP_STYLE} />
         <Legend wrapperStyle={LEGEND_STYLE} />
         {series.map((s, i) => (
-          <Bar key={s.key} dataKey={s.key} name={s.name ?? s.key}
-            fill={colorOf(i, s.color)} radius={[3, 3, 0, 0]} />
+          <Bar
+            key={s.key}
+            dataKey={s.key}
+            name={s.name ?? s.key}
+            fill={colorOf(i, s.color)}
+            radius={[3, 3, 0, 0]}
+          />
         ))}
       </BarChart>
     )
 
   return (
-    <div style={{
-      marginTop: 12, background: 'rgba(255,255,255,0.015)',
-      border: '1px solid var(--lv-rule)', padding: 12,
-    }}>
+    <div
+      style={{
+        marginTop: 12,
+        background: 'rgba(255,255,255,0.015)',
+        border: '1px solid var(--lv-rule)',
+        padding: 12,
+      }}
+    >
       {spec.title && (
-        <p style={{
-          fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.2em',
-          textTransform: 'uppercase', color: 'var(--lv-mute)',
-          marginBottom: 12, textAlign: 'center',
-        }}>
+        <p
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            color: 'var(--lv-mute)',
+            marginBottom: 12,
+            textAlign: 'center',
+          }}
+        >
           {spec.title}
         </p>
       )}
@@ -350,23 +545,28 @@ function toolLabel(call: ToolCallRecord): string {
 
 function ToolCallRow({ call }: { call: ToolCallRecord }) {
   const isRunning = call.status === 'running'
-  const isError   = call.status === 'error'
+  const isError = call.status === 'error'
 
-  const color = isRunning ? 'var(--lv-ink)'
-    : isError ? 'hsl(var(--destructive))'
-    : 'var(--lv-mute)'
+  const color = isRunning ? 'var(--lv-ink)' : isError ? 'hsl(var(--destructive))' : 'var(--lv-mute)'
 
   return (
-    <div title={call.preview} style={{
-      display: 'flex', alignItems: 'center', gap: 8,
-      fontFamily: 'var(--font-mono)', fontSize: 10.5, color,
-      userSelect: 'none',
-      // Highlight the row while the tool is actively running
-      background: isRunning ? 'rgba(200,168,106,0.05)' : 'transparent',
-      padding: isRunning ? '3px 8px 3px 6px' : '0',
-      marginLeft: isRunning ? '-6px' : '0',
-      transition: 'background 0.2s',
-    }}>
+    <div
+      title={call.preview}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        fontFamily: 'var(--font-mono)',
+        fontSize: 10.5,
+        color,
+        userSelect: 'none',
+        // Highlight the row while the tool is actively running
+        background: isRunning ? 'rgba(200,168,106,0.05)' : 'transparent',
+        padding: isRunning ? '3px 8px 3px 6px' : '0',
+        marginLeft: isRunning ? '-6px' : '0',
+        transition: 'background 0.2s',
+      }}
+    >
       {isRunning ? (
         <AsteriskAnimated size={13} />
       ) : isError ? (
@@ -384,12 +584,17 @@ function ToolCallRow({ call }: { call: ToolCallRecord }) {
 function ToolCallsSection({ calls }: { calls: ToolCallRecord[] }) {
   if (!calls.length) return null
   return (
-    <div style={{
-      marginBottom: 10,
-      borderLeft: '2px solid var(--lv-rule-strong)',
-      paddingLeft: 12, paddingBottom: 10,
-      display: 'flex', flexDirection: 'column', gap: 6,
-    }}>
+    <div
+      style={{
+        marginBottom: 10,
+        borderLeft: '2px solid var(--lv-rule-strong)',
+        paddingLeft: 12,
+        paddingBottom: 10,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+      }}
+    >
       {calls.map((call) => (
         <ToolCallRow key={call.id} call={call} />
       ))}
@@ -400,7 +605,7 @@ function ToolCallsSection({ calls }: { calls: ToolCallRecord[] }) {
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function formatTimestamp(date: Date): string {
-  const tz  = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
   const now = new Date()
 
   // Compare calendar dates in the user's local timezone
@@ -412,9 +617,11 @@ function formatTimestamp(date: Date): string {
 
   const time = date.toLocaleTimeString([], { timeZone: tz, hour: '2-digit', minute: '2-digit' })
 
-  if (localDate(date) === localDate(now))       return time
+  if (localDate(date) === localDate(now)) return time
   if (localDate(date) === localDate(yesterday)) return `Yesterday · ${time}`
-  return date.toLocaleDateString([], { timeZone: tz, month: 'short', day: 'numeric' }) + ' · ' + time
+  return (
+    date.toLocaleDateString([], { timeZone: tz, month: 'short', day: 'numeric' }) + ' · ' + time
+  )
 }
 
 // ─── Markdown component overrides ────────────────────────────────────────────
@@ -428,18 +635,24 @@ const MD_COMPONENTS: Components = {
   // Route fenced code blocks to CodeBlock; style inline code distinctly.
   code({ className, children }) {
     const match = /language-(\w+)/.exec(className ?? '')
-    const code  = String(children).replace(/\n$/, '')
+    const code = String(children).replace(/\n$/, '')
 
     if (match?.[1] === 'chart') {
       try {
         return <ChartBlock spec={JSON.parse(code) as ChartSpec} />
       } catch {
         return (
-          <div style={{
-            marginTop: 12, background: 'rgba(255,255,255,0.015)',
-            border: '1px solid var(--lv-rule)', padding: 14,
-            fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--lv-mute)',
-          }}>
+          <div
+            style={{
+              marginTop: 12,
+              background: 'rgba(255,255,255,0.015)',
+              border: '1px solid var(--lv-rule)',
+              padding: 14,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: 'var(--lv-mute)',
+            }}
+          >
             Chart could not be rendered: invalid chart spec
           </div>
         )
@@ -449,11 +662,15 @@ const MD_COMPONENTS: Components = {
     // Inline code: no language tag AND no newlines
     if (!match && !code.includes('\n')) {
       return (
-        <code style={{
-          fontFamily: 'var(--font-mono)', fontSize: '0.84em',
-          background: 'rgba(255,255,255,0.06)', padding: '1px 5px',
-          color: 'var(--lv-ink)',
-        }}>
+        <code
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.84em',
+            background: 'rgba(255,255,255,0.06)',
+            padding: '1px 5px',
+            color: 'var(--lv-ink)',
+          }}
+        >
           {children}
         </code>
       )
@@ -477,35 +694,67 @@ interface LocalAttachment {
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload  = () => resolve(reader.result as string)
+    reader.onload = () => resolve(reader.result as string)
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
 }
 
-function AttachmentChip({ attachment, onRemove }: { attachment: LocalAttachment; onRemove: (id: string) => void }) {
+function AttachmentChip({
+  attachment,
+  onRemove,
+}: {
+  attachment: LocalAttachment
+  onRemove: (id: string) => void
+}) {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 6,
-      border: '1px solid var(--lv-rule-strong)',
-      background: 'rgba(255,255,255,0.04)',
-      padding: '3px 8px 3px 4px', maxWidth: 180,
-    }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        border: '1px solid var(--lv-rule-strong)',
+        background: 'rgba(255,255,255,0.04)',
+        padding: '3px 8px 3px 4px',
+        maxWidth: 180,
+      }}
+    >
       {attachment.previewUrl ? (
-        <img src={attachment.previewUrl} alt={attachment.file.name}
-             style={{ width: 22, height: 22, objectFit: 'cover', flexShrink: 0 }} />
+        <img
+          src={attachment.previewUrl}
+          alt={attachment.file.name}
+          style={{ width: 22, height: 22, objectFit: 'cover', flexShrink: 0 }}
+        />
       ) : (
         <FileText size={12} style={{ flexShrink: 0, color: 'var(--lv-mute)' }} />
       )}
-      <span style={{
-        fontFamily: 'var(--font-mono)', fontSize: 10.5,
-        color: 'var(--lv-soft)', overflow: 'hidden', textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap', userSelect: 'none',
-      }}>{attachment.file.name}</span>
-      <button type="button" onClick={() => onRemove(attachment.id)} style={{
-        marginLeft: 2, flexShrink: 0, background: 'none', border: 'none',
-        cursor: 'pointer', color: 'var(--lv-mute)', padding: 2, lineHeight: 0,
-      }}>
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10.5,
+          color: 'var(--lv-soft)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          userSelect: 'none',
+        }}
+      >
+        {attachment.file.name}
+      </span>
+      <button
+        type="button"
+        onClick={() => onRemove(attachment.id)}
+        style={{
+          marginLeft: 2,
+          flexShrink: 0,
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: 'var(--lv-mute)',
+          padding: 2,
+          lineHeight: 0,
+        }}
+      >
         <X size={10} />
       </button>
     </div>
@@ -516,11 +765,28 @@ function AttachmentChip({ attachment, onRemove }: { attachment: LocalAttachment;
 
 /** Extension → Prism language identifier. */
 const EXT_LANG: Record<string, string> = {
-  py: 'python', js: 'javascript', ts: 'typescript', tsx: 'tsx', jsx: 'jsx',
-  java: 'java', cpp: 'cpp', c: 'c', go: 'go', rs: 'rust',
-  html: 'html', css: 'css', json: 'json', md: 'markdown',
-  sh: 'bash', bash: 'bash', yaml: 'yaml', yml: 'yaml',
-  toml: 'toml', sql: 'sql', txt: 'plaintext', csv: 'plaintext',
+  py: 'python',
+  js: 'javascript',
+  ts: 'typescript',
+  tsx: 'tsx',
+  jsx: 'jsx',
+  java: 'java',
+  cpp: 'cpp',
+  c: 'c',
+  go: 'go',
+  rs: 'rust',
+  html: 'html',
+  css: 'css',
+  json: 'json',
+  md: 'markdown',
+  sh: 'bash',
+  bash: 'bash',
+  yaml: 'yaml',
+  yml: 'yaml',
+  toml: 'toml',
+  sql: 'sql',
+  txt: 'plaintext',
+  csv: 'plaintext',
 }
 
 function AttachmentPreviewModal({
@@ -531,16 +797,16 @@ function AttachmentPreviewModal({
   onClose: () => void
 }) {
   const isImage = attachment.type.startsWith('image/')
-  const isPdf   = attachment.type === 'application/pdf'
+  const isPdf = attachment.type === 'application/pdf'
 
   // Decode text / code content from the data URL.
   const { text, lang } = useMemo(() => {
     if (isImage || isPdf) return { text: null, lang: 'plaintext' }
     try {
-      const b64   = attachment.dataUrl.split(',')[1] ?? ''
+      const b64 = attachment.dataUrl.split(',')[1] ?? ''
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-      const str   = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
-      const ext   = attachment.name.split('.').pop()?.toLowerCase() ?? ''
+      const str = new TextDecoder('utf-8', { fatal: false }).decode(bytes)
+      const ext = attachment.name.split('.').pop()?.toLowerCase() ?? ''
       return { text: str, lang: EXT_LANG[ext] ?? 'plaintext' }
     } catch {
       return { text: null, lang: 'plaintext' }
@@ -548,11 +814,13 @@ function AttachmentPreviewModal({
   }, [attachment, isImage, isPdf])
 
   const themeName = useAppStore((s) => s.codeTheme)
-  const theme     = CODE_THEMES[themeName] ?? CODE_THEMES[CODE_THEME_DEFAULT]
+  const theme = CODE_THEMES[themeName] ?? CODE_THEMES[CODE_THEME_DEFAULT]
 
   // Close on Escape.
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
@@ -560,17 +828,26 @@ function AttachmentPreviewModal({
   return createPortal(
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 200,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)',
+        position: 'fixed',
+        inset: 0,
+        zIndex: 200,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0,0,0,0.75)',
+        backdropFilter: 'blur(4px)',
       }}
       onClick={onClose}
     >
       <div
         style={{
-          position: 'relative', display: 'flex', flexDirection: 'column',
-          background: 'var(--lv-card)', border: '1px solid var(--lv-rule-strong)',
-          boxShadow: '0 8px 48px rgba(0,0,0,0.8)', overflow: 'hidden',
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'var(--lv-card)',
+          border: '1px solid var(--lv-rule-strong)',
+          boxShadow: '0 8px 48px rgba(0,0,0,0.8)',
+          overflow: 'hidden',
           ...(isImage
             ? { maxWidth: '92vw', maxHeight: '92vh' }
             : { width: 740, maxWidth: '95vw', maxHeight: '88vh' }),
@@ -578,22 +855,46 @@ function AttachmentPreviewModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 10,
-          padding: '10px 14px', borderBottom: '1px solid var(--lv-rule)', flexShrink: 0,
-        }}>
-          {isImage
-            ? <ImageIcon size={13} style={{ color: 'var(--lv-mute)', flexShrink: 0 }} />
-            : <FileText  size={13} style={{ color: 'var(--lv-mute)', flexShrink: 0 }} />
-          }
-          <span style={{
-            flex: 1, fontFamily: 'var(--font-mono)', fontSize: 11.5,
-            color: 'var(--lv-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{attachment.name}</span>
-          <button onClick={onClose} style={{
-            flexShrink: 0, background: 'none', border: 'none',
-            cursor: 'pointer', color: 'var(--lv-mute)', padding: 4, lineHeight: 0,
-          }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '10px 14px',
+            borderBottom: '1px solid var(--lv-rule)',
+            flexShrink: 0,
+          }}
+        >
+          {isImage ? (
+            <ImageIcon size={13} style={{ color: 'var(--lv-mute)', flexShrink: 0 }} />
+          ) : (
+            <FileText size={13} style={{ color: 'var(--lv-mute)', flexShrink: 0 }} />
+          )}
+          <span
+            style={{
+              flex: 1,
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11.5,
+              color: 'var(--lv-ink)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {attachment.name}
+          </span>
+          <button
+            onClick={onClose}
+            style={{
+              flexShrink: 0,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--lv-mute)',
+              padding: 4,
+              lineHeight: 0,
+            }}
+          >
             <X size={14} />
           </button>
         </div>
@@ -601,28 +902,58 @@ function AttachmentPreviewModal({
         {/* Body */}
         <div style={{ overflow: 'auto', flex: 1 }}>
           {isImage ? (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              padding: 16, background: 'rgba(0,0,0,0.2)',
-            }}>
-              <img src={attachment.dataUrl} alt={attachment.name}
-                   style={{ maxWidth: '100%', maxHeight: '82vh', objectFit: 'contain' }} />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 16,
+                background: 'rgba(0,0,0,0.2)',
+              }}
+            >
+              <img
+                src={attachment.dataUrl}
+                alt={attachment.name}
+                style={{ maxWidth: '100%', maxHeight: '82vh', objectFit: 'contain' }}
+              />
             </div>
           ) : isPdf ? (
-            <embed src={attachment.dataUrl} type="application/pdf" style={{ width: '100%', height: '72vh' }} />
+            <embed
+              src={attachment.dataUrl}
+              type="application/pdf"
+              style={{ width: '100%', height: '72vh' }}
+            />
           ) : text !== null ? (
             <SyntaxHighlighter
-              language={lang} style={theme} PreTag="div" showLineNumbers
-              customStyle={{ margin: 0, borderRadius: 0, fontSize: '0.78rem', lineHeight: '1.6', padding: '1rem 1rem 1rem 0.5rem' }}
-              codeTagProps={{ style: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' } }}
+              language={lang}
+              style={theme}
+              PreTag="div"
+              showLineNumbers
+              customStyle={{
+                margin: 0,
+                borderRadius: 0,
+                fontSize: '0.78rem',
+                lineHeight: '1.6',
+                padding: '1rem 1rem 1rem 0.5rem',
+              }}
+              codeTagProps={{
+                style: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' },
+              }}
             >
               {text}
             </SyntaxHighlighter>
           ) : (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              height: 160, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--lv-mute)',
-            }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: 160,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: 'var(--lv-mute)',
+              }}
+            >
               Binary file — cannot preview
             </div>
           )}
@@ -645,22 +976,40 @@ function MessageAttachments({ attachments }: { attachments: MessageAttachment[] 
         {attachments.map((a, i) =>
           a.type.startsWith('image/') ? (
             <img
-              key={i} src={a.dataUrl} alt={a.name}
+              key={i}
+              src={a.dataUrl}
+              alt={a.name}
               onClick={() => setPreviewing(a)}
               style={{ maxWidth: 200, maxHeight: 150, objectFit: 'cover', cursor: 'pointer' }}
             />
           ) : (
             <div
-              key={i} onClick={() => setPreviewing(a)}
+              key={i}
+              onClick={() => setPreviewing(a)}
               style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: 'rgba(255,255,255,0.08)', padding: '4px 8px',
-                cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)',
-                fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--lv-soft)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'rgba(255,255,255,0.08)',
+                padding: '4px 8px',
+                cursor: 'pointer',
+                border: '1px solid rgba(255,255,255,0.1)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10.5,
+                color: 'var(--lv-soft)',
               }}
             >
               <FileText size={11} style={{ flexShrink: 0 }} />
-              <span style={{ maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+              <span
+                style={{
+                  maxWidth: 140,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {a.name}
+              </span>
             </div>
           ),
         )}
@@ -675,56 +1024,100 @@ function MessageAttachments({ attachments }: { attachments: MessageAttachment[] 
 // ─── ContextPanel ────────────────────────────────────────────────────────────
 
 function formatFileSize(dataUrl: string): string {
-  const b64   = dataUrl.split(',')[1] ?? ''
+  const b64 = dataUrl.split(',')[1] ?? ''
   const bytes = Math.floor(b64.length * 0.75)
-  if (bytes < 1024)        return `${bytes} B`
+  if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function ContextItem({ attachment, onClick }: { attachment: MessageAttachment; onClick: () => void }) {
+function ContextItem({
+  attachment,
+  onClick,
+}: {
+  attachment: MessageAttachment
+  onClick: () => void
+}) {
   const [hov, setHov] = useState(false)
   const isImage = attachment.type.startsWith('image/')
   return (
     <button
-      type="button" onClick={onClick}
-      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
-        display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        cursor: 'pointer',
         border: `1px solid ${hov ? 'var(--lv-rule-strong)' : 'var(--lv-rule)'}`,
         background: hov ? 'rgba(255,255,255,0.04)' : 'transparent',
-        transition: 'border-color 0.15s, background 0.15s', overflow: 'hidden',
+        transition: 'border-color 0.15s, background 0.15s',
+        overflow: 'hidden',
       }}
     >
       {isImage ? (
         <>
-          <img src={attachment.dataUrl} alt={attachment.name}
-               style={{ width: '100%', height: 112, objectFit: 'cover', display: 'block' }} />
+          <img
+            src={attachment.dataUrl}
+            alt={attachment.name}
+            style={{ width: '100%', height: 112, objectFit: 'cover', display: 'block' }}
+          />
           <div style={{ padding: '6px 8px' }}>
-            <p style={{
-              fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>{attachment.name}</p>
+            <p
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--lv-mute)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {attachment.name}
+            </p>
           </div>
         </>
       ) : (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px' }}>
-          <div style={{
-            flexShrink: 0, width: 28, height: 28,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid var(--lv-rule)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
+          <div
+            style={{
+              flexShrink: 0,
+              width: 28,
+              height: 28,
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid var(--lv-rule)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
             <FileText size={12} style={{ color: 'var(--lv-mute)' }} />
           </div>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <p style={{
-              fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--lv-soft)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>{attachment.name}</p>
-            <p style={{
-              fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)', marginTop: 2,
-            }}>{formatFileSize(attachment.dataUrl)}</p>
+            <p
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10.5,
+                color: 'var(--lv-soft)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {attachment.name}
+            </p>
+            <p
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 9.5,
+                color: 'var(--lv-mute)',
+                marginTop: 2,
+              }}
+            >
+              {formatFileSize(attachment.dataUrl)}
+            </p>
           </div>
         </div>
       )}
@@ -748,53 +1141,118 @@ function ContextPanel({
     <>
       <div style={{ width: 208, height: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Header */}
-        <div style={{
-          padding: '18px 20px 14px', borderBottom: '1px solid var(--lv-rule)', flexShrink: 0,
-        }}>
-          <span style={{
-            fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.28em',
-            textTransform: 'uppercase', color: 'var(--lv-gold)', fontWeight: 500,
-          }}>Context</span>
+        <div
+          style={{
+            padding: '18px 20px 14px',
+            borderBottom: '1px solid var(--lv-rule)',
+            flexShrink: 0,
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              letterSpacing: '0.28em',
+              textTransform: 'uppercase',
+              color: 'var(--lv-gold)',
+              fontWeight: 500,
+            }}
+          >
+            Context
+          </span>
         </div>
 
         {/* Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: 12,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}
+        >
           {isEmpty ? (
-            <p style={{
-              fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
-              textAlign: 'center', paddingTop: 24, lineHeight: 1.8, userSelect: 'none',
-            }}>Files and photos<br />you share will<br />appear here</p>
+            <p
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--lv-mute)',
+                textAlign: 'center',
+                paddingTop: 24,
+                lineHeight: 1.8,
+                userSelect: 'none',
+              }}
+            >
+              Files and photos
+              <br />
+              you share will
+              <br />
+              appear here
+            </p>
           ) : (
             <>
               {/* ── Prompt section ── */}
               {sessionPrompt && (
                 <section>
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
-                  }}>
-                    <span style={{
-                      fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.22em',
-                      textTransform: 'uppercase', color: 'var(--lv-mute)', fontWeight: 500,
-                    }}>Prompt</span>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9,
+                        letterSpacing: '0.22em',
+                        textTransform: 'uppercase',
+                        color: 'var(--lv-mute)',
+                        fontWeight: 500,
+                      }}
+                    >
+                      Prompt
+                    </span>
                     {promptPending && (
-                      <span style={{
-                        fontFamily: 'var(--font-mono)', fontSize: 8.5, letterSpacing: '0.1em',
-                        textTransform: 'uppercase', color: 'var(--lv-gold)',
-                        border: '1px solid rgba(200,168,106,0.35)',
-                        padding: '1px 5px',
-                      }}>pending</span>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 8.5,
+                          letterSpacing: '0.1em',
+                          textTransform: 'uppercase',
+                          color: 'var(--lv-gold)',
+                          border: '1px solid rgba(200,168,106,0.35)',
+                          padding: '1px 5px',
+                        }}
+                      >
+                        pending
+                      </span>
                     )}
                   </div>
-                  <div style={{
-                    background: 'rgba(200,168,106,0.06)',
-                    border: '1px solid rgba(200,168,106,0.18)',
-                    borderLeft: '2px solid var(--lv-gold)',
-                    padding: '8px 10px',
-                  }}>
-                    <p style={{
-                      fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--lv-soft)',
-                      lineHeight: 1.65, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                    }}>{sessionPrompt}</p>
+                  <div
+                    style={{
+                      background: 'rgba(200,168,106,0.06)',
+                      border: '1px solid rgba(200,168,106,0.18)',
+                      borderLeft: '2px solid var(--lv-gold)',
+                      padding: '8px 10px',
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10.5,
+                        color: 'var(--lv-soft)',
+                        lineHeight: 1.65,
+                        margin: 0,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {sessionPrompt}
+                    </p>
                   </div>
                 </section>
               )}
@@ -802,11 +1260,19 @@ function ContextPanel({
               {/* ── Attachments section ── */}
               {items.length > 0 && (
                 <section>
-                  <div style={{
-                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.22em',
-                    textTransform: 'uppercase', color: 'var(--lv-mute)', fontWeight: 500,
-                    marginBottom: 8,
-                  }}>Files</div>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9,
+                      letterSpacing: '0.22em',
+                      textTransform: 'uppercase',
+                      color: 'var(--lv-mute)',
+                      fontWeight: 500,
+                      marginBottom: 8,
+                    }}
+                  >
+                    Files
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {items.map((att, i) => (
                       <ContextItem key={i} attachment={att} onClick={() => setPreviewing(att)} />
@@ -830,20 +1296,35 @@ function ContextPanel({
 
 // Individual action button for message toolbar
 function MsgActionBtn({
-  onClick, title, children,
-}: { onClick: () => void; title: string; children: React.ReactNode }) {
+  onClick,
+  title,
+  children,
+}: {
+  onClick: () => void
+  title: string
+  children: React.ReactNode
+}) {
   const [h, setH] = useState(false)
   return (
     <button
-      onClick={onClick} title={title}
-      onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)}
+      onClick={onClick}
+      title={title}
+      onMouseEnter={() => setH(true)}
+      onMouseLeave={() => setH(false)}
       style={{
-        background: 'transparent', border: 'none', cursor: 'pointer', padding: 4,
-        lineHeight: 0, display: 'flex', alignItems: 'center',
+        background: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+        padding: 4,
+        lineHeight: 0,
+        display: 'flex',
+        alignItems: 'center',
         color: h ? 'var(--lv-ink)' : 'var(--lv-mute)',
         transition: 'color 0.2s var(--ease-snap)',
       }}
-    >{children}</button>
+    >
+      {children}
+    </button>
   )
 }
 
@@ -869,10 +1350,15 @@ function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
       }}
     >
       {isUser && (
-        <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
-          paddingRight: 4, userSelect: 'none',
-        }}>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--lv-mute)',
+            paddingRight: 4,
+            userSelect: 'none',
+          }}
+        >
           {formatTimestamp(msg.timestamp)}
         </span>
       )}
@@ -887,40 +1373,71 @@ function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
 
 function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean }) {
   const [hover, setHover] = useState(false)
-  const isUser    = msg.role === 'user'
+  const isUser = msg.role === 'user'
   const hasCharts = (msg.charts?.length ?? 0) > 0 || msg.content.includes('```chart')
   const hasRunningTool = msg.toolCalls?.some((tc) => tc.status === 'running') ?? false
-  const placeholder    = hasRunningTool ? '' : '▌'
+  const placeholder = hasRunningTool ? '' : '▌'
 
   if (isUser) {
     return (
       <div
         style={{ display: 'flex', justifyContent: 'flex-end' }}
-        onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
       >
-        <div className="group/msg" style={{ position: 'relative', maxWidth: '72%', paddingBottom: 28 }}>
+        <div
+          className="group/msg"
+          style={{ position: 'relative', maxWidth: '72%', paddingBottom: 28 }}
+        >
           {/* Label row — "You" + time fades in on hover */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end',
-            marginBottom: 8,
-          }}>
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
-              opacity: hover ? 1 : 0,
-              transition: 'opacity 0.2s var(--ease-snap)',
-            }}>{formatTimestamp(msg.timestamp)}</span>
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.28em',
-              textTransform: 'uppercase', color: 'var(--lv-mute)', fontWeight: 500,
-            }}>You</span>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              justifyContent: 'flex-end',
+              marginBottom: 8,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--lv-mute)',
+                opacity: hover ? 1 : 0,
+                transition: 'opacity 0.2s var(--ease-snap)',
+              }}
+            >
+              {formatTimestamp(msg.timestamp)}
+            </span>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                letterSpacing: '0.28em',
+                textTransform: 'uppercase',
+                color: 'var(--lv-mute)',
+                fontWeight: 500,
+              }}
+            >
+              You
+            </span>
           </div>
           {/* Bubble */}
-          <div style={{
-            fontFamily: 'var(--font-sans)', fontSize: 14.5, lineHeight: 1.6,
-            color: 'var(--lv-ink)', fontWeight: 400,
-            background: 'rgba(255,255,255,0.04)', border: '1px solid var(--lv-rule)',
-            padding: '12px 16px', borderRadius: 4, textAlign: 'left',
-          }}>
+          <div
+            style={{
+              fontFamily: 'var(--font-sans)',
+              fontSize: 14.5,
+              lineHeight: 1.6,
+              color: 'var(--lv-ink)',
+              fontWeight: 400,
+              background: 'rgba(255,255,255,0.04)',
+              border: '1px solid var(--lv-rule)',
+              padding: '12px 16px',
+              borderRadius: 4,
+              textAlign: 'left',
+            }}
+          >
             {msg.attachments && msg.attachments.length > 0 && (
               <MessageAttachments attachments={msg.attachments} />
             )}
@@ -929,9 +1446,7 @@ function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean
                 remarkPlugins={[remarkGfm]}
                 components={{
                   ...MD_COMPONENTS,
-                  p: ({ children }) => (
-                    <p style={{ margin: 0, lineHeight: 1.6 }}>{children}</p>
-                  ),
+                  p: ({ children }) => <p style={{ margin: 0, lineHeight: 1.6 }}>{children}</p>,
                 }}
                 className="prose prose-sm prose-invert"
               >
@@ -940,15 +1455,26 @@ function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean
             )}
           </div>
           {/* Hover action row */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 2,
-            marginTop: 6, justifyContent: 'flex-end', marginRight: -4,
-            opacity: hover ? 1 : 0,
-            transform: hover ? 'translateY(0)' : 'translateY(-3px)',
-            pointerEvents: hover ? 'auto' : 'none',
-            transition: 'opacity 0.2s var(--ease-snap), transform 0.2s var(--ease-snap)',
-          }}>
-            <MsgActionBtn onClick={() => { navigator.clipboard.writeText(msg.content).catch(() => {}) }} title="Copy">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              marginTop: 6,
+              justifyContent: 'flex-end',
+              marginRight: -4,
+              opacity: hover ? 1 : 0,
+              transform: hover ? 'translateY(0)' : 'translateY(-3px)',
+              pointerEvents: hover ? 'auto' : 'none',
+              transition: 'opacity 0.2s var(--ease-snap), transform 0.2s var(--ease-snap)',
+            }}
+          >
+            <MsgActionBtn
+              onClick={() => {
+                navigator.clipboard.writeText(msg.content).catch(() => {})
+              }}
+              title="Copy"
+            >
               <Copy size={13} />
             </MsgActionBtn>
           </div>
@@ -959,35 +1485,48 @@ function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean
 
   // Agent message — left-aligned, no bubble
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-start' }}
-         onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+    <div
+      style={{ display: 'flex', justifyContent: 'flex-start' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
       <div
         className="group/msg"
         style={{ position: 'relative', paddingBottom: 28, maxWidth: hasCharts ? '90%' : '76%' }}
       >
         {/* Eyebrow */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          color: 'var(--lv-gold)', marginBottom: 10,
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            color: 'var(--lv-gold)',
+            marginBottom: 10,
+          }}
+        >
           {isLive ? <AsteriskAnimated size={16} /> : <AsteriskMark size={14} />}
           {!isLive && (
-            <span style={{
-              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.28em',
-              textTransform: 'uppercase', fontWeight: 500,
-            }}>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                letterSpacing: '0.28em',
+                textTransform: 'uppercase',
+                fontWeight: 500,
+              }}
+            >
               {formatTimestamp(msg.timestamp)}
             </span>
           )}
         </div>
 
         {/* Tool calls */}
-        {msg.toolCalls && msg.toolCalls.length > 0 && (
-          <ToolCallsSection calls={msg.toolCalls} />
-        )}
+        {msg.toolCalls && msg.toolCalls.length > 0 && <ToolCallsSection calls={msg.toolCalls} />}
 
         {/* Charts */}
-        {msg.charts?.map((spec, i) => <ChartBlock key={i} spec={spec} />)}
+        {msg.charts?.map((spec, i) => (
+          <ChartBlock key={i} spec={spec} />
+        ))}
 
         {/* Markdown body */}
         {(msg.content || !hasCharts) && (
@@ -1014,17 +1553,33 @@ function MoreDivider({ loading, onClick }: { loading: boolean; onClick?: () => v
     <div
       onClick={!loading ? onClick : undefined}
       style={{
-        display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0',
-        userSelect: 'none', cursor: !loading && onClick ? 'pointer' : 'default',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '4px 0',
+        userSelect: 'none',
+        cursor: !loading && onClick ? 'pointer' : 'default',
         marginBottom: 8,
       }}
     >
       <div style={{ flex: 1, height: 1, background: 'var(--lv-rule)' }} />
-      <span style={{
-        fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
-        display: 'flex', alignItems: 'center', gap: 5,
-      }}>
-        {loading ? <><Loader2 size={10} className="animate-spin" /> loading</> : '— more —'}
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 10,
+          color: 'var(--lv-mute)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 5,
+        }}
+      >
+        {loading ? (
+          <>
+            <Loader2 size={10} className="animate-spin" /> loading
+          </>
+        ) : (
+          '— more —'
+        )}
       </span>
       <div style={{ flex: 1, height: 1, background: 'var(--lv-rule)' }} />
     </div>
@@ -1069,8 +1624,8 @@ export function ChatWindow() {
     sessionPrompts,
   } = useAppStore()
 
-  const draftKey   = sessionId ?? '__new__'
-  const messages   = sessionMessages[draftKey] ?? []
+  const draftKey = sessionId ?? '__new__'
+  const messages = sessionMessages[draftKey] ?? []
   const isStreaming = streamingSet[draftKey] === true
 
   // ── Context panel visibility (hidden by default) ──────────────────────
@@ -1084,11 +1639,14 @@ export function ChatWindow() {
   // ── Context panel — collect all attachments from current session ──────
   // Newest-first; deduplicated by data URL prefix so identical files are
   // not listed twice even if sent in multiple messages.
+  // Use sessionMessages[draftKey] directly (stable map lookup) so the
+  // memo dependency doesn't recreate on every render.
   const contextAttachments = useMemo<MessageAttachment[]>(() => {
+    const msgs = sessionMessages[draftKey] ?? []
     const result: MessageAttachment[] = []
     const seen = new Set<string>()
-    for (let i = messages.length - 1; i >= 0; i--) {
-      for (const att of messages[i].attachments ?? []) {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      for (const att of msgs[i].attachments ?? []) {
         const key = att.dataUrl.slice(0, 80)
         if (!seen.has(key)) {
           seen.add(key)
@@ -1097,16 +1655,18 @@ export function ChatWindow() {
       }
     }
     return result
-  }, [messages])
+  }, [sessionMessages, draftKey])
 
   // ── Attachments ───────────────────────────────────────────────────────
   const [attachments, setAttachments] = useState<LocalAttachment[]>([])
-  const fileInputRef  = useRef<HTMLInputElement>(null)
-  const textareaRef   = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const attachmentsRef = useRef<LocalAttachment[]>([])
 
   // Keep ref in sync so the unmount cleanup always sees the latest list.
-  useEffect(() => { attachmentsRef.current = attachments }, [attachments])
+  useEffect(() => {
+    attachmentsRef.current = attachments
+  }, [attachments])
 
   // Revoke any remaining object URLs when the component unmounts.
   useEffect(() => {
@@ -1140,7 +1700,7 @@ export function ChatWindow() {
   }, [])
 
   // Pagination state
-  const [hasMore, setHasMore]         = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const cursorRef = useRef<string | undefined>(undefined)
 
@@ -1199,7 +1759,7 @@ export function ChatWindow() {
 
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
         requestAnimationFrame(() => {
-          if (cancelled) return   // session changed before rAF fired — don't unlock
+          if (cancelled) return // session changed before rAF fired — don't unlock
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
           canLoadRef.current = true
         })
@@ -1209,8 +1769,10 @@ export function ChatWindow() {
     }
 
     loadInitial()
-    return () => { cancelled = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId])
 
   // ── Scroll to bottom when signalled (during streaming) ───────────────────
@@ -1234,7 +1796,7 @@ export function ChatWindow() {
     if (!el) return
 
     const prevScrollTop = el.scrollTop
-    const prevHeight    = el.scrollHeight
+    const prevHeight = el.scrollHeight
 
     setLoadingMore(true)
 
@@ -1262,7 +1824,6 @@ export function ChatWindow() {
     }
   }, [loadingMore, hasMore, sessionId, prependSessionMessages])
 
-
   // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1280,7 +1841,9 @@ export function ChatWindow() {
         dataUrl: dataUrls[i],
       }))
       // Blob URLs are no longer needed — revoke to free memory.
-      attachments.forEach((a) => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl) })
+      attachments.forEach((a) => {
+        if (a.previewUrl) URL.revokeObjectURL(a.previewUrl)
+      })
       setAttachments([])
     }
 
@@ -1295,19 +1858,38 @@ export function ChatWindow() {
   const canSend = !isStreaming && (!!input.trim() || attachments.length > 0)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--lv-bg)' }}>
-
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        background: 'var(--lv-bg)',
+      }}
+    >
       {/* ── Title bar ────────────────────────────────────────────────── */}
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        paddingLeft: 240, height: 48,
-        borderBottom: '1px solid var(--lv-rule)', flexShrink: 0,
-      }}>
-        <div style={{
-          fontFamily: 'var(--font-sans)', fontStyle: 'normal', fontWeight: 500,
-          fontSize: 14, color: 'var(--lv-ink)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
-        }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          paddingLeft: 240,
+          height: 48,
+          borderBottom: '1px solid var(--lv-rule)',
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: 'var(--font-sans)',
+            fontStyle: 'normal',
+            fontWeight: 500,
+            fontSize: 14,
+            color: 'var(--lv-ink)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+          }}
+        >
           {sessionTitle ?? 'New chat'}
         </div>
         <button
@@ -1315,10 +1897,14 @@ export function ChatWindow() {
           onClick={() => setShowContext((v) => !v)}
           title="Toggle context panel"
           style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '0 12px', height: '100%',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '0 12px',
+            height: '100%',
             color: showContext ? 'var(--lv-gold)' : 'var(--lv-mute)',
-            lineHeight: 0, flexShrink: 0,
+            lineHeight: 0,
+            flexShrink: 0,
             transition: 'color 0.15s',
           }}
         >
@@ -1328,10 +1914,8 @@ export function ChatWindow() {
 
       {/* ── Body row ─────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-
         {/* ── Main column ────────────────────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-
           {/* Messages scroll area */}
           <div
             ref={scrollRef}
@@ -1343,13 +1927,22 @@ export function ChatWindow() {
             {hasMore && <MoreDivider loading={loadingMore} onClick={loadMore} />}
 
             {messages.length === 0 && !hasMore && (
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200,
-              }}>
-                <p style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--lv-mute)',
-                  letterSpacing: '0.1em',
-                }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: 200,
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 11,
+                    color: 'var(--lv-mute)',
+                    letterSpacing: '0.1em',
+                  }}
+                >
                   Ask anything
                 </p>
               </div>
@@ -1358,7 +1951,8 @@ export function ChatWindow() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               {messages.map((msg, i) => (
                 <MessageBubble
-                  key={msg.id} msg={msg}
+                  key={msg.id}
+                  msg={msg}
                   isLive={isStreaming && i === messages.length - 1 && msg.role === 'assistant'}
                 />
               ))}
@@ -1368,11 +1962,19 @@ export function ChatWindow() {
           </div>
 
           {/* ── Input bar ──────────────────────────────────────────────── */}
-          <div style={{ borderTop: '1px solid var(--lv-rule)', padding: '14px 240px 18px', flexShrink: 0 }}>
+          <div
+            style={{
+              borderTop: '1px solid var(--lv-rule)',
+              padding: '14px 240px 18px',
+              flexShrink: 0,
+            }}
+          >
             <form onSubmit={handleSubmit}>
               {/* Hidden file picker */}
               <input
-                ref={fileInputRef} type="file" multiple
+                ref={fileInputRef}
+                type="file"
+                multiple
                 accept="image/*,.pdf,.txt,.md,.csv,.json,.py,.ts,.tsx,.js,.jsx,.java,.cpp,.c,.go,.rs,.html,.css"
                 style={{ display: 'none' }}
                 onChange={handleFileSelect}
@@ -1388,28 +1990,45 @@ export function ChatWindow() {
               )}
 
               {/* Input row */}
-              <div style={{
-                display: 'flex', alignItems: 'flex-end', gap: 12,
-                borderBottom: '1px solid var(--lv-rule-strong)', paddingBottom: 10,
-              }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-end',
+                  gap: 12,
+                  borderBottom: '1px solid var(--lv-rule-strong)',
+                  paddingBottom: 10,
+                }}
+              >
                 {/* @ / paperclip icon */}
                 <DropdownMenu.Root>
                   <DropdownMenu.Trigger asChild>
-                    <button type="button" title="Attach files or photos" style={{
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      color: attachments.length > 0 ? 'var(--lv-gold)' : 'var(--lv-mute)',
-                      padding: 0, lineHeight: 0, flexShrink: 0,
-                    }}>
+                    <button
+                      type="button"
+                      title="Attach files or photos"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: attachments.length > 0 ? 'var(--lv-gold)' : 'var(--lv-mute)',
+                        padding: 0,
+                        lineHeight: 0,
+                        flexShrink: 0,
+                      }}
+                    >
                       <Paperclip size={15} />
                     </button>
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content
-                      sideOffset={10} align="start"
+                      sideOffset={10}
+                      align="start"
                       style={{
-                        zIndex: 200, minWidth: 180,
-                        background: 'var(--lv-card)', border: '1px solid var(--lv-rule-strong)',
-                        padding: 4, boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
+                        zIndex: 200,
+                        minWidth: 180,
+                        background: 'var(--lv-card)',
+                        border: '1px solid var(--lv-rule-strong)',
+                        padding: 4,
+                        boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
                       }}
                       className={cn(
                         'data-[state=open]:animate-in data-[state=closed]:animate-out',
@@ -1419,9 +2038,15 @@ export function ChatWindow() {
                       <DropdownMenu.Item
                         onSelect={() => fileInputRef.current?.click()}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: 10,
-                          padding: '8px 12px', cursor: 'pointer', outline: 'none',
-                          fontFamily: 'var(--font-sans)', fontSize: 12.5, color: 'var(--lv-ink)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          outline: 'none',
+                          fontFamily: 'var(--font-sans)',
+                          fontSize: 12.5,
+                          color: 'var(--lv-ink)',
                         }}
                         className="hover:bg-accent focus:bg-accent transition-colors"
                       >
@@ -1436,19 +2061,24 @@ export function ChatWindow() {
                     The textarea always captures input (no focus-switching).
                     The overlay renders backtick spans and inline code visually. */}
                 <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
-
                   {/* Markdown render layer — sits behind the textarea */}
                   {input && (
                     <div
                       aria-hidden
                       className="prose prose-sm prose-invert max-w-none"
                       style={{
-                        position: 'absolute', inset: 0, zIndex: 0,
-                        pointerEvents: 'none', overflow: 'hidden',
-                        fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.5,
+                        position: 'absolute',
+                        inset: 0,
+                        zIndex: 0,
+                        pointerEvents: 'none',
+                        overflow: 'hidden',
+                        fontFamily: 'var(--font-sans)',
+                        fontSize: 14,
+                        lineHeight: 1.5,
                         color: 'var(--lv-ink)',
                         // Match textarea padding so rendered text aligns with the caret
-                        padding: 0, margin: 0,
+                        padding: 0,
+                        margin: 0,
                       }}
                     >
                       <ReactMarkdown
@@ -1474,7 +2104,10 @@ export function ChatWindow() {
                     ref={textareaRef}
                     value={input}
                     className={input ? 'chat-input-transparent' : undefined}
-                    onChange={(e) => { setInput(e.target.value); setDraft(draftKey, e.target.value) }}
+                    onChange={(e) => {
+                      setInput(e.target.value)
+                      setDraft(draftKey, e.target.value)
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         if (e.altKey) {
@@ -1482,8 +2115,8 @@ export function ChatWindow() {
                           e.preventDefault()
                           const el = e.currentTarget
                           const start = el.selectionStart ?? el.value.length
-                          const end   = el.selectionEnd   ?? el.value.length
-                          const next  = el.value.slice(0, start) + '\n' + el.value.slice(end)
+                          const end = el.selectionEnd ?? el.value.length
+                          const next = el.value.slice(0, start) + '\n' + el.value.slice(end)
                           flushSync(() => {
                             setInput(next)
                             setDraft(draftKey, next)
@@ -1502,15 +2135,22 @@ export function ChatWindow() {
                     placeholder="Reply, ask, or @reference a note…"
                     rows={1}
                     style={{
-                      position: 'relative', zIndex: 1,
-                      width: '100%', background: 'transparent', border: 'none',
-                      resize: 'none', outline: 'none',
-                      fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.5,
+                      position: 'relative',
+                      zIndex: 1,
+                      width: '100%',
+                      background: 'transparent',
+                      border: 'none',
+                      resize: 'none',
+                      outline: 'none',
+                      fontFamily: 'var(--font-sans)',
+                      fontSize: 14,
+                      lineHeight: 1.5,
                       // Transparent when content is present so markdown layer shows through;
                       // keep ink colour when empty so the placeholder is readable.
                       color: input ? 'transparent' : 'var(--lv-ink)',
                       caretColor: 'var(--lv-ink)',
-                      minHeight: 22, maxHeight: 320,
+                      minHeight: 22,
+                      maxHeight: 320,
                     }}
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     onInput={(e: any) => {
@@ -1525,29 +2165,51 @@ export function ChatWindow() {
                   type="submit"
                   disabled={!canSend}
                   style={{
-                    width: 28, height: 28, flexShrink: 0,
+                    width: 28,
+                    height: 28,
+                    flexShrink: 0,
                     background: canSend ? 'var(--lv-ink)' : 'var(--lv-rule-strong)',
                     color: 'var(--lv-bg)',
-                    border: 'none', cursor: canSend ? 'pointer' : 'not-allowed',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: 'none',
+                    cursor: canSend ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     transition: 'background 0.15s',
                   }}
                 >
-                  {isStreaming
-                    ? <AsteriskAnimated size={16} />
-                    : <Send size={13} />}
+                  {isStreaming ? <AsteriskAnimated size={16} /> : <Send size={13} />}
                 </button>
               </div>
 
               {/* Hints row */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 14, marginTop: 8,
-              }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>↵ send</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>⌥↵ newline</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>@ reference</span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 14,
+                  marginTop: 8,
+                }}
+              >
+                <span
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}
+                >
+                  ↵ send
+                </span>
+                <span
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}
+                >
+                  ⌥↵ newline
+                </span>
+                <span
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}
+                >
+                  @ reference
+                </span>
                 <span style={{ flex: 1 }} />
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>
+                <span
+                  style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}
+                >
                   llm: claude-sonnet-4 · {sessionTitle ? 'active' : 'new chat'}
                 </span>
               </div>
@@ -1572,20 +2234,23 @@ export function ChatWindow() {
                   // Applied prompt (already sent with first message) takes precedence,
                   // then pending prompt (set but first message not sent yet).
                   sessionId
-                    ? (appliedSessionPrompts[sessionId] ?? sessionPrompts[sessionId] ?? sessionPrompts['__new__'] ?? '')
+                    ? (appliedSessionPrompts[sessionId] ??
+                      sessionPrompts[sessionId] ??
+                      sessionPrompts['__new__'] ??
+                      '')
                     : (sessionPrompts['__new__'] ?? '')
                 }
                 promptPending={
                   // True when the prompt is set but hasn't been sent yet
                   sessionId
-                    ? (!appliedSessionPrompts[sessionId] && !!(sessionPrompts[sessionId] ?? sessionPrompts['__new__']))
+                    ? !appliedSessionPrompts[sessionId] &&
+                      !!(sessionPrompts[sessionId] ?? sessionPrompts['__new__'])
                     : !!sessionPrompts['__new__']
                 }
               />
             </motion.div>
           )}
         </AnimatePresence>
-
       </div>
     </div>
   )

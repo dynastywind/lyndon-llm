@@ -9,12 +9,12 @@
  * changed from Settings at any time.
  */
 import type { CSSProperties } from 'react'
-import { vscDarkPlus }       from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { dracula }           from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { oneDark }           from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { nord }              from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { nightOwl }          from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { atomDark }          from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { nord } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { nightOwl } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 export type SyntaxTheme = Record<string, CSSProperties>
 
@@ -32,11 +32,11 @@ export type CodeThemeName = keyof typeof CODE_THEMES
 /** Ordered list for the settings dropdown. */
 export const CODE_THEME_OPTIONS: { value: CodeThemeName; label: string }[] = [
   { value: 'vscDarkPlus', label: 'VS Code Dark+' },
-  { value: 'dracula',     label: 'Dracula'       },
-  { value: 'oneDark',     label: 'One Dark'      },
-  { value: 'nord',        label: 'Nord'          },
-  { value: 'nightOwl',    label: 'Night Owl'     },
-  { value: 'atomDark',    label: 'Atom Dark'     },
+  { value: 'dracula', label: 'Dracula' },
+  { value: 'oneDark', label: 'One Dark' },
+  { value: 'nord', label: 'Nord' },
+  { value: 'nightOwl', label: 'Night Owl' },
+  { value: 'atomDark', label: 'Atom Dark' },
 ]
 
 export const CODE_THEME_DEFAULT: CodeThemeName = 'vscDarkPlus'

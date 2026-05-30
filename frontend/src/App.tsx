@@ -9,7 +9,15 @@ export default function App() {
   const { mode, sessionId } = useAppStore()
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--lv-bg)', color: 'var(--lv-ink)', overflow: 'hidden' }}>
+    <div
+      style={{
+        display: 'flex',
+        height: '100vh',
+        background: 'var(--lv-bg)',
+        color: 'var(--lv-ink)',
+        overflow: 'hidden',
+      }}
+    >
       <Sidebar />
       <main style={{ flex: 1, overflow: 'hidden' }}>
         {/*
@@ -21,12 +29,11 @@ export default function App() {
           creation path, so the remounted component's effect correctly sees
           messages.length > 0 and skips the unnecessary DB fetch.
         */}
-        {mode === 'chat'    && <ChatWindow key={sessionId ?? '__new__'} />}
-        {mode === 'cowork'  && <CoworkWindow />}
-        {mode === 'code'    && <CodeWindow />}
+        {mode === 'chat' && <ChatWindow key={sessionId ?? '__new__'} />}
+        {mode === 'cowork' && <CoworkWindow />}
+        {mode === 'code' && <CodeWindow />}
         {mode === 'sandbox' && <SandboxWindow />}
       </main>
     </div>
-
   )
 }

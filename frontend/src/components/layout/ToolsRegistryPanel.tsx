@@ -36,48 +36,44 @@ function InternalToolsSection({ tools }: { tools: RegistryTool[] }) {
       <p className="text-xs text-muted-foreground mb-3">
         Shipped with LyndonLLM. These cannot be edited or removed.
       </p>
-      {Object.entries(byMode).filter(([mode]) => mode !== 'cowork').map(([mode, modeTools]) => (
-        <div key={mode} className="mb-4">
-          <p className="text-xs font-medium text-muted-foreground mb-1.5 capitalize">{mode}</p>
-          <ul className="space-y-1.5">
-            {modeTools.map((t) => (
-              <li
-                key={`${mode}-${t.name}`}
-                className="flex items-start gap-3 bg-background rounded-lg px-3 py-2"
-              >
-                <Wrench size={14} className="text-muted-foreground shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-mono">{t.name}</span>
-                    <Lock size={11} className="text-muted-foreground/50" />
-                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">
-                      {t.permission}
-                    </span>
+      {Object.entries(byMode)
+        .filter(([mode]) => mode !== 'cowork')
+        .map(([mode, modeTools]) => (
+          <div key={mode} className="mb-4">
+            <p className="text-xs font-medium text-muted-foreground mb-1.5 capitalize">{mode}</p>
+            <ul className="space-y-1.5">
+              {modeTools.map((t) => (
+                <li
+                  key={`${mode}-${t.name}`}
+                  className="flex items-start gap-3 bg-background rounded-lg px-3 py-2"
+                >
+                  <Wrench size={14} className="text-muted-foreground shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-mono">{t.name}</span>
+                      <Lock size={11} className="text-muted-foreground/50" />
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">
+                        {t.permission}
+                      </span>
+                    </div>
+                    {t.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                        {t.description}
+                      </p>
+                    )}
                   </div>
-                  {t.description && (
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                      {t.description}
-                    </p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
     </section>
   )
 }
 
 // ─── MCP server card ──────────────────────────────────────────────────────────
 
-function McpServerCard({
-  server,
-  onChange,
-}: {
-  server: McpServer
-  onChange: () => void
-}) {
+function McpServerCard({ server, onChange }: { server: McpServer; onChange: () => void }) {
   const [expanded, setExpanded] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -117,18 +113,14 @@ function McpServerCard({
           <p className="text-sm font-medium truncate">{server.name}</p>
           <p className="text-[10px] text-muted-foreground font-mono">
             {server.transport}
-            {server.transport === 'stdio' && server.command
-              ? ` · ${server.command}`
-              : ''}
+            {server.transport === 'stdio' && server.command ? ` · ${server.command}` : ''}
             {server.transport === 'sse' && server.url ? ` · ${server.url}` : ''}
           </p>
         </div>
         <span
           className={cn(
             'text-[10px] px-1.5 py-0.5 rounded',
-            server.enabled
-              ? 'bg-green-500/10 text-green-400'
-              : 'bg-muted text-muted-foreground',
+            server.enabled ? 'bg-green-500/10 text-green-400' : 'bg-muted text-muted-foreground',
           )}
         >
           {server.enabled ? 'on' : 'off'}
@@ -220,7 +212,15 @@ function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
       }
       await createMcpServer(body)
       setOpen(false)
-      setForm({ name: '', transport: 'stdio', command: '', args: [], env: {}, url: '', enabled: true })
+      setForm({
+        name: '',
+        transport: 'stdio',
+        command: '',
+        args: [],
+        env: {},
+        url: '',
+        enabled: true,
+      })
       setArgsText('')
       onAdded()
     } catch (err) {
@@ -244,7 +244,10 @@ function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-background rounded-lg border border-border p-4 space-y-3">
+    <form
+      onSubmit={handleSubmit}
+      className="bg-background rounded-lg border border-border p-4 space-y-3"
+    >
       <p className="text-sm font-medium">New MCP server</p>
       <input
         required
@@ -255,9 +258,7 @@ function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
       />
       <select
         value={form.transport}
-        onChange={(e) =>
-          setForm({ ...form, transport: e.target.value as 'stdio' | 'sse' })
-        }
+        onChange={(e) => setForm({ ...form, transport: e.target.value as 'stdio' | 'sse' })}
         className="w-full bg-card border border-border rounded px-3 py-1.5 text-sm"
       >
         <option value="stdio">stdio (local process)</option>
@@ -355,8 +356,7 @@ export function ToolsRegistryPanel({ active = true }: { active?: boolean }) {
       <section>
         <SectionLabel>MCP servers</SectionLabel>
         <p className="text-xs text-muted-foreground mb-3">
-          Connect external MCP servers. Tools are discovered on save and can be refreshed
-          anytime.
+          Connect external MCP servers. Tools are discovered on save and can be refreshed anytime.
         </p>
         <AddMcpServerForm onAdded={load} />
         {servers.length > 0 && (

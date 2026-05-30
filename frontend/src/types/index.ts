@@ -32,7 +32,7 @@ export interface ToolCallRecord {
 /** A file or image attached to a user message. */
 export interface MessageAttachment {
   name: string
-  type: string    // MIME type, e.g. "image/png"
+  type: string // MIME type, e.g. "image/png"
   dataUrl: string // full data URL: "data:<type>;base64,<data>"
 }
 
@@ -135,36 +135,36 @@ export interface ChatSessionMessage {
 
 // ── Sandbox ───────────────────────────────────────────────────────────────────
 export interface SandboxLanguage {
-  id:        string
-  label:     string
+  id: string
+  label: string
   available: boolean
-  runtime:   'docker' | 'process' | 'unavailable'
+  runtime: 'docker' | 'process' | 'unavailable'
 }
 
 export interface SandboxResult {
-  stdout:      string
-  stderr:      string
-  exit_code:   number | null
+  stdout: string
+  stderr: string
+  exit_code: number | null
   duration_ms: number
-  timed_out:   boolean
-  runtime:     'docker' | 'process' | 'error'
+  timed_out: boolean
+  runtime: 'docker' | 'process' | 'error'
 }
 
 // ── Memory ────────────────────────────────────────────────────────────────────
 export type MemoryType = 'episodic' | 'semantic' | 'procedural'
 
 export interface MemoryRecord {
-  id:          string
-  content:     string
-  session_id:  string
+  id: string
+  content: string
+  session_id: string
   memory_type: MemoryType
-  importance:  number
-  created_at:  string
+  importance: number
+  created_at: string
 }
 
 export interface MemoriesResponse {
   memories: MemoryRecord[]
-  total:    number
+  total: number
 }
 
 // ── Metrics ───────────────────────────────────────────────────────────────────
@@ -175,28 +175,28 @@ export interface MetricRecord {
   route: string | null
   total_ms: number
   phases: {
-    route_ms?:  number
-    rag_ms?:    number
+    route_ms?: number
+    rag_ms?: number
     search_ms?: number
-    ttft_ms?:   number
-    total_ms?:  number
+    ttft_ms?: number
+    total_ms?: number
   }
 }
 
 export interface MetricsSummary {
-  count:        number
+  count: number
   avg_total_ms: number
   p50_total_ms: number | null
   p90_total_ms: number | null
   min_total_ms: number
   max_total_ms: number
-  avg_ttft_ms:  number | null
-  p90_ttft_ms:  number | null
+  avg_ttft_ms: number | null
+  p90_ttft_ms: number | null
 }
 
 export interface MetricsResponse {
   metrics: MetricRecord[]
-  total:   number
+  total: number
   summary: MetricsSummary
 }
 

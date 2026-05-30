@@ -11,12 +11,16 @@ function chartSpecToMarkdown(spec: ChartSpec): string {
 
 export function useStream() {
   const {
-    sessionId, setSessionId,
+    sessionId,
+    setSessionId,
     addSessionMessage,
-    startStreaming, stopStreaming,
-    bumpSessionVersion, bumpScrollToBottom,
+    startStreaming,
+    stopStreaming,
+    bumpSessionVersion,
+    bumpScrollToBottom,
     systemPrompt,
-    sessionPrompts, clearSessionPrompt,
+    sessionPrompts,
+    clearSessionPrompt,
     setAppliedSessionPrompt,
   } = useAppStore()
 
@@ -63,17 +67,26 @@ export function useStream() {
           ...s.sessionMessages,
           [activeSessionId!]: [
             ...(s.sessionMessages[activeSessionId!] ?? []),
-            { id: msgId, role: 'assistant' as const, content: '', timestamp: new Date(), toolCalls: [] },
+            {
+              id: msgId,
+              role: 'assistant' as const,
+              content: '',
+              timestamp: new Date(),
+              toolCalls: [],
+            },
           ],
         },
       }))
 
       // Helper: update the assistant message in its session slot
-      const updateMsg = (updater: (prev: ReturnType<typeof useAppStore.getState>['sessionMessages'][string][number]) =>
-        ReturnType<typeof useAppStore.getState>['sessionMessages'][string][number]) => {
+      const updateMsg = (
+        updater: (
+          prev: ReturnType<typeof useAppStore.getState>['sessionMessages'][string][number],
+        ) => ReturnType<typeof useAppStore.getState>['sessionMessages'][string][number],
+      ) => {
         useAppStore.setState((s) => {
           const msgs = [...(s.sessionMessages[activeSessionId!] ?? [])]
-          const idx  = msgs.findIndex((m) => m.id === msgId)
+          const idx = msgs.findIndex((m) => m.id === msgId)
           if (idx < 0) return s
           msgs[idx] = updater(msgs[idx])
           return { sessionMessages: { ...s.sessionMessages, [activeSessionId!]: msgs } }
@@ -90,70 +103,96 @@ export function useStream() {
         : undefined
 
       try {
-        await streamChat(userMessage, activeSessionId, (type, data) => {
-          switch (type) {
-            case 'token': {
-              const text = data.text as string
-              updateMsg((m) => ({ ...m, content: m.content + text }))
-              bumpScrollToBottom()
-              break
-            }
-
-            case 'tool_start': {
-              const newCall: ToolCallRecord = {
-                id:     data.id   as string,
-                name:   data.name as string,
-                args:   data.args as Record<string, unknown>,
-                status: 'running',
+        await streamChat(
+          userMessage,
+          activeSessionId,
+          (type, data) => {
+            switch (type) {
+              case 'token': {
+                const text = data.text as string
+                updateMsg((m) => ({ ...m, content: m.content + text }))
+                bumpScrollToBottom()
+                break
               }
-              updateMsg((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), newCall] }))
-              break
-            }
 
-            case 'tool_result': {
-              const { id, success, preview } = data as { id: string; success: boolean; preview: string }
-              updateMsg((m) => ({
-                ...m,
-                toolCalls: (m.toolCalls ?? []).map((tc) =>
-                  tc.id === id
-                    ? { ...tc, status: success ? ('done' as const) : ('error' as const), preview }
-                    : tc,
-                ),
-              }))
-              break
-            }
+              case 'tool_start': {
+                const newCall: ToolCallRecord = {
+                  id: data.id as string,
+                  name: data.name as string,
+                  args: data.args as Record<string, unknown>,
+                  status: 'running',
+                }
+                updateMsg((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), newCall] }))
+                break
+              }
 
-            case 'chart': {
-              const spec = data.spec as ChartSpec
-              updateMsg((m) => ({ ...m, content: m.content + chartSpecToMarkdown(spec) }))
-              break
-            }
+              case 'tool_result': {
+                const { id, success, preview } = data as {
+                  id: string
+                  success: boolean
+                  preview: string
+                }
+                updateMsg((m) => ({
+                  ...m,
+                  toolCalls: (m.toolCalls ?? []).map((tc) =>
+                    tc.id === id
+                      ? { ...tc, status: success ? ('done' as const) : ('error' as const), preview }
+                      : tc,
+                  ),
+                }))
+                break
+              }
 
-            case 'metrics': {
-              const { total_ms, phases } = data as { total_ms: number; phases: Record<string, number> }
-              const parts = Object.entries(phases).map(([k, v]) => `${k}=${v}ms`).join('  ')
-              console.info(`[metrics] total=${total_ms}ms  ${parts}`)
-              break
-            }
+              case 'chart': {
+                const spec = data.spec as ChartSpec
+                updateMsg((m) => ({ ...m, content: m.content + chartSpecToMarkdown(spec) }))
+                break
+              }
 
-            case 'error': {
-              console.warn('[stream] backend error event:', data.message)
-              break
+              case 'metrics': {
+                const { total_ms, phases } = data as {
+                  total_ms: number
+                  phases: Record<string, number>
+                }
+                const parts = Object.entries(phases)
+                  .map(([k, v]) => `${k}=${v}ms`)
+                  .join('  ')
+                console.info(`[metrics] total=${total_ms}ms  ${parts}`)
+                break
+              }
+
+              case 'error': {
+                console.warn('[stream] backend error event:', data.message)
+                break
+              }
             }
-          }
-        // system_prompt is sent only on the first message so the model receives
-        // it as immutable context at the top of the conversation; the session
-        // prompt follows immediately after.
-        }, apiAttachments,
-           isFirstMessage ? (systemPrompt || undefined) : undefined,
-           appliedSessionPrompt)
+            // system_prompt is sent only on the first message so the model receives
+            // it as immutable context at the top of the conversation; the session
+            // prompt follows immediately after.
+          },
+          apiAttachments,
+          isFirstMessage ? systemPrompt || undefined : undefined,
+          appliedSessionPrompt,
+        )
       } finally {
         stopStreaming(activeSessionId)
         bumpScrollToBottom()
         bumpSessionVersion()
       }
     },
-    [sessionId, setSessionId, addSessionMessage, startStreaming, stopStreaming, bumpSessionVersion, bumpScrollToBottom, systemPrompt, sessionPrompts, clearSessionPrompt, setAppliedSessionPrompt],
+    [
+      sessionId,
+      setSessionId,
+      addSessionMessage,
+      startStreaming,
+      stopStreaming,
+      bumpSessionVersion,
+      bumpScrollToBottom,
+      systemPrompt,
+      sessionPrompts,
+      clearSessionPrompt,
+      setAppliedSessionPrompt,
+    ],
   )
 
   return { send }

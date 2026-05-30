@@ -20,14 +20,15 @@ import type {
 // served from the tauri:// custom protocol — there is no Vite proxy, so
 // relative /api/* paths would resolve to tauri:///api/* (invalid).
 // Detect Tauri at runtime and point directly at the local backend.
-const IS_TAURI = typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== 'undefined'
+const IS_TAURI =
+  typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== 'undefined'
 const BASE = IS_TAURI ? 'http://localhost:8000/api' : '/api'
 
 /** Attachment payload sent to the chat endpoint (base64 content, no prefix). */
 export interface AttachmentPayload {
   name: string
-  type: string  // MIME type
-  data: string  // raw base64 (no "data:...;base64," prefix)
+  type: string // MIME type
+  data: string // raw base64 (no "data:...;base64," prefix)
 }
 
 function headers(sessionId: string, mode: string) {
@@ -64,8 +65,8 @@ export async function streamChat(
     body: JSON.stringify({
       message,
       ...(attachments?.length ? { attachments } : {}),
-      ...(systemPrompt         ? { system_prompt:   systemPrompt  } : {}),
-      ...(sessionPrompt        ? { session_prompt:  sessionPrompt } : {}),
+      ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
+      ...(sessionPrompt ? { session_prompt: sessionPrompt } : {}),
     }),
   })
   if (!res.ok) throw new Error(`Chat error: ${res.statusText}`)
@@ -74,6 +75,7 @@ export async function streamChat(
   const decoder = new TextDecoder()
   let buffer = ''
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
@@ -82,7 +84,7 @@ export async function streamChat(
 
     // SSE messages are separated by \n\n
     const parts = buffer.split('\n\n')
-    buffer = parts.pop() ?? ''          // last element may be incomplete
+    buffer = parts.pop() ?? '' // last element may be incomplete
 
     for (const part of parts) {
       if (!part.trim()) continue
@@ -118,9 +120,7 @@ export async function listChatSessions(
   limit = 20,
   offset = 0,
 ): Promise<ChatSessionsResponse> {
-  const res = await fetch(
-    `${BASE}/chat/sessions?mode=${mode}&limit=${limit}&offset=${offset}`,
-  )
+  const res = await fetch(`${BASE}/chat/sessions?mode=${mode}&limit=${limit}&offset=${offset}`)
   if (!res.ok) throw new Error(`Failed to list sessions: ${res.statusText}`)
   return res.json()
 }
@@ -128,7 +128,7 @@ export async function listChatSessions(
 export async function getChatMessages(
   sessionId: string,
   limit = 5,
-  before?: string,          // ISO-8601 cursor — fetch messages older than this
+  before?: string, // ISO-8601 cursor — fetch messages older than this
 ): Promise<{ messages: ChatSessionMessage[]; has_more: boolean }> {
   const params = new URLSearchParams({ limit: String(limit) })
   if (before) params.set('before', before)
@@ -191,10 +191,9 @@ export async function listRagSources(): Promise<{ sources: string[] }> {
 }
 
 export async function deleteRagSource(source: string): Promise<void> {
-  const res = await fetch(
-    `${BASE}/rag/sources?source=${encodeURIComponent(source)}`,
-    { method: 'DELETE' },
-  )
+  const res = await fetch(`${BASE}/rag/sources?source=${encodeURIComponent(source)}`, {
+    method: 'DELETE',
+  })
   if (!res.ok) throw new Error(`Failed to delete source: ${res.statusText}`)
 }
 
@@ -324,11 +323,7 @@ export async function runTests(sessionId: string, testPath?: string): Promise<Te
   return res.json()
 }
 
-export async function commitFiles(
-  files: string[],
-  message: string,
-  sessionId: string,
-) {
+export async function commitFiles(files: string[], message: string, sessionId: string) {
   const res = await fetch(`${BASE}/code/commit`, {
     method: 'POST',
     headers: headers(sessionId, 'code'),
@@ -380,9 +375,9 @@ export async function getMetrics(
   params: { limit?: number; offset?: number; session_id?: string } = {},
 ): Promise<MetricsResponse> {
   const qs = new URLSearchParams()
-  if (params.limit    !== undefined) qs.set('limit',      String(params.limit))
-  if (params.offset   !== undefined) qs.set('offset',     String(params.offset))
-  if (params.session_id)             qs.set('session_id', params.session_id)
+  if (params.limit !== undefined) qs.set('limit', String(params.limit))
+  if (params.offset !== undefined) qs.set('offset', String(params.offset))
+  if (params.session_id) qs.set('session_id', params.session_id)
   const res = await fetch(`${BASE}/metrics?${qs}`)
   if (!res.ok) throw new Error('Failed to fetch metrics')
   return res.json()
