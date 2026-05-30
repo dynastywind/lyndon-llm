@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     cowork_shell_timeout: int = 30          # seconds
     cowork_max_plan_steps: int = 20
 
+    # Sandbox
+    sandbox_timeout: int = 60               # max seconds per run (60s for compiled langs)
+
     # Code
     code_default_repo_path: str = ""        # default repo to open
     vercel_token: str = ""

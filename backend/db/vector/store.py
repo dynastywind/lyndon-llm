@@ -29,6 +29,10 @@ class VectorStoreBase:
 
     async def list_sources(self) -> list[str]: ...
 
+    async def list_all(self, limit: int = 200) -> tuple[list[str], list[str], list[dict]]:
+        """Return (ids, documents, metadatas) for up to *limit* items."""
+        return [], [], []
+
 
 class ChromaVectorStore(VectorStoreBase):
     def __init__(self, collection_name: str) -> None:
@@ -87,6 +91,14 @@ class ChromaVectorStore(VectorStoreBase):
         })
         return sources
 
+    async def list_all(self, limit: int = 200) -> tuple[list[str], list[str], list[dict]]:
+        result = self._get_col().get(include=["documents", "metadatas"], limit=limit)
+        return (
+            result.get("ids", []),
+            result.get("documents", []),
+            result.get("metadatas", []),
+        )
+
 
 class QdrantVectorStore(VectorStoreBase):
     def __init__(self, collection_name: str) -> None:
@@ -116,7 +128,7 @@ class QdrantVectorStore(VectorStoreBase):
             PointStruct(
                 id=abs(hash(id_)) % (2**63),   # Qdrant needs integer IDs
                 vector=emb,
-                payload={"text": doc, **meta},
+                payload={"text": doc, "_id": id_, **meta},  # _id preserves the string UUID
             )
             for id_, emb, doc, meta in zip(ids, embeddings, documents, metadatas)
         ]
@@ -184,6 +196,23 @@ class QdrantVectorStore(VectorStoreBase):
             if offset is None:
                 break
         return sorted(sources)
+
+    async def list_all(self, limit: int = 200) -> tuple[list[str], list[str], list[dict]]:
+        results, _ = self._client.scroll(
+            collection_name=self._collection,
+            with_payload=True,
+            limit=limit,
+        )
+        ids, docs, metas = [], [], []
+        for point in results:
+            payload = dict(point.payload or {})
+            doc = payload.pop("text", "")
+            # Original string ID is stored in payload under "_id" (set during upsert)
+            original_id = payload.pop("_id", str(point.id))
+            ids.append(original_id)
+            docs.append(doc)
+            metas.append(payload)
+        return ids, docs, metas
 
 
 _instances: dict[str, VectorStoreBase] = {}

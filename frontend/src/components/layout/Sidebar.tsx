@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { BookOpen, Server, Trash2, Loader2, Pencil, BarChart2, MoreHorizontal, MessageSquarePlus } from 'lucide-react'
+import { BookOpen, Server, Trash2, Loader2, Pencil, BrainCircuit, MoreHorizontal, MessageSquarePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
@@ -82,8 +82,9 @@ function SidebarAsteriskAnimated({ size = 12 }: { size?: number }) {
 
 // ── Modes ─────────────────────────────────────────────────────────────────────
 const MODES: { id: Mode; label: string }[] = [
-  { id: 'chat',   label: 'Chat'   },
-  { id: 'code',   label: 'Code'   },
+  { id: 'chat',    label: 'Chat'    },
+  { id: 'code',    label: 'Code'    },
+  { id: 'sandbox', label: 'Sandbox' },
 ]
 
 // ── component ─────────────────────────────────────────────────────────────────
@@ -269,7 +270,7 @@ export function Sidebar() {
             <p style={{
               fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 500,
               color: 'var(--lv-ink)', marginBottom: 6,
-            }}>Session prompt</p>
+            }}>Session Prompt</p>
             <p style={{
               fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
               marginBottom: 14, lineHeight: 1.6,
@@ -315,7 +316,7 @@ export function Sidebar() {
                 padding: '6px 18px', cursor: 'pointer',
                 fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600,
                 color: 'var(--lv-bg)',
-              }}>Set</button>
+              }}>Start</button>
             </div>
           </div>
         </div>,
@@ -428,7 +429,7 @@ export function Sidebar() {
               {([
                 { tab: 'knowledge' as SettingsTab, icon: BookOpen,  label: 'Knowledge' },
                 { tab: 'tools'     as SettingsTab, icon: Server,    label: 'MCP'       },
-                { tab: 'metrics'   as SettingsTab, icon: BarChart2, label: 'Metrics'   },
+                { tab: 'memory'    as SettingsTab, icon: BrainCircuit, label: 'Memory' },
               ] as const).map(({ tab, icon: Icon, label }) => (
                 <DropdownMenu.Item
                   key={tab}

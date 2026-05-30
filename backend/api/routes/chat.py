@@ -215,6 +215,23 @@ async def get_memories(query: str, session: Session = Depends(get_session)):
     return {"memories": [m.model_dump(exclude={"embedding"}) for m in memories]}
 
 
+@router.get("/memories")
+async def list_memories():
+    """Return all long-term memories, newest-first."""
+    from chat.memory.long_term import LongTermMemory
+    lt = LongTermMemory()
+    items = await lt.list_all()
+    return {"memories": items, "total": len(items)}
+
+
+@router.delete("/memories/{memory_id}", status_code=204)
+async def delete_memory(memory_id: str):
+    """Permanently delete a long-term memory by ID."""
+    from chat.memory.long_term import LongTermMemory
+    lt = LongTermMemory()
+    await lt.delete(memory_id)
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _session_dict(row) -> dict:

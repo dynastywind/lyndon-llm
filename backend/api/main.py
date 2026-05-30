@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import chat, cowork, code, rag, registry, metrics
+from api.routes import chat, cowork, code, rag, registry, metrics, sandbox
 from api.ws.stream import router as ws_router
 from config.settings import settings
 
@@ -58,9 +58,11 @@ def _register_all_tools() -> None:
     from chat.tools.web_search import WebSearchTool
     from chat.tools.rag_query import RAGQueryTool
     from chat.tools.chart import RenderChartTool
+    from chat.tools.run_code import RunCodeTool
     tool_registry.register(Mode.CHAT, WebSearchTool)
     tool_registry.register(Mode.CHAT, RAGQueryTool)
     tool_registry.register(Mode.CHAT, RenderChartTool)
+    tool_registry.register(Mode.CHAT, RunCodeTool)
 
     # Cowork tools (read + write + exec)
     from cowork.tools.shell import ShellTool
@@ -97,6 +99,7 @@ app.include_router(code.router,   prefix="/api/code",   tags=["code"])
 app.include_router(rag.router,      prefix="/api/rag",      tags=["rag"])
 app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
 app.include_router(metrics.router,  prefix="/api/metrics",  tags=["metrics"])
+app.include_router(sandbox.router,  prefix="/api/sandbox",  tags=["sandbox"])
 app.include_router(ws_router,     prefix="/ws",         tags=["websocket"])
 
 

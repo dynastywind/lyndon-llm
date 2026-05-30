@@ -1,5 +1,5 @@
 // ── Modes ─────────────────────────────────────────────────────────────────────
-export type Mode = 'chat' | 'cowork' | 'code'
+export type Mode = 'chat' | 'cowork' | 'code' | 'sandbox'
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
@@ -131,6 +131,40 @@ export interface ChatSessionMessage {
   created_at: string
   /** Raw attachment payloads as stored in the DB (base64 data, no prefix). */
   attachments: Array<{ name: string; type: string; data: string }>
+}
+
+// ── Sandbox ───────────────────────────────────────────────────────────────────
+export interface SandboxLanguage {
+  id:        string
+  label:     string
+  available: boolean
+  runtime:   'docker' | 'process' | 'unavailable'
+}
+
+export interface SandboxResult {
+  stdout:      string
+  stderr:      string
+  exit_code:   number | null
+  duration_ms: number
+  timed_out:   boolean
+  runtime:     'docker' | 'process' | 'error'
+}
+
+// ── Memory ────────────────────────────────────────────────────────────────────
+export type MemoryType = 'episodic' | 'semantic' | 'procedural'
+
+export interface MemoryRecord {
+  id:          string
+  content:     string
+  session_id:  string
+  memory_type: MemoryType
+  importance:  number
+  created_at:  string
+}
+
+export interface MemoriesResponse {
+  memories: MemoryRecord[]
+  total:    number
 }
 
 // ── Metrics ───────────────────────────────────────────────────────────────────

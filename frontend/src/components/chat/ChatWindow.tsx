@@ -1389,7 +1389,27 @@ export function ChatWindow() {
                   value={input}
                   onChange={(e) => { setInput(e.target.value); setDraft(draftKey, e.target.value) }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e) }
+                    if (e.key === 'Enter') {
+                      if (e.altKey) {
+                        // Alt+↵ → insert newline
+                        e.preventDefault()
+                        const el = e.currentTarget
+                        const start = el.selectionStart ?? el.value.length
+                        const end   = el.selectionEnd   ?? el.value.length
+                        const next  = el.value.slice(0, start) + '\n' + el.value.slice(end)
+                        setInput(next)
+                        setDraft(draftKey, next)
+                        // restore cursor after the inserted newline
+                        requestAnimationFrame(() => {
+                          el.selectionStart = el.selectionEnd = start + 1
+                        })
+                      } else if (!e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                        // plain ↵ → send
+                        e.preventDefault()
+                        handleSubmit(e)
+                      }
+                      // Shift/⌘/Ctrl+↵ fall through to browser default (newline)
+                    }
                   }}
                   placeholder="Reply, ask, or @reference a note…"
                   rows={1}
@@ -1397,12 +1417,12 @@ export function ChatWindow() {
                     flex: 1, background: 'transparent', border: 'none', resize: 'none',
                     fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.5,
                     color: 'var(--lv-ink)', outline: 'none',
-                    minHeight: 22, maxHeight: 160,
+                    minHeight: 22, maxHeight: 320,
                   }}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   onInput={(e: any) => {
                     e.target.style.height = 'auto'
-                    e.target.style.height = `${Math.min(e.target.scrollHeight, 160)}px`
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 320)}px`
                   }}
                 />
 
@@ -1429,7 +1449,8 @@ export function ChatWindow() {
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 14, marginTop: 8,
               }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>⌘↵ send</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>↵ send</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>⌥↵ newline</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>@ reference</span>
                 <span style={{ flex: 1 }} />
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}>

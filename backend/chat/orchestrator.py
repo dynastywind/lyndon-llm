@@ -14,7 +14,7 @@ from config.settings import settings
 
 RouteName = Literal["direct", "rag", "tools", "rag_and_tools"]
 
-ALL_CHAT_TOOLS = frozenset({"web_search", "rag_query", "render_chart"})
+ALL_CHAT_TOOLS = frozenset({"web_search", "rag_query", "render_chart", "run_code"})
 
 # Greeting / short chit-chat with no other signals
 _GREETING_RE = re.compile(
@@ -63,6 +63,30 @@ _CHART_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Code-execution signals — any request to run / execute / test a snippet
+_LANGS = (
+    r"python|javascript|js|typescript|ts|ruby|go|golang|rust|java|"
+    r"c\+\+|cpp|c#|csharp|c\b|bash|shell|haskell|ocaml|erlang|elixir|"
+    r"kotlin|scala|clojure|dart|swift|php|perl|lua|groovy|r\b"
+)
+_CODE_EXEC_RE = re.compile(
+    r"("
+    # "run/execute/test this code", "run this python code", "run the following script", etc.
+    # (\w+\s+)? allows an optional language word between the determiner and noun
+    r"\b(run|execute|eval|test)\s+(this|the|following|my|above)\s+(?:\w+\s+){0,2}"
+    r"(code|snippet|script|program|function|example)\b|"
+    # "run python code", "execute javascript", "compile and run"
+    r"\b(run|execute)\s+(" + _LANGS + r")(\s+(code|snippet|script|program))?\b|"
+    r"\bcompile\s+(and\s+run|this)\b|"
+    # "what does/will this code output/return/print"
+    r"\bwhat\s+(does|will|would|is)\s+(this|the|it)\s+(code\s+)?(output|return|print|produce|do)\b|"
+    # "what's the output of", "what is the output"
+    r"\bwhat['’]?s\s+the\s+output\b|"
+    r"\bwhat\s+is\s+the\s+(output|result)\s+of\b"
+    r")",
+    re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class RouteDecision:
@@ -98,6 +122,8 @@ class HeuristicOrchestrator:
             tool_set.add("web_search")
         if _CHART_RE.search(text):
             tool_set.add("render_chart")
+        if _CODE_EXEC_RE.search(text):
+            tool_set.add("run_code")
 
         # Allow on-demand KB search mid-turn when tools are active and KB exists
         if tool_set and has_kb_sources and not wants_rag:

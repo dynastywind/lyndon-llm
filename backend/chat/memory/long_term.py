@@ -109,6 +109,23 @@ class LongTermMemory:
             ))
         return memories
 
+    async def list_all(self, limit: int = 200) -> list[dict]:
+        """Return all memories as plain dicts, sorted newest-first."""
+        vs = await self._get_vector_store()
+        ids, docs, metas = await vs.list_all(limit=limit)
+        results = []
+        for id_, doc, meta in zip(ids, docs, metas):
+            results.append({
+                "id":          id_,
+                "content":     doc,
+                "session_id":  meta.get("session_id", ""),
+                "memory_type": meta.get("memory_type", "episodic"),
+                "importance":  float(meta.get("importance", 0.5)),
+                "created_at":  meta.get("created_at", ""),
+            })
+        results.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        return results
+
     async def delete(self, memory_id: str) -> None:
         vs = await self._get_vector_store()
         await vs.delete(ids=[memory_id])

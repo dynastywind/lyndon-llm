@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { deleteRagSource, listRagSources, uploadRagFile } from '@/api/client'
 import { useAppStore } from '@/store'
 import { ToolsRegistryPanel } from './ToolsRegistryPanel'
-import { MetricsPanel } from './MetricsPanel'
+import { MemoryPanel } from './MemoryPanel'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ interface UploadItem {
   error?: string
 }
 
-export type SettingsTab = 'knowledge' | 'tools' | 'metrics' | 'prompts'
+export type SettingsTab = 'knowledge' | 'tools' | 'memory' | 'prompts'
 
 interface Props {
   open: boolean
@@ -167,8 +167,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
             <TabButton active={tab === 'tools'} onClick={() => setTab('tools')}>
               MCP
             </TabButton>
-            <TabButton active={tab === 'metrics'} onClick={() => setTab('metrics')}>
-              Metrics
+            <TabButton active={tab === 'memory'} onClick={() => setTab('memory')}>
+              Memory
             </TabButton>
             <TabButton active={tab === 'prompts'} onClick={() => setTab('prompts')}>
               Prompts
@@ -179,8 +179,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
           <div className="flex-1 overflow-y-auto p-5">
           {tab === 'tools' ? (
             <ToolsRegistryPanel active={open && tab === 'tools'} />
-          ) : tab === 'metrics' ? (
-            <MetricsPanel active={open && tab === 'metrics'} />
+          ) : tab === 'memory' ? (
+            <MemoryPanel active={open && tab === 'memory'} />
           ) : tab === 'prompts' ? (
             <PromptsPanel />
           ) : (

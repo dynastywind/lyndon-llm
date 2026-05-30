@@ -4,6 +4,9 @@ import type {
   ReviewResult,
   TestResult,
   MetricsResponse,
+  MemoriesResponse,
+  SandboxLanguage,
+  SandboxResult,
   ChatSession,
   ChatSessionsResponse,
   ChatSessionMessage,
@@ -327,6 +330,43 @@ export async function commitFiles(
     body: JSON.stringify({ files, message }),
   })
   return res.json()
+}
+
+// ── Sandbox ───────────────────────────────────────────────────────────────────
+
+export async function getSandboxLanguages(): Promise<{ languages: SandboxLanguage[] }> {
+  const res = await fetch(`${BASE}/sandbox/languages`)
+  if (!res.ok) throw new Error('Failed to fetch languages')
+  return res.json()
+}
+
+export async function runSandbox(
+  language: string,
+  code: string,
+  timeout = 10,
+): Promise<SandboxResult> {
+  const res = await fetch(`${BASE}/sandbox/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language, code, timeout }),
+  })
+  if (!res.ok) throw new Error(`Sandbox error: ${res.statusText}`)
+  return res.json()
+}
+
+// ── Memory ────────────────────────────────────────────────────────────────────
+
+export async function getMemories(): Promise<MemoriesResponse> {
+  const res = await fetch(`${BASE}/chat/memories`)
+  if (!res.ok) throw new Error('Failed to fetch memories')
+  return res.json()
+}
+
+export async function deleteMemory(memoryId: string): Promise<void> {
+  const res = await fetch(`${BASE}/chat/memories/${encodeURIComponent(memoryId)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) throw new Error('Failed to delete memory')
 }
 
 // ── Metrics ───────────────────────────────────────────────────────────────────

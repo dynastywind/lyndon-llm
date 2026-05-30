@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { ChatWindow } from '@/components/chat/ChatWindow'
 import { CoworkWindow } from '@/components/cowork/CoworkWindow'
 import { CodeWindow } from '@/components/code/CodeWindow'
+import { SandboxWindow } from '@/components/sandbox/SandboxWindow'
 
 export default function App() {
   const { mode, sessionId } = useAppStore()
@@ -20,9 +21,10 @@ export default function App() {
           creation path, so the remounted component's effect correctly sees
           messages.length > 0 and skips the unnecessary DB fetch.
         */}
-        {mode === 'chat'   && <ChatWindow key={sessionId ?? '__new__'} />}
-        {mode === 'cowork' && <CoworkWindow />}
-        {mode === 'code'   && <CodeWindow />}
+        {mode === 'chat'    && <ChatWindow key={sessionId ?? '__new__'} />}
+        {mode === 'cowork'  && <CoworkWindow />}
+        {mode === 'code'    && <CodeWindow />}
+        {mode === 'sandbox' && <SandboxWindow />}
       </main>
     </div>
 
