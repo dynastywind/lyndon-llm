@@ -61,6 +61,22 @@ interface AppState {
   setDraft:  (key: string, text: string) => void
   clearDraft:(key: string) => void
 
+  // Prompts
+  /** Global system prompt — appended to BASE_SYSTEM_PROMPT on every request. Persisted. */
+  systemPrompt: string
+  setSystemPrompt: (text: string) => void
+  /** Per-session prompts — quoted into the first message of each session. Not persisted. */
+  sessionPrompts: Record<string, string>
+  setSessionPrompt:   (key: string, text: string) => void
+  clearSessionPrompt: (key: string) => void
+  /**
+   * Prompts that were actually applied to a session's first message.
+   * Keyed by sessionId. Persisted — survives reload so the context panel
+   * can still show what prompt was used even after the session prompt is consumed.
+   */
+  appliedSessionPrompts: Record<string, string>
+  setAppliedSessionPrompt: (sessionId: string, text: string) => void
+
   // Appearance
   codeTheme: CodeThemeName
   setCodeTheme: (theme: CodeThemeName) => void
@@ -168,13 +184,37 @@ export const useAppStore = create<AppState>()(
           return { drafts }
         }),
 
+      // ── Prompts ───────────────────────────────────────────────────────
+      systemPrompt: '',
+      setSystemPrompt: (text) => set({ systemPrompt: text }),
+
+      sessionPrompts: {},
+      setSessionPrompt: (key, text) =>
+        set((s) => ({ sessionPrompts: { ...s.sessionPrompts, [key]: text } })),
+      clearSessionPrompt: (key) =>
+        set((s) => {
+          const sessionPrompts = { ...s.sessionPrompts }
+          delete sessionPrompts[key]
+          return { sessionPrompts }
+        }),
+
+      appliedSessionPrompts: {},
+      setAppliedSessionPrompt: (sessionId, text) =>
+        set((s) => ({ appliedSessionPrompts: { ...s.appliedSessionPrompts, [sessionId]: text } })),
+
       // ── Appearance ────────────────────────────────────────────────────
       codeTheme: CODE_THEME_DEFAULT,
       setCodeTheme: (codeTheme) => set({ codeTheme }),
     }),
     {
       name: 'lyndon-llm-store',
-      partialize: (s) => ({ sessionId: s.sessionId, repoPath: s.repoPath, codeTheme: s.codeTheme }),
+      partialize: (s) => ({
+        sessionId:             s.sessionId,
+        repoPath:              s.repoPath,
+        codeTheme:             s.codeTheme,
+        systemPrompt:          s.systemPrompt,
+        appliedSessionPrompts: s.appliedSessionPrompts,
+      }),
     },
   ),
 )

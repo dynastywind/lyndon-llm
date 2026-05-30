@@ -66,6 +66,19 @@ class ChatRepo:
         )
         return rows, total
 
+    async def rename_session(self, session_id: str, title: str) -> bool:
+        """Rename a session. Returns False if the session doesn't exist."""
+        row = await self.get_session(session_id)
+        if row is None:
+            return False
+        await self._db.execute(
+            update(ChatSession)
+            .where(ChatSession.id == session_id)
+            .values(title=title.strip() or None, updated_at=datetime.now(timezone.utc))
+        )
+        await self._db.commit()
+        return True
+
     async def maybe_set_title(self, session_id: str, first_message: str) -> None:
         """Set the session title from the first user message if still untitled."""
         row = await self.get_session(session_id)

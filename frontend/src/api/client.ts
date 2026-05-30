@@ -3,6 +3,7 @@ import type {
   FileDiff,
   ReviewResult,
   TestResult,
+  MetricsResponse,
   ChatSession,
   ChatSessionsResponse,
   ChatSessionMessage,
@@ -46,6 +47,8 @@ export async function streamChat(
   sessionId: string,
   onEvent: (type: string, data: Record<string, unknown>) => void,
   attachments?: AttachmentPayload[],
+  systemPrompt?: string,
+  sessionPrompt?: string,
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/`, {
     method: 'POST',
@@ -53,6 +56,8 @@ export async function streamChat(
     body: JSON.stringify({
       message,
       ...(attachments?.length ? { attachments } : {}),
+      ...(systemPrompt         ? { system_prompt:   systemPrompt  } : {}),
+      ...(sessionPrompt        ? { session_prompt:  sessionPrompt } : {}),
     }),
   })
   if (!res.ok) throw new Error(`Chat error: ${res.statusText}`)
@@ -135,6 +140,16 @@ export async function getAllChatMessages(
 export async function deleteChatSession(sessionId: string): Promise<void> {
   const res = await fetch(`${BASE}/chat/sessions/${sessionId}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`Failed to delete session: ${res.statusText}`)
+}
+
+export async function renameChatSession(sessionId: string, title: string): Promise<ChatSession> {
+  const res = await fetch(`${BASE}/chat/sessions/${sessionId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  })
+  if (!res.ok) throw new Error(`Failed to rename session: ${res.statusText}`)
+  return res.json()
 }
 
 export async function ingestDocument(source: string): Promise<{ chunks_stored: number }> {
@@ -311,5 +326,19 @@ export async function commitFiles(
     headers: headers(sessionId, 'code'),
     body: JSON.stringify({ files, message }),
   })
+  return res.json()
+}
+
+// ── Metrics ───────────────────────────────────────────────────────────────────
+
+export async function getMetrics(
+  params: { limit?: number; offset?: number; session_id?: string } = {},
+): Promise<MetricsResponse> {
+  const qs = new URLSearchParams()
+  if (params.limit    !== undefined) qs.set('limit',      String(params.limit))
+  if (params.offset   !== undefined) qs.set('offset',     String(params.offset))
+  if (params.session_id)             qs.set('session_id', params.session_id)
+  const res = await fetch(`${BASE}/metrics?${qs}`)
+  if (!res.ok) throw new Error('Failed to fetch metrics')
   return res.json()
 }

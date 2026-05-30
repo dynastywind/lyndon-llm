@@ -15,6 +15,9 @@ export function useStream() {
     addSessionMessage,
     startStreaming, stopStreaming,
     bumpSessionVersion, bumpScrollToBottom,
+    systemPrompt,
+    sessionPrompts, clearSessionPrompt,
+    setAppliedSessionPrompt,
   } = useAppStore()
 
   const send = useCallback(
@@ -32,7 +35,23 @@ export function useStream() {
         }
       }
 
-      // 1. Add user bubble immediately
+      // Resolve session prompt — applies to first message only
+      const draftKey = activeSessionId
+      const sessionPrompt = sessionPrompts[draftKey] ?? sessionPrompts['__new__']
+      const existingMessages = useAppStore.getState().sessionMessages[activeSessionId] ?? []
+      const isFirstMessage = existingMessages.length === 0
+
+      // Capture the session prompt to pass to the backend (sent separately, not in the bubble)
+      let appliedSessionPrompt: string | undefined
+      if (isFirstMessage && sessionPrompt) {
+        appliedSessionPrompt = sessionPrompt
+        // Record it for the context panel and clear from pending store
+        setAppliedSessionPrompt(activeSessionId, sessionPrompt)
+        clearSessionPrompt(draftKey)
+        clearSessionPrompt('__new__')
+      }
+
+      // 1. Add user bubble with the original message only (prompt is invisible to the user)
       addSessionMessage(activeSessionId, { role: 'user', content: userMessage, attachments })
       bumpScrollToBottom()
       startStreaming(activeSessionId)
@@ -122,14 +141,14 @@ export function useStream() {
               break
             }
           }
-        }, apiAttachments)
+        }, apiAttachments, systemPrompt || undefined, appliedSessionPrompt)
       } finally {
         stopStreaming(activeSessionId)
         bumpScrollToBottom()
         bumpSessionVersion()
       }
     },
-    [sessionId, setSessionId, addSessionMessage, startStreaming, stopStreaming, bumpSessionVersion, bumpScrollToBottom],
+    [sessionId, setSessionId, addSessionMessage, startStreaming, stopStreaming, bumpSessionVersion, bumpScrollToBottom, systemPrompt, sessionPrompts, clearSessionPrompt, setAppliedSessionPrompt],
   )
 
   return { send }

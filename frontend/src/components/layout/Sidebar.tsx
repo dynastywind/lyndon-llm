@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { BookOpen, Server, Trash2, Loader2 } from 'lucide-react'
+import { BookOpen, Server, Trash2, Loader2, Pencil, BarChart2, MoreHorizontal, MessageSquarePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
-import { createChatSession, deleteChatSession } from '@/api/client'
+import { deleteChatSession, renameChatSession } from '@/api/client'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import type { Mode, ChatSession } from '@/types'
 
@@ -95,10 +95,33 @@ export function Sidebar() {
     clearSessionMessages,
     streamingSet,
     bumpSessionVersion,
+    sessionPrompts, setSessionPrompt,
   } = useAppStore()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab,  setSettingsTab]  = useState<SettingsTab>('knowledge')
+
+  // Session prompt modal
+  const [promptOpen,  setPromptOpen]  = useState(false)
+  const [promptDraft, setPromptDraft] = useState('')
+  const promptInputRef = useRef<HTMLTextAreaElement>(null)
+
+  // The key for the current session prompt slot
+  const promptKey = sessionId ?? '__new__'
+  const currentSessionPrompt = sessionPrompts[promptKey] ?? ''
+
+  // Focus textarea when modal opens
+  useEffect(() => {
+    if (promptOpen) {
+      setPromptDraft(currentSessionPrompt)
+      setTimeout(() => promptInputRef.current?.focus(), 30)
+    }
+  }, [promptOpen]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handlePromptConfirm = () => {
+    setSessionPrompt(promptKey, promptDraft.trim())
+    setPromptOpen(false)
+  }
 
   const openSettings = (tab: SettingsTab) => { setSettingsTab(tab); setSettingsOpen(true) }
 
@@ -120,15 +143,13 @@ export function Sidebar() {
     setSessionId(session.session_id); setSessionTitle(session.title)
   }
 
-  const handleDeleteSession = async (session: ChatSession) => {
+  const handleDeleteSession = (session: ChatSession) => {
     removeSession(session.session_id)
     clearSessionMessages(session.session_id)
+    // If the deleted session was active, deselect — same as clicking "+ New chat"
     if (session.session_id === sessionId) {
-      try {
-        const fresh = await createChatSession()
-        setSessionId(fresh.session_id)
-        bumpSessionVersion()
-      } catch { setSessionId(null) }
+      setSessionId(null)
+      setSessionTitle(null)
     }
     deleteChatSession(session.session_id).catch(() => {})
   }
@@ -166,8 +187,11 @@ export function Sidebar() {
         ))}
       </div>
 
-      {/* New chat */}
-      <div style={{ padding: '12px 16px 10px', flexShrink: 0 }}>
+      {/* New chat + more menu */}
+      <div style={{
+        padding: '12px 16px 10px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
         <button onClick={handleNewChat} style={{
           display: 'flex', alignItems: 'center', gap: 8,
           color: LV.gold, cursor: 'pointer', background: 'none', border: 'none',
@@ -180,7 +204,123 @@ export function Sidebar() {
           </svg>
           New chat
         </button>
+
+        {/* More menu */}
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              title="More options"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: 4, lineHeight: 0,
+                color: currentSessionPrompt ? LV.gold : LV.mute,
+              }}
+              className="hover:!text-[var(--lv-ink)] transition-colors"
+            >
+              <MoreHorizontal size={14} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              side="bottom" align="end" sideOffset={4}
+              style={{
+                zIndex: 200, minWidth: 180, background: 'var(--lv-card)',
+                border: `1px solid var(--lv-rule-strong)`,
+                padding: '4px',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
+              }}
+              className={cn(
+                'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+              )}
+            >
+              <DropdownMenu.Item
+                onSelect={() => setPromptOpen(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 12px', cursor: 'pointer', outline: 'none',
+                  fontFamily: LV.font.sans, fontSize: 12.5, color: LV.ink,
+                }}
+                className="hover:bg-accent focus:bg-accent transition-colors"
+              >
+                <MessageSquarePlus size={13} style={{ color: LV.mute }} />
+                {currentSessionPrompt ? 'Edit session prompt' : 'Add session prompt'}
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       </div>
+
+      {/* Session prompt modal */}
+      {promptOpen && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 300,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)',
+        }}
+          onClick={() => setPromptOpen(false)}
+        >
+          <div style={{
+            background: 'var(--lv-card)', border: '1px solid var(--lv-rule-strong)',
+            padding: 24, width: 460, boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+          }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p style={{
+              fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 500,
+              color: 'var(--lv-ink)', marginBottom: 6,
+            }}>Session prompt</p>
+            <p style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
+              marginBottom: 14, lineHeight: 1.6,
+            }}>
+              Quoted before your first message in this session. Applies once then clears.
+            </p>
+            <textarea
+              ref={promptInputRef}
+              value={promptDraft}
+              onChange={(e) => setPromptDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') setPromptOpen(false)
+                // Ctrl/Cmd+Enter to confirm
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handlePromptConfirm()
+              }}
+              placeholder="e.g. Assume I'm a senior backend engineer. Be terse and skip basics."
+              rows={6}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                background: 'var(--lv-elev)', border: '1px solid var(--lv-rule-strong)',
+                padding: '10px 12px', resize: 'vertical',
+                fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--lv-ink)',
+                lineHeight: 1.6, outline: 'none', marginBottom: 16,
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--lv-gold)' }}
+              onBlur={(e)  => { e.currentTarget.style.borderColor = 'var(--lv-rule-strong)' }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setPromptOpen(false)} style={{
+                background: 'none', border: '1px solid var(--lv-rule-strong)',
+                padding: '6px 14px', cursor: 'pointer',
+                fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--lv-soft)',
+              }}>Cancel</button>
+              {currentSessionPrompt && (
+                <button onClick={() => { setSessionPrompt(promptKey, ''); setPromptOpen(false) }} style={{
+                  background: 'none', border: '1px solid var(--lv-rule-strong)',
+                  padding: '6px 14px', cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--lv-mute)',
+                }}>Clear</button>
+              )}
+              <button onClick={handlePromptConfirm} style={{
+                background: 'var(--lv-ink)', border: 'none',
+                padding: '6px 18px', cursor: 'pointer',
+                fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600,
+                color: 'var(--lv-bg)',
+              }}>Set</button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* Recents */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -218,6 +358,11 @@ export function Sidebar() {
                   isStreaming={streamingSet[s.session_id] === true}
                   onSelect={handleResumeSession}
                   onDelete={handleDeleteSession}
+                  onRename={(newTitle) => {
+                    // optimistically update sidebar + active title
+                    if (sessionId === s.session_id) setSessionTitle(newTitle || null)
+                    bumpSessionVersion()
+                  }}
                 />
               ))}
               {hasMore && (
@@ -281,8 +426,9 @@ export function Sidebar() {
               )}
             >
               {([
-                { tab: 'knowledge' as SettingsTab, icon: BookOpen, label: 'Knowledge' },
-                { tab: 'tools'     as SettingsTab, icon: Server,   label: 'MCP'       },
+                { tab: 'knowledge' as SettingsTab, icon: BookOpen,  label: 'Knowledge' },
+                { tab: 'tools'     as SettingsTab, icon: Server,    label: 'MCP'       },
+                { tab: 'metrics'   as SettingsTab, icon: BarChart2, label: 'Metrics'   },
               ] as const).map(({ tab, icon: Icon, label }) => (
                 <DropdownMenu.Item
                   key={tab}
@@ -310,16 +456,23 @@ export function Sidebar() {
 
 // ── SessionRow ────────────────────────────────────────────────────────────────
 function SessionRow({
-  session, active, isStreaming, onSelect, onDelete,
+  session, active, isStreaming, onSelect, onDelete, onRename,
 }: {
   session: ChatSession; active: boolean; isStreaming: boolean
   onSelect: (s: ChatSession) => void
   onDelete: (s: ChatSession) => void
+  onRename: (newTitle: string) => void
 }) {
   const [confirming, setConfirming] = useState(false)
-  const trashRef  = useRef<HTMLButtonElement>(null)
-  const bubbleRef = useRef<HTMLDivElement>(null)
+  const [renaming,   setRenaming]   = useState(false)
+  const [renameVal,  setRenameVal]  = useState('')
+  const [saving,     setSaving]     = useState(false)
+  const trashRef   = useRef<HTMLButtonElement>(null)
+  const bubbleRef  = useRef<HTMLDivElement>(null)
+  const renameRef  = useRef<HTMLDivElement>(null)
+  const inputRef   = useRef<HTMLInputElement>(null)
 
+  // Close delete-confirm on outside click
   useEffect(() => {
     if (!confirming) return
     const onDown  = (e: MouseEvent) => {
@@ -334,6 +487,28 @@ function SessionRow({
       window.removeEventListener('scroll', onScroll, true)
     }
   }, [confirming])
+
+  // Focus input when rename modal opens
+  useEffect(() => {
+    if (renaming) setTimeout(() => inputRef.current?.focus(), 30)
+  }, [renaming])
+
+  const openRename = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setRenameVal(session.title ?? '')
+    setRenaming(true)
+  }
+
+  const handleRenameConfirm = async () => {
+    setSaving(true)
+    try {
+      await renameChatSession(session.session_id, renameVal.trim())
+      onRename(renameVal.trim())
+      setRenaming(false)
+    } catch { /* ignore */ } finally {
+      setSaving(false)
+    }
+  }
 
   const bubbleStyle = (): React.CSSProperties => {
     if (!trashRef.current) return {}
@@ -354,7 +529,7 @@ function SessionRow({
     >
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
-        overflow: 'hidden', paddingRight: 20,
+        overflow: 'hidden', paddingRight: 44,
       }}>
         {isStreaming && <SidebarAsteriskAnimated size={11} />}
         <span style={{
@@ -373,24 +548,91 @@ function SessionRow({
         {relativeTime(session.updated_at)}
       </span>
 
-      {/* Trash — hidden until hover */}
-      <button
-        ref={trashRef}
-        onClick={(e) => { e.stopPropagation(); setConfirming((v) => !v) }}
-        title="Delete"
-        style={{
-          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-          background: 'none', border: 'none', cursor: 'pointer',
-          padding: 4, color: 'var(--lv-mute)',
-        }}
-        className={cn(
-          'opacity-0 group-hover:opacity-100 transition-opacity',
-          'hover:!text-[hsl(var(--destructive))]',
-          confirming && '!opacity-100 !text-[hsl(var(--destructive))]',
-        )}
+      {/* Action buttons — hidden until hover */}
+      <div style={{
+        position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+        display: 'flex', alignItems: 'center', gap: 2,
+      }}
+        className="opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={(e) => e.stopPropagation()}
       >
-        <Trash2 size={12} />
-      </button>
+        <button
+          onClick={openRename}
+          title="Rename"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--lv-mute)', lineHeight: 0 }}
+          className="hover:!text-[var(--lv-ink)] transition-colors"
+        >
+          <Pencil size={11} />
+        </button>
+        <button
+          ref={trashRef}
+          onClick={(e) => { e.stopPropagation(); setConfirming((v) => !v) }}
+          title="Delete"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--lv-mute)', lineHeight: 0 }}
+          className={cn(
+            'hover:!text-[hsl(var(--destructive))] transition-colors',
+            confirming && '!text-[hsl(var(--destructive))]',
+          )}
+        >
+          <Trash2 size={11} />
+        </button>
+      </div>
+
+      {/* Rename modal */}
+      {renaming && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 300,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)',
+        }}
+          onClick={() => setRenaming(false)}
+        >
+          <div ref={renameRef}
+            style={{
+              background: 'var(--lv-card)', border: '1px solid var(--lv-rule-strong)',
+              padding: 24, width: 320, boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p style={{
+              fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: 500,
+              color: 'var(--lv-ink)', marginBottom: 14,
+            }}>Rename chat</p>
+            <input
+              ref={inputRef}
+              value={renameVal}
+              onChange={(e) => setRenameVal(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleRenameConfirm()
+                if (e.key === 'Escape') setRenaming(false)
+              }}
+              style={{
+                width: '100%', background: 'var(--lv-elev)',
+                border: '1px solid var(--lv-rule-strong)',
+                padding: '8px 10px', fontFamily: 'var(--font-sans)',
+                fontSize: 13, color: 'var(--lv-ink)', outline: 'none',
+                boxSizing: 'border-box', marginBottom: 16,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setRenaming(false)} style={{
+                background: 'none', border: '1px solid var(--lv-rule-strong)',
+                padding: '6px 14px', cursor: 'pointer',
+                fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--lv-soft)',
+              }}>Cancel</button>
+              <button onClick={handleRenameConfirm} disabled={saving} style={{
+                background: 'var(--lv-ink)', border: 'none',
+                padding: '6px 14px', cursor: saving ? 'not-allowed' : 'pointer',
+                fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600,
+                color: 'var(--lv-bg)', opacity: saving ? 0.6 : 1,
+              }}>
+                {saving ? 'Saving…' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {/* Confirm bubble */}
       {confirming && createPortal(

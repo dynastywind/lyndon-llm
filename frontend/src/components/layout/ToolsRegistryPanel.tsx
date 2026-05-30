@@ -36,7 +36,7 @@ function InternalToolsSection({ tools }: { tools: RegistryTool[] }) {
       <p className="text-xs text-muted-foreground mb-3">
         Shipped with LyndonLLM. These cannot be edited or removed.
       </p>
-      {Object.entries(byMode).map(([mode, modeTools]) => (
+      {Object.entries(byMode).filter(([mode]) => mode !== 'cowork').map(([mode, modeTools]) => (
         <div key={mode} className="mb-4">
           <p className="text-xs font-medium text-muted-foreground mb-1.5 capitalize">{mode}</p>
           <ul className="space-y-1.5">

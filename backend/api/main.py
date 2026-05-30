@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import chat, cowork, code, rag, registry
+from api.routes import chat, cowork, code, rag, registry, metrics
 from api.ws.stream import router as ws_router
 from config.settings import settings
 
@@ -96,6 +96,7 @@ app.include_router(cowork.router, prefix="/api/cowork", tags=["cowork"])
 app.include_router(code.router,   prefix="/api/code",   tags=["code"])
 app.include_router(rag.router,      prefix="/api/rag",      tags=["rag"])
 app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
+app.include_router(metrics.router,  prefix="/api/metrics",  tags=["metrics"])
 app.include_router(ws_router,     prefix="/ws",         tags=["websocket"])
 
 

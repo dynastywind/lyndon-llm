@@ -133,6 +133,39 @@ export interface ChatSessionMessage {
   attachments: Array<{ name: string; type: string; data: string }>
 }
 
+// ── Metrics ───────────────────────────────────────────────────────────────────
+export interface MetricRecord {
+  id: string
+  session_id: string | null
+  created_at: string
+  route: string | null
+  total_ms: number
+  phases: {
+    route_ms?:  number
+    rag_ms?:    number
+    search_ms?: number
+    ttft_ms?:   number
+    total_ms?:  number
+  }
+}
+
+export interface MetricsSummary {
+  count:        number
+  avg_total_ms: number
+  p50_total_ms: number | null
+  p90_total_ms: number | null
+  min_total_ms: number
+  max_total_ms: number
+  avg_ttft_ms:  number | null
+  p90_ttft_ms:  number | null
+}
+
+export interface MetricsResponse {
+  metrics: MetricRecord[]
+  total:   number
+  summary: MetricsSummary
+}
+
 // ── Tool registry (Settings) ──────────────────────────────────────────────────
 
 export interface RegistryTool {

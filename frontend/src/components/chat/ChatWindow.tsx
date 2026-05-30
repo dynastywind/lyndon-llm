@@ -699,8 +699,17 @@ function ContextItem({ attachment, onClick }: { attachment: MessageAttachment; o
   )
 }
 
-function ContextPanel({ items }: { items: MessageAttachment[] }) {
+function ContextPanel({
+  items,
+  sessionPrompt = '',
+  promptPending = false,
+}: {
+  items: MessageAttachment[]
+  sessionPrompt?: string
+  promptPending?: boolean
+}) {
   const [previewing, setPreviewing] = useState<MessageAttachment | null>(null)
+  const isEmpty = items.length === 0 && !sessionPrompt
 
   return (
     <>
@@ -715,17 +724,64 @@ function ContextPanel({ items }: { items: MessageAttachment[] }) {
           }}>Context</span>
         </div>
 
-        {/* Items */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {items.length === 0 ? (
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {isEmpty ? (
             <p style={{
               fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)',
               textAlign: 'center', paddingTop: 24, lineHeight: 1.8, userSelect: 'none',
             }}>Files and photos<br />you share will<br />appear here</p>
           ) : (
-            items.map((att, i) => (
-              <ContextItem key={i} attachment={att} onClick={() => setPreviewing(att)} />
-            ))
+            <>
+              {/* ── Prompt section ── */}
+              {sessionPrompt && (
+                <section>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
+                  }}>
+                    <span style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.22em',
+                      textTransform: 'uppercase', color: 'var(--lv-mute)', fontWeight: 500,
+                    }}>Prompt</span>
+                    {promptPending && (
+                      <span style={{
+                        fontFamily: 'var(--font-mono)', fontSize: 8.5, letterSpacing: '0.1em',
+                        textTransform: 'uppercase', color: 'var(--lv-gold)',
+                        border: '1px solid rgba(200,168,106,0.35)',
+                        padding: '1px 5px',
+                      }}>pending</span>
+                    )}
+                  </div>
+                  <div style={{
+                    background: 'rgba(200,168,106,0.06)',
+                    border: '1px solid rgba(200,168,106,0.18)',
+                    borderLeft: '2px solid var(--lv-gold)',
+                    padding: '8px 10px',
+                  }}>
+                    <p style={{
+                      fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--lv-soft)',
+                      lineHeight: 1.65, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    }}>{sessionPrompt}</p>
+                  </div>
+                </section>
+              )}
+
+              {/* ── Attachments section ── */}
+              {items.length > 0 && (
+                <section>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.22em',
+                    textTransform: 'uppercase', color: 'var(--lv-mute)', fontWeight: 500,
+                    marginBottom: 8,
+                  }}>Files</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {items.map((att, i) => (
+                      <ContextItem key={i} attachment={att} onClick={() => setPreviewing(att)} />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -963,6 +1019,8 @@ export function ChatWindow() {
     drafts,
     setDraft,
     clearDraft,
+    appliedSessionPrompts,
+    sessionPrompts,
   } = useAppStore()
 
   const draftKey   = sessionId ?? '__new__'
@@ -1042,8 +1100,6 @@ export function ChatWindow() {
   // DOM refs
   const scrollRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
-  // Saved scroll height before a prepend so we can restore position after.
-  const savedScrollHeightRef = useRef(0)
   // Stays false until the post-load rAF fires. Blocks onWheel during the
   // brief inertia window after a session switch.
   const canLoadRef = useRef(false)
@@ -1058,11 +1114,7 @@ export function ChatWindow() {
   }, [])
 
   // ── Reset state synchronously on session change ──────────────────────────
-  // useLayoutEffect runs before paint so these refs can never bleed stale
-  // values from a previous session into the new session's first render.
-
   useLayoutEffect(() => {
-    savedScrollHeightRef.current = 0
     canLoadRef.current = false
   }, [sessionId])
 
@@ -1120,36 +1172,44 @@ export function ChatWindow() {
     if (scrollToBottomTick > 0) scrollToLatest()
   }, [scrollToBottomTick, scrollToLatest])
 
-  // ── Restore scroll position after prepend ────────────────────────────────
-  // Keyed on messages.length so this only runs when the list actually grows,
-  // not on every render (e.g. setLoadingMore(true) would fire the no-dep
-  // version before prependMessages, clearing savedScrollHeightRef too early).
-
-  useLayoutEffect(() => {
-    if (!savedScrollHeightRef.current || !scrollRef.current) return
-    const delta = scrollRef.current.scrollHeight - savedScrollHeightRef.current
-    if (delta > 0) scrollRef.current.scrollTop += delta
-    savedScrollHeightRef.current = 0
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length])
-
   // ── Load more (older) messages ────────────────────────────────────────────
+  // Strategy: capture scrollTop + scrollHeight synchronously before the fetch,
+  // then use flushSync to commit the prepend in one shot and immediately
+  // restore the position. This avoids two bugs in the old approach:
+  //   (1) The browser's native overflow-anchor would auto-adjust scrollTop,
+  //       then our useLayoutEffect would add delta again → double correction.
+  //   (2) The user might scroll further while the fetch is in flight; reading
+  //       scrollTop inside useLayoutEffect would use the wrong post-scroll value.
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore || !sessionId) return
-    const sid = sessionId
+    const el = scrollRef.current
+    if (!el) return
+
+    const prevScrollTop = el.scrollTop
+    const prevHeight    = el.scrollHeight
+
     setLoadingMore(true)
-    savedScrollHeightRef.current = scrollRef.current?.scrollHeight ?? 0
 
     try {
-      const { messages: raw, has_more } = await getChatMessages(sid, 5, cursorRef.current)
-      if (useAppStore.getState().sessionId !== sid) return
+      const { messages: raw, has_more } = await getChatMessages(sessionId, 5, cursorRef.current)
+      if (useAppStore.getState().sessionId !== sessionId) return
       const converted = raw.map(toStoreMessage)
-      prependSessionMessages(sid, converted)
-      setHasMore(has_more)
+
+      // Commit prepend + metadata in one synchronous paint so we only need to
+      // read scrollHeight once, immediately after the DOM has settled.
+      flushSync(() => {
+        prependSessionMessages(sessionId, converted)
+        setHasMore(has_more)
+      })
       if (converted.length > 0) cursorRef.current = raw[0].created_at
+
+      // Restore: shift scrollTop by exactly the height the new messages added.
+      // overflow-anchor:none on the container means the browser won't also
+      // auto-adjust, so this single write is the only correction needed.
+      el.scrollTop = prevScrollTop + (el.scrollHeight - prevHeight)
     } catch {
-      // ignore
+      // ignore — user can click the MoreDivider to retry
     } finally {
       setLoadingMore(false)
     }
@@ -1227,7 +1287,7 @@ export function ChatWindow() {
           {/* Messages scroll area */}
           <div
             ref={scrollRef}
-            style={{ flex: 1, overflowY: 'auto', padding: '24px 240px' }}
+            style={{ flex: 1, overflowY: 'auto', padding: '24px 240px', overflowAnchor: 'none' }}
             onWheel={(e) => {
               if (e.deltaY < 0 && hasMore && canLoadRef.current) loadMore()
             }}
@@ -1391,7 +1451,22 @@ export function ChatWindow() {
               exit={{ x: '100%' }}
               transition={{ type: 'tween', duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
             >
-              <ContextPanel items={contextAttachments} />
+              <ContextPanel
+                items={contextAttachments}
+                sessionPrompt={
+                  // Applied prompt (already sent with first message) takes precedence,
+                  // then pending prompt (set but first message not sent yet).
+                  sessionId
+                    ? (appliedSessionPrompts[sessionId] ?? sessionPrompts[sessionId] ?? sessionPrompts['__new__'] ?? '')
+                    : (sessionPrompts['__new__'] ?? '')
+                }
+                promptPending={
+                  // True when the prompt is set but hasn't been sent yet
+                  sessionId
+                    ? (!appliedSessionPrompts[sessionId] && !!(sessionPrompts[sessionId] ?? sessionPrompts['__new__']))
+                    : !!sessionPrompts['__new__']
+                }
+              />
             </motion.div>
           )}
         </AnimatePresence>

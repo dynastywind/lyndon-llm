@@ -11,7 +11,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { deleteRagSource, listRagSources, uploadRagFile } from '@/api/client'
+import { useAppStore } from '@/store'
 import { ToolsRegistryPanel } from './ToolsRegistryPanel'
+import { MetricsPanel } from './MetricsPanel'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -25,7 +27,7 @@ interface UploadItem {
   error?: string
 }
 
-export type SettingsTab = 'knowledge' | 'tools'
+export type SettingsTab = 'knowledge' | 'tools' | 'metrics' | 'prompts'
 
 interface Props {
   open: boolean
@@ -165,12 +167,22 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
             <TabButton active={tab === 'tools'} onClick={() => setTab('tools')}>
               MCP
             </TabButton>
+            <TabButton active={tab === 'metrics'} onClick={() => setTab('metrics')}>
+              Metrics
+            </TabButton>
+            <TabButton active={tab === 'prompts'} onClick={() => setTab('prompts')}>
+              Prompts
+            </TabButton>
           </div>
 
           {/* ── Body ── */}
           <div className="flex-1 overflow-y-auto p-5">
           {tab === 'tools' ? (
             <ToolsRegistryPanel active={open && tab === 'tools'} />
+          ) : tab === 'metrics' ? (
+            <MetricsPanel active={open && tab === 'metrics'} />
+          ) : tab === 'prompts' ? (
+            <PromptsPanel />
           ) : (
           <div className="space-y-7">
             {/* ── Upload section ── */}
@@ -299,6 +311,69 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  )
+}
+
+// ─── PromptsPanel ─────────────────────────────────────────────────────────────
+
+function PromptsPanel() {
+  const { systemPrompt, setSystemPrompt } = useAppStore()
+  const [draft, setDraft] = useState(systemPrompt)
+  const [saved, setSaved] = useState(false)
+
+  const handleSave = () => {
+    setSystemPrompt(draft.trim())
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1800)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <section>
+        <SectionLabel>System Prompt</SectionLabel>
+        <p style={{
+          fontFamily: 'var(--font-mono)', fontSize: 10.5, color: 'var(--lv-mute)',
+          marginBottom: 12, lineHeight: 1.6,
+        }}>
+          Applied globally to every chat session. Injected into the model&apos;s
+          system instructions alongside the base prompt.
+        </p>
+        <textarea
+          value={draft}
+          onChange={(e) => { setDraft(e.target.value); setSaved(false) }}
+          placeholder="e.g. Always respond in British English. Be concise."
+          rows={10}
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            background: 'var(--lv-elev)', border: '1px solid var(--lv-rule-strong)',
+            padding: '10px 12px', resize: 'vertical',
+            fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--lv-ink)',
+            lineHeight: 1.6, outline: 'none',
+          }}
+          onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--lv-gold)' }}
+          onBlur={(e)  => { e.currentTarget.style.borderColor = 'var(--lv-rule-strong)' }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10, gap: 8 }}>
+          {draft.trim() !== systemPrompt && (
+            <button onClick={() => { setDraft(systemPrompt); setSaved(false) }} style={{
+              background: 'none', border: '1px solid var(--lv-rule-strong)',
+              padding: '6px 14px', cursor: 'pointer',
+              fontFamily: 'var(--font-sans)', fontSize: 12, color: 'var(--lv-mute)',
+            }}>Reset</button>
+          )}
+          <button onClick={handleSave} style={{
+            background: saved ? 'transparent' : 'var(--lv-ink)',
+            border: saved ? '1px solid var(--lv-gold)' : 'none',
+            padding: '6px 18px', cursor: 'pointer',
+            fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 600,
+            color: saved ? 'var(--lv-gold)' : 'var(--lv-bg)',
+            transition: 'all 0.2s',
+          }}>
+            {saved ? '✓ Saved' : 'Save'}
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }
 

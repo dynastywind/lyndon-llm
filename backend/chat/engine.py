@@ -111,6 +111,8 @@ class ChatEngine:
         self,
         user_message: str,
         attachments: list[dict] | None = None,
+        custom_system_prompt: str | None = None,
+        session_prompt: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         timer = _Timer()
 
@@ -156,10 +158,12 @@ class ChatEngine:
         if decision.needs_rag:
             timer.mark("rag_ms")
 
-        # 3. Build system prompt (base + memories + optional RAG)
+        # 3. Build system prompt (base + optional user instructions + memories + optional RAG)
         system_prompt = BASE_SYSTEM_PROMPT
+        if custom_system_prompt:
+            system_prompt = f"{system_prompt}\n\n## User Instructions\n{custom_system_prompt.strip()}"
         if context_block:
-            system_prompt = f"{BASE_SYSTEM_PROMPT}\n\n{context_block}"
+            system_prompt = f"{system_prompt}\n\n{context_block}"
         await self.memory.build_system_prompt(system_prompt, user_message)
 
         # 4. Add user turn to short-term memory & compress if needed
@@ -171,6 +175,12 @@ class ChatEngine:
         # patch the last user message to multimodal content *after* memory is
         # updated so compression always operates on plain text.
         llm_messages = _inject_attachments(self.memory.get_messages(), attachments or [])
+
+        # If a one-off session prompt was provided, prepend it to the last user
+        # message *in the LLM copy only*.  The DB and memory manager always store
+        # the clean user message — the session prompt is invisible to the user.
+        if session_prompt:
+            llm_messages = _inject_session_prompt(llm_messages, session_prompt)
 
         # 5. Tool loop or direct stream — collect text for memory
         full_response = ""
@@ -221,7 +231,20 @@ class ChatEngine:
         )
         yield {"type": "metrics", "total_ms": total_ms, "phases": timer.phases}
 
-        # 6. Persist assistant turn & update session title
+        # 6. Persist metrics
+        if self._db:
+            try:
+                from db.repos.metrics import MetricsRepo
+                await MetricsRepo(self._db).add(
+                    session_id=self.session.session_id,
+                    total_ms=total_ms,
+                    phases=timer.phases,
+                    route=decision.route,
+                )
+            except Exception:
+                pass   # metrics are best-effort — never block the response
+
+        # 7. Persist assistant turn & update session title
         self.memory.add_assistant_turn(full_response)
         await self.memory.maybe_compress()
 
@@ -623,6 +646,37 @@ def _inject_attachments(messages: list[dict], attachments: list[dict]) -> list[d
             patched[i] = {**patched[i], "content": new_content}
             break
 
+    return patched
+
+
+def _inject_session_prompt(messages: list[dict], session_prompt: str) -> list[dict]:
+    """
+    Prepend a session-level instruction to the last user message in the LLM
+    message list.  The original user message is preserved verbatim in the DB
+    and memory manager — this function only modifies the copy sent to the LLM.
+
+    Format delivered to the model:
+        [Session instructions]
+        <prompt text>
+
+        <original user message>
+    """
+    header = f"[Session instructions]\n{session_prompt.strip()}\n"
+    patched = list(messages)
+    for i in range(len(patched) - 1, -1, -1):
+        if patched[i].get("role") == "user":
+            content = patched[i].get("content") or ""
+            if isinstance(content, str):
+                patched[i] = {**patched[i], "content": f"{header}\n{content}"}
+            elif isinstance(content, list):
+                # Multimodal: prepend to the first text block
+                new_content = list(content)
+                for j, block in enumerate(new_content):
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        new_content[j] = {**block, "text": f"{header}\n{block['text']}"}
+                        break
+                patched[i] = {**patched[i], "content": new_content}
+            break
     return patched
 
 

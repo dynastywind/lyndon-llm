@@ -29,6 +29,8 @@ class AttachmentPayload(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     attachments: list[AttachmentPayload] = []
+    system_prompt:  str | None = None   # global instruction injected into system prompt
+    session_prompt: str | None = None   # one-off per-session instruction; prepended to first LLM user turn only
 
 
 class IngestRequest(BaseModel):
@@ -67,7 +69,12 @@ async def chat(
     attachments = [a.model_dump() for a in body.attachments] if body.attachments else None
 
     async def _generate():
-        async for event in engine.stream_response(body.message, attachments=attachments):
+        async for event in engine.stream_response(
+            body.message,
+            attachments=attachments,
+            custom_system_prompt=body.system_prompt  or None,
+            session_prompt=      body.session_prompt or None,
+        ):
             evt_type = event["type"]
             payload = {k: v for k, v in event.items() if k != "type"}
             yield _sse(evt_type, payload)
@@ -105,6 +112,25 @@ async def list_chat_sessions(
     repo = ChatRepo(db)
     rows, total = await repo.list_sessions(mode=mode, limit=limit, offset=offset)
     return {"sessions": [_session_dict(r) for r in rows], "total": total}
+
+
+class RenameRequest(BaseModel):
+    title: str
+
+
+@router.patch("/sessions/{session_id}", status_code=200)
+async def rename_chat_session(
+    session_id: str,
+    body: RenameRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Rename a session."""
+    repo = ChatRepo(db)
+    ok = await repo.rename_session(session_id, body.title)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session not found")
+    row = await repo.get_session(session_id)
+    return _session_dict(row)
 
 
 @router.delete("/sessions/{session_id}", status_code=204)
