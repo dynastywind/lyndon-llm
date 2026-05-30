@@ -1950,19 +1950,20 @@ export function ChatWindow() {
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-end',
           paddingLeft: 240,
-          height: 48,
+          paddingBottom: 12,
+          height: 'var(--header-h)',
           borderBottom: '1px solid var(--lv-rule)',
           flexShrink: 0,
         }}
       >
         <div
           style={{
-            fontFamily: 'var(--font-sans)',
+            fontFamily: 'var(--font-display)',
             fontStyle: 'normal',
             fontWeight: 500,
-            fontSize: 14,
+            fontSize: 32,
             color: 'var(--lv-ink)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',

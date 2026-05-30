@@ -303,17 +303,24 @@ export function Sidebar() {
     >
       {/* Wordmark */}
       <div
-        style={{ padding: '18px 16px 16px', borderBottom: `1px solid ${LV.rule}`, flexShrink: 0 }}
+        style={{
+          height: 'var(--header-h)',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 16px',
+          borderBottom: `1px solid ${LV.rule}`,
+          flexShrink: 0,
+        }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: LV.ink }}>
           <Mark size={26} />
           <span
             style={{
-              fontFamily: LV.font.sans,
+              fontFamily: LV.font.display,
               fontStyle: 'normal',
               fontWeight: 600,
-              fontSize: 15,
-              letterSpacing: '-0.01em',
+              fontSize: 20,
+              letterSpacing: '0',
               color: LV.ink,
             }}
           >

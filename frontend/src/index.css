@@ -5,6 +5,9 @@
 /* ── Lyndon Vision design tokens ──────────────────────────────────────────── */
 @layer base {
   :root {
+    /* Shared layout */
+    --header-h: 72px;  /* height of both the sidebar wordmark bar and chat title bar */
+
     /* Surfaces */
     --lv-bg:          #0a0a0a;
     --lv-elev:        #131313;
