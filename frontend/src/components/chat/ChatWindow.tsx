@@ -891,7 +891,20 @@ function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean
             {msg.attachments && msg.attachments.length > 0 && (
               <MessageAttachments attachments={msg.attachments} />
             )}
-            {msg.content && <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{msg.content}</p>}
+            {msg.content && (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  ...MD_COMPONENTS,
+                  p: ({ children }) => (
+                    <p style={{ margin: 0, lineHeight: 1.6 }}>{children}</p>
+                  ),
+                }}
+                className="prose prose-sm prose-invert"
+              >
+                {msg.content}
+              </ReactMarkdown>
+            )}
           </div>
           {/* Hover action row */}
           <div style={{
@@ -1386,51 +1399,93 @@ export function ChatWindow() {
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
 
-                {/* Textarea */}
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={(e) => { setInput(e.target.value); setDraft(draftKey, e.target.value) }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      if (e.altKey) {
-                        // Alt+↵ → insert newline
-                        e.preventDefault()
-                        const el = e.currentTarget
-                        const start = el.selectionStart ?? el.value.length
-                        const end   = el.selectionEnd   ?? el.value.length
-                        const next  = el.value.slice(0, start) + '\n' + el.value.slice(end)
-                        // flushSync commits synchronously so cursor + height
-                        // can be set in the same tick, before any repaint.
-                        flushSync(() => {
-                          setInput(next)
-                          setDraft(draftKey, next)
-                        })
-                        el.selectionStart = el.selectionEnd = start + 1
-                        el.style.height = 'auto'
-                        el.style.height = `${Math.min(el.scrollHeight, 320)}px`
-                      } else if (!e.shiftKey && !e.metaKey && !e.ctrlKey) {
-                        // plain ↵ → send
-                        e.preventDefault()
-                        handleSubmit(e)
+                {/* Input wrapper: markdown overlay behind a transparent textarea.
+                    The textarea always captures input (no focus-switching).
+                    The overlay renders backtick spans and inline code visually. */}
+                <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+
+                  {/* Markdown render layer — sits behind the textarea */}
+                  {input && (
+                    <div
+                      aria-hidden
+                      className="prose prose-sm prose-invert max-w-none"
+                      style={{
+                        position: 'absolute', inset: 0, zIndex: 0,
+                        pointerEvents: 'none', overflow: 'hidden',
+                        fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.5,
+                        color: 'var(--lv-ink)',
+                        // Match textarea padding so rendered text aligns with the caret
+                        padding: 0, margin: 0,
+                      }}
+                    >
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          // Plain paragraphs: no extra margin, same line-height as textarea
+                          p: ({ children }) => (
+                            <p style={{ margin: 0, lineHeight: 1.5 }}>{children}</p>
+                          ),
+                          // Inline code: styled but no external padding that would shift layout
+                          code: MD_COMPONENTS.code,
+                          // Suppress block-level wrappers that would shift vertical alignment
+                          pre: ({ children }) => <>{children}</>,
+                        }}
+                      >
+                        {input}
+                      </ReactMarkdown>
+                    </div>
+                  )}
+
+                  {/* Transparent textarea — always on top, captures all input */}
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    className={input ? 'chat-input-transparent' : undefined}
+                    onChange={(e) => { setInput(e.target.value); setDraft(draftKey, e.target.value) }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        if (e.altKey) {
+                          // Alt+↵ → insert newline
+                          e.preventDefault()
+                          const el = e.currentTarget
+                          const start = el.selectionStart ?? el.value.length
+                          const end   = el.selectionEnd   ?? el.value.length
+                          const next  = el.value.slice(0, start) + '\n' + el.value.slice(end)
+                          flushSync(() => {
+                            setInput(next)
+                            setDraft(draftKey, next)
+                          })
+                          el.selectionStart = el.selectionEnd = start + 1
+                          el.style.height = 'auto'
+                          el.style.height = `${Math.min(el.scrollHeight, 320)}px`
+                        } else if (!e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                          // plain ↵ → send
+                          e.preventDefault()
+                          handleSubmit(e)
+                        }
+                        // Shift/⌘/Ctrl+↵ → browser default newline
                       }
-                      // Shift/⌘/Ctrl+↵ fall through to browser default (newline)
-                    }
-                  }}
-                  placeholder="Reply, ask, or @reference a note…"
-                  rows={1}
-                  style={{
-                    flex: 1, background: 'transparent', border: 'none', resize: 'none',
-                    fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.5,
-                    color: 'var(--lv-ink)', outline: 'none',
-                    minHeight: 22, maxHeight: 320,
-                  }}
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  onInput={(e: any) => {
-                    e.target.style.height = 'auto'
-                    e.target.style.height = `${Math.min(e.target.scrollHeight, 320)}px`
-                  }}
-                />
+                    }}
+                    placeholder="Reply, ask, or @reference a note…"
+                    rows={1}
+                    style={{
+                      position: 'relative', zIndex: 1,
+                      width: '100%', background: 'transparent', border: 'none',
+                      resize: 'none', outline: 'none',
+                      fontFamily: 'var(--font-sans)', fontSize: 14, lineHeight: 1.5,
+                      // Transparent when content is present so markdown layer shows through;
+                      // keep ink colour when empty so the placeholder is readable.
+                      color: input ? 'transparent' : 'var(--lv-ink)',
+                      caretColor: 'var(--lv-ink)',
+                      minHeight: 22, maxHeight: 320,
+                    }}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    onInput={(e: any) => {
+                      e.target.style.height = 'auto'
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 320)}px`
+                    }}
+                  />
+                </div>
 
                 {/* Send button — 28×28 ink fill with arrow */}
                 <button

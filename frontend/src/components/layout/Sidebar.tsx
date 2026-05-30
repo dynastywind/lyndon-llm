@@ -82,9 +82,8 @@ function SidebarAsteriskAnimated({ size = 12 }: { size?: number }) {
 
 // ── Modes ─────────────────────────────────────────────────────────────────────
 const MODES: { id: Mode; label: string }[] = [
-  { id: 'chat',    label: 'Chat'    },
-  { id: 'code',    label: 'Code'    },
-  { id: 'sandbox', label: 'Sandbox' },
+  { id: 'chat', label: 'Chat' },
+  { id: 'code', label: 'Code' },
 ]
 
 // ── component ─────────────────────────────────────────────────────────────────

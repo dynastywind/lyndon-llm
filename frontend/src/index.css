@@ -72,6 +72,10 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
   ::selection { background: var(--lv-gold); color: var(--lv-bg); }
+
+  /* Chat input overlay — textarea is transparent so the markdown layer shows through,
+     but the native placeholder still needs a visible colour. */
+  .chat-input-transparent::placeholder { color: var(--lv-mute); opacity: 0.8; }
 }
 
 /* ── Typography helpers ─────────────────────────────────────────────────── */
