@@ -32,6 +32,14 @@ const config: Config = {
         '2xl': '0px',
         full:  '9999px',
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            'code::before': { content: 'none' },
+            'code::after':  { content: 'none' },
+          },
+        },
+      },
     },
   },
   plugins: [require('@tailwindcss/typography')],

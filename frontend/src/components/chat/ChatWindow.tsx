@@ -1055,7 +1055,8 @@ export function ChatWindow() {
 
   // ── Attachments ───────────────────────────────────────────────────────
   const [attachments, setAttachments] = useState<LocalAttachment[]>([])
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef  = useRef<HTMLInputElement>(null)
+  const textareaRef   = useRef<HTMLTextAreaElement>(null)
   const attachmentsRef = useRef<LocalAttachment[]>([])
 
   // Keep ref in sync so the unmount cleanup always sees the latest list.
@@ -1239,6 +1240,7 @@ export function ChatWindow() {
 
     setInput('')
     clearDraft(draftKey)
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
     await send(msg, msgAttachments)
   }
 
@@ -1386,6 +1388,7 @@ export function ChatWindow() {
 
                 {/* Textarea */}
                 <textarea
+                  ref={textareaRef}
                   value={input}
                   onChange={(e) => { setInput(e.target.value); setDraft(draftKey, e.target.value) }}
                   onKeyDown={(e) => {
