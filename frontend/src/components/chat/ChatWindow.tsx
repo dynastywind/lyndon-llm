@@ -949,7 +949,7 @@ function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean
             remarkPlugins={[remarkGfm, remarkMath]}
             rehypePlugins={[rehypeKatex]}
             components={MD_COMPONENTS}
-            className={cn('prose prose-sm prose-invert max-w-none', hasCharts && 'mt-2')}
+            className={cn('prose prose-sm prose-invert', hasCharts && 'mt-2')}
           >
             {msg.content || placeholder}
           </ReactMarkdown>
@@ -1400,12 +1400,15 @@ export function ChatWindow() {
                         const start = el.selectionStart ?? el.value.length
                         const end   = el.selectionEnd   ?? el.value.length
                         const next  = el.value.slice(0, start) + '\n' + el.value.slice(end)
-                        setInput(next)
-                        setDraft(draftKey, next)
-                        // restore cursor after the inserted newline
-                        requestAnimationFrame(() => {
-                          el.selectionStart = el.selectionEnd = start + 1
+                        // flushSync commits synchronously so cursor + height
+                        // can be set in the same tick, before any repaint.
+                        flushSync(() => {
+                          setInput(next)
+                          setDraft(draftKey, next)
                         })
+                        el.selectionStart = el.selectionEnd = start + 1
+                        el.style.height = 'auto'
+                        el.style.height = `${Math.min(el.scrollHeight, 320)}px`
                       } else if (!e.shiftKey && !e.metaKey && !e.ctrlKey) {
                         // plain ↵ → send
                         e.preventDefault()

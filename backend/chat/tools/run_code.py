@@ -54,7 +54,7 @@ class RunCodeTool(BaseTool):
         timeout = min(60, settings.sandbox_timeout)
         result = await run_code(lang_key, code, timeout=timeout)
 
-        output = _format_result(result, LANGUAGES[lang_key].label)
+        output = _format_result(result, LANGUAGES[lang_key].label, code)
         success = result["exit_code"] == 0 and not result["timed_out"]
 
         return ToolResult(
@@ -99,26 +99,25 @@ class RunCodeTool(BaseTool):
 # Output formatter
 # ---------------------------------------------------------------------------
 
-def _format_result(r: dict, label: str) -> str:
+def _format_result(r: dict, label: str, code: str = "") -> str:
     """Format the sandbox result dict into a clean string for the LLM."""
-    status = "timeout" if r["timed_out"] else f"exit {r['exit_code']}"
-    header = f"[{label} · {r['runtime']} · {r['duration_ms']}ms · {status}]"
+    parts: list[str] = []
 
-    parts = [header]
+    if code.strip():
+        parts.append(f"{label} code:\n{code.strip()}")
 
     stdout = (r.get("stdout") or "").rstrip()
     stderr = (r.get("stderr") or "").rstrip()
 
     if stdout:
-        parts.append(stdout)
+        parts.append(f"Output:\n{stdout}")
     elif not stderr:
-        parts.append("(no output)")
+        parts.append("Output:\n(no output)")
 
     if stderr:
-        parts.append("--- stderr ---")
-        parts.append(stderr)
+        parts.append(f"Errors:\n{stderr}")
 
     if r["timed_out"]:
         parts.append("⚠ Execution timed out.")
 
-    return "\n".join(parts)
+    return "\n\n".join(parts)
