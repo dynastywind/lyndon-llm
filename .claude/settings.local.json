@@ -33,7 +33,8 @@
       "Bash(python -m py_compile backend/chat/engine.py)",
       "Bash(python3 -m py_compile backend/chat/engine.py)",
       "Bash(python3 -m py_compile backend/api/routes/chat.py)",
-      "Bash(python3 -m py_compile /Users/lyndon/Documents/projects/lyndonLLM/backend/chat/engine.py)"
+      "Bash(python3 -m py_compile /Users/lyndon/Documents/projects/lyndonLLM/backend/chat/engine.py)",
+      "Bash(xargs cat)"
     ]
   }
 }
