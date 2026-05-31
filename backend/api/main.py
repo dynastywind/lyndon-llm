@@ -110,3 +110,25 @@ app.include_router(ws_router, prefix="/ws", tags=["websocket"])
 @app.get("/health")
 async def health():
     return {"status": "ok", "app": settings.app_name}
+
+
+@app.get("/api/models")
+async def list_models():
+    """
+    Return models currently loaded in EXO via GET /ollama/api/ps.
+
+    This endpoint (mirroring `ollama ps`) lists only models that are
+    actively running in memory — no inference probe needed.
+    """
+    import httpx
+
+    base_url = settings.llm_base_url.rstrip("/").removesuffix("/v1")
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.get(f"{base_url}/ollama/api/ps")
+            resp.raise_for_status()
+            data = resp.json()
+            models = [m["model"] for m in data.get("models", [])]
+    except Exception:
+        models = []
+    return {"models": models}

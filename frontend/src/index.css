@@ -79,6 +79,8 @@
   /* Chat input overlay — textarea is transparent so the markdown layer shows through,
      but the native placeholder still needs a visible colour. */
   .chat-input-transparent::placeholder { color: var(--lv-mute); opacity: 0.8; }
+  /* Italic placeholder for the chat input */
+  .chat-input-placeholder::placeholder { font-style: italic; color: var(--lv-mute); }
 }
 
 /* ── Typography helpers ─────────────────────────────────────────────────── */

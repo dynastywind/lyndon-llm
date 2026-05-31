@@ -32,6 +32,10 @@ services:
     environment:
       - CHROMA_HOST=chroma
       - CHROMA_PORT=8000
+      # Langfuse — set these to enable observability (or put them in .env)
+      # - LANGFUSE_SECRET_KEY=sk-lf-...
+      # - LANGFUSE_PUBLIC_KEY=pk-lf-...
+      # - LANGFUSE_HOST=https://cloud.langfuse.com
     env_file:
       - ./backend/.env
     depends_on:

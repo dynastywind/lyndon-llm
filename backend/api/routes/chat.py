@@ -32,6 +32,7 @@ class ChatRequest(BaseModel):
     session_prompt: str | None = (
         None  # one-off per-session instruction; prepended to first LLM user turn only
     )
+    model: str | None = None  # override the default LLM model for this request
 
 
 class IngestRequest(BaseModel):
@@ -76,6 +77,7 @@ async def chat(
             attachments=attachments,
             custom_system_prompt=body.system_prompt or None,
             session_prompt=body.session_prompt or None,
+            model=body.model or None,
         ):
             evt_type = event["type"]
             payload = {k: v for k, v in event.items() if k != "type"}

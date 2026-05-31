@@ -58,6 +58,7 @@ export async function streamChat(
   attachments?: AttachmentPayload[],
   systemPrompt?: string,
   sessionPrompt?: string,
+  model?: string,
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/`, {
     method: 'POST',
@@ -67,6 +68,7 @@ export async function streamChat(
       ...(attachments?.length ? { attachments } : {}),
       ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
       ...(sessionPrompt ? { session_prompt: sessionPrompt } : {}),
+      ...(model ? { model } : {}),
     }),
   })
   if (!res.ok) throw new Error(`Chat error: ${res.statusText}`)
@@ -380,5 +382,13 @@ export async function getMetrics(
   if (params.session_id) qs.set('session_id', params.session_id)
   const res = await fetch(`${BASE}/metrics?${qs}`)
   if (!res.ok) throw new Error('Failed to fetch metrics')
+  return res.json()
+}
+
+// ── Models ────────────────────────────────────────────────────────────────────
+
+export async function getModels(): Promise<{ models: string[] }> {
+  const res = await fetch(`${BASE.replace('/api', '')}/api/models`)
+  if (!res.ok) throw new Error('Failed to fetch models')
   return res.json()
 }

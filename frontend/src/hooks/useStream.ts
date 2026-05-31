@@ -22,6 +22,7 @@ export function useStream() {
     sessionPrompts,
     clearSessionPrompt,
     setAppliedSessionPrompt,
+    selectedModel,
   } = useAppStore()
 
   const send = useCallback(
@@ -173,6 +174,7 @@ export function useStream() {
           apiAttachments,
           isFirstMessage ? systemPrompt || undefined : undefined,
           appliedSessionPrompt,
+          selectedModel ?? undefined,
         )
       } finally {
         stopStreaming(activeSessionId)
@@ -192,6 +194,7 @@ export function useStream() {
       sessionPrompts,
       clearSessionPrompt,
       setAppliedSessionPrompt,
+      selectedModel,
     ],
   )
 

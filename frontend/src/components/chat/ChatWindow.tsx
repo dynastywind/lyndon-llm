@@ -16,11 +16,12 @@ import {
   Check,
   AlertCircle,
   Copy,
-  Paperclip,
+  Plus,
   X,
   FileText,
   Image as ImageIcon,
   PanelRight,
+  ChevronDown,
 } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import ReactMarkdown from 'react-markdown'
@@ -51,7 +52,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
-import { getChatMessages } from '@/api/client'
+import { getChatMessages, getModels } from '@/api/client'
 import type {
   Message,
   ToolCallRecord,
@@ -1702,6 +1703,8 @@ export function ChatWindow() {
     clearDraft,
     appliedSessionPrompts,
     sessionPrompts,
+    selectedModel,
+    setSelectedModel,
   } = useAppStore()
 
   const draftKey = sessionId ?? '__new__'
@@ -1710,6 +1713,17 @@ export function ChatWindow() {
 
   // ── Context panel visibility (hidden by default) ──────────────────────
   const [showContext, setShowContext] = useState(false)
+
+  // ── Model selector ────────────────────────────────────────────────────
+  const [availableModels, setAvailableModels] = useState<string[]>([])
+  useEffect(() => {
+    getModels()
+      .then(({ models }) => {
+        setAvailableModels(models)
+        if (models.length > 0 && !selectedModel) setSelectedModel(models[0])
+      })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { send } = useStream()
 
@@ -1739,6 +1753,7 @@ export function ChatWindow() {
 
   // ── Attachments ───────────────────────────────────────────────────────
   const [attachments, setAttachments] = useState<LocalAttachment[]>([])
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const attachmentsRef = useRef<LocalAttachment[]>([])
@@ -2080,40 +2095,47 @@ export function ChatWindow() {
                   paddingBottom: 10,
                 }}
               >
-                {/* @ / paperclip icon */}
-                <DropdownMenu.Root>
+                {/* Circular +/× attach button */}
+                <DropdownMenu.Root open={attachMenuOpen} onOpenChange={setAttachMenuOpen}>
                   <DropdownMenu.Trigger asChild>
                     <button
                       type="button"
-                      title="Attach files or photos"
+                      title="Add to message"
                       style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: attachments.length > 0 ? 'var(--lv-gold)' : 'var(--lv-mute)',
-                        padding: 0,
-                        lineHeight: 0,
+                        width: 32,
+                        height: 32,
                         flexShrink: 0,
+                        borderRadius: '50%',
+                        border: `1px solid ${attachMenuOpen || attachments.length > 0 ? 'var(--lv-gold)' : 'var(--lv-rule-strong)'}`,
+                        background: 'none',
+                        cursor: 'pointer',
+                        color: attachMenuOpen || attachments.length > 0 ? 'var(--lv-gold)' : 'var(--lv-mute)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'border-color 0.15s, color 0.15s',
                       }}
                     >
-                      <Paperclip size={15} />
+                      {attachMenuOpen ? <X size={14} /> : <Plus size={15} />}
                     </button>
                   </DropdownMenu.Trigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.Content
-                      sideOffset={10}
+                      sideOffset={12}
                       align="start"
                       style={{
                         zIndex: 200,
-                        minWidth: 180,
+                        minWidth: 240,
                         background: 'var(--lv-card)',
                         border: '1px solid var(--lv-rule-strong)',
-                        padding: 4,
-                        boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
+                        borderRadius: 10,
+                        padding: '6px 0 8px',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
                       }}
                       className={cn(
                         'data-[state=open]:animate-in data-[state=closed]:animate-out',
                         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+                        'data-[state=open]:slide-in-from-bottom-2',
                       )}
                     >
                       <DropdownMenu.Item
@@ -2171,7 +2193,7 @@ export function ChatWindow() {
                   <textarea
                     ref={textareaRef}
                     value={input}
-                    className={input ? 'chat-input-transparent' : undefined}
+                    className={input ? 'chat-input-transparent' : 'chat-input-placeholder'}
                     onChange={(e) => {
                       setInput(e.target.value)
                       setDraft(draftKey, e.target.value)
@@ -2200,7 +2222,7 @@ export function ChatWindow() {
                         // Shift/⌘/Ctrl+↵ → browser default newline
                       }
                     }}
-                    placeholder="Reply, ask, or @reference a note…"
+                    placeholder="Continue the thread…"
                     rows={1}
                     style={{
                       position: 'relative',
@@ -2230,25 +2252,26 @@ export function ChatWindow() {
                   />
                 </div>
 
-                {/* Send button — 28×28 ink fill with arrow */}
+                {/* Send button — gold rectangle with arrow */}
                 <button
                   type="submit"
                   disabled={!canSend}
                   style={{
-                    width: 28,
-                    height: 28,
+                    width: 40,
+                    height: 40,
                     flexShrink: 0,
-                    background: canSend ? 'var(--lv-ink)' : 'var(--lv-rule-strong)',
-                    color: 'var(--lv-bg)',
+                    background: canSend ? 'var(--lv-gold)' : 'var(--lv-rule-strong)',
+                    color: canSend ? 'var(--lv-bg)' : 'var(--lv-mute)',
                     border: 'none',
                     cursor: canSend ? 'pointer' : 'not-allowed',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     transition: 'background 0.15s',
+                    borderRadius: 4,
                   }}
                 >
-                  {isStreaming ? <AsteriskAnimated size={16} /> : <Send size={13} />}
+                  {isStreaming ? <AsteriskAnimated size={16} /> : <Send size={18} />}
                 </button>
               </div>
 
@@ -2257,31 +2280,85 @@ export function ChatWindow() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 14,
-                  marginTop: 8,
+                  marginTop: 10,
                 }}
               >
                 <span
                   style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}
                 >
-                  ↵ send
-                </span>
-                <span
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}
-                >
-                  ⌥↵ newline
-                </span>
-                <span
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}
-                >
-                  @ reference
+                  ↵ send · ⌥↵ newline
                 </span>
                 <span style={{ flex: 1 }} />
-                <span
-                  style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}
-                >
-                  llm: claude-sonnet-4 · {sessionTitle ? 'active' : 'new chat'}
-                </span>
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <button
+                      type="button"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9.5,
+                        color: 'var(--lv-soft)',
+                      }}
+                    >
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--lv-gold)', flexShrink: 0 }} />
+                      {selectedModel ?? '—'}
+                      <ChevronDown size={10} style={{ color: 'var(--lv-mute)' }} />
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      side="top"
+                      align="end"
+                      sideOffset={8}
+                      style={{
+                        zIndex: 200,
+                        minWidth: 220,
+                        background: 'var(--lv-card)',
+                        border: '1px solid var(--lv-rule-strong)',
+                        borderRadius: 8,
+                        padding: '4px 0',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+                      }}
+                      className={cn(
+                        'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+                        'data-[state=open]:slide-in-from-bottom-2',
+                      )}
+                    >
+                      {availableModels.length === 0 ? (
+                        <div style={{ padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)' }}>
+                          No models found
+                        </div>
+                      ) : (
+                        availableModels.map((m) => (
+                          <DropdownMenu.Item
+                            key={m}
+                            onSelect={() => setSelectedModel(m)}
+                            style={{ outline: 'none', cursor: 'pointer' }}
+                            className="hover:bg-accent focus:bg-accent transition-colors"
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px' }}>
+                              <span style={{
+                                width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
+                                background: m === selectedModel ? 'var(--lv-gold)' : 'transparent',
+                                border: m === selectedModel ? 'none' : '1px solid var(--lv-mute)',
+                              }} />
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: m === selectedModel ? 'var(--lv-ink)' : 'var(--lv-soft)' }}>
+                                {m}
+                              </span>
+                            </div>
+                          </DropdownMenu.Item>
+                        ))
+                      )}
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
               </div>
             </form>
           </div>

@@ -61,6 +61,10 @@ interface AppState {
   setDraft: (key: string, text: string) => void
   clearDraft: (key: string) => void
 
+  // Model selection
+  selectedModel: string | null
+  setSelectedModel: (model: string | null) => void
+
   // Prompts
   /** Global system prompt — appended to BASE_SYSTEM_PROMPT on every request. Persisted. */
   systemPrompt: string
@@ -180,6 +184,10 @@ export const useAppStore = create<AppState>()(
           delete drafts[key]
           return { drafts }
         }),
+
+      // ── Model ────────────────────────────────────────────────────────
+      selectedModel: null,
+      setSelectedModel: (model) => set({ selectedModel: model }),
 
       // ── Prompts ───────────────────────────────────────────────────────
       systemPrompt: '',
