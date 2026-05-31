@@ -5,6 +5,8 @@ Every Chat engine interaction goes through this class.
 
 from __future__ import annotations
 
+import uuid
+
 from chat.memory.long_term import LongTermMemory
 from chat.memory.session_file import SessionFileMemory
 from chat.memory.short_term import ShortTermMemory
@@ -106,14 +108,31 @@ class MemoryManager:
             )
 
     async def update_session_file(self, turns) -> None:
-        """Update the session memory file with the latest turns (fire-and-forget)."""
+        """Update the session memory file and sync the result to Chroma.
+
+        Uses a deterministic UUID derived from the session_id so that every
+        update overwrites the same Chroma document (upsert — no duplicates).
+        """
         if not turns:
             return
-        await self.session_file.update(
+        content = await self.session_file.update(
             self.session_id,
             turns,
             llm_gateway.complete,
         )
+        if content:
+            stable_id = str(
+                uuid.uuid5(uuid.NAMESPACE_DNS, f"session-summary:{self.session_id}")
+            )
+            await self.long_term.store(
+                Memory(
+                    id=stable_id,
+                    session_id=self.session_id,
+                    memory_type=MemoryType.EPISODIC,
+                    content=content,
+                    importance=0.8,
+                )
+            )
 
     async def store_memory(
         self,
