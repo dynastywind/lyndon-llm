@@ -78,12 +78,12 @@ async def test_agentic_loop_continues_after_successful_chart(monkeypatch):
     calls = 0
     streamed_messages = None
 
-    async def fake_complete_with_tools_raw(messages, tools):
+    async def fake_complete_with_tools_raw(messages, tools, model=None):
         nonlocal calls
         calls += 1
         return FakeMessage() if calls == 1 else FinalMessage()
 
-    async def fake_stream_from_raw(messages):
+    async def fake_stream_from_raw(messages, model=None):
         nonlocal streamed_messages
         streamed_messages = messages
         yield "Here is the trend."

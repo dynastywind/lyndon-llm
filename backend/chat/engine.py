@@ -41,6 +41,18 @@ from core.permissions.gate import Mode, PermissionGate
 from core.session.manager import Session
 from core.tools.registry import tool_registry
 
+if settings.langfuse_secret_key and settings.langfuse_public_key:
+    from langfuse._client.propagation import propagate_attributes as _propagate_attributes
+
+    def _langfuse_session_ctx(session_id: str):
+        return _propagate_attributes(session_id=session_id)
+else:
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _langfuse_session_ctx(_session_id: str):  # type: ignore[misc]
+        yield
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -114,6 +126,25 @@ class ChatEngine:
         attachments: list[dict] | None = None,
         custom_system_prompt: str | None = None,
         session_prompt: str | None = None,
+        model: str | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        with _langfuse_session_ctx(self.session.session_id):
+            async for event in self._stream_response_inner(
+                user_message,
+                attachments=attachments,
+                custom_system_prompt=custom_system_prompt,
+                session_prompt=session_prompt,
+                model=model,
+            ):
+                yield event
+
+    async def _stream_response_inner(
+        self,
+        user_message: str,
+        attachments: list[dict] | None = None,
+        custom_system_prompt: str | None = None,
+        session_prompt: str | None = None,
+        model: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         timer = _Timer()
 
@@ -211,6 +242,7 @@ class ChatEngine:
                 async for event in self._search_and_stream(
                     user_message,
                     llm_messages,
+                    model=model,
                 ):
                     if event["type"] == "tool_result":
                         timer.mark("search_ms")
@@ -224,6 +256,7 @@ class ChatEngine:
                 async for event in self._agentic_loop(
                     allowed_tools=decision.tools,
                     messages_override=llm_messages,
+                    model=model,
                 ):
                     if event["type"] == "token":
                         if not first_token:
@@ -234,7 +267,7 @@ class ChatEngine:
                         full_response += _chart_spec_to_markdown(event["spec"])
                     yield event
         else:
-            async for chunk in llm_gateway.stream_from_raw(llm_messages):
+            async for chunk in llm_gateway.stream_from_raw(llm_messages, model=model):
                 if not first_token:
                     first_token = True
                     timer.mark("ttft_ms")
@@ -292,6 +325,7 @@ class ChatEngine:
         self,
         allowed_tools: frozenset[str] | None = None,
         messages_override: list[dict] | None = None,
+        model: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Runs tool calls until the model produces a plain-text response or
@@ -325,6 +359,7 @@ class ChatEngine:
                 response_msg = await llm_gateway.complete_with_tools_raw(
                     messages,
                     tool_schemas,
+                    model=model,
                 )
 
                 # Primary: structured tool_calls from the API
@@ -336,7 +371,7 @@ class ChatEngine:
 
                 if not effective_calls:
                     # No tool calls — stream the final answer
-                    async for chunk in llm_gateway.stream_from_raw(messages):
+                    async for chunk in llm_gateway.stream_from_raw(messages, model=model):
                         yield {"type": "token", "text": chunk}
                     return
 
@@ -399,18 +434,18 @@ class ChatEngine:
                     # messages.  Inject results into the user message and stream once
                     # — no second round-trip.
                     final_msgs = _inject_tool_results(original_messages, round_results)
-                    async for chunk in llm_gateway.stream_from_raw(final_msgs):
+                    async for chunk in llm_gateway.stream_from_raw(final_msgs, model=model):
                         yield {"type": "token", "text": chunk}
                     return
 
             # Max rounds reached — stream final answer
-            async for chunk in llm_gateway.stream_from_raw(messages):
+            async for chunk in llm_gateway.stream_from_raw(messages, model=model):
                 yield {"type": "token", "text": chunk}
 
         except Exception as exc:
             yield {"type": "error", "message": str(exc)}
             # Fall back: plain streaming without tools
-            async for chunk in llm_gateway.stream_from_raw(original_messages):
+            async for chunk in llm_gateway.stream_from_raw(original_messages, model=model):
                 yield {"type": "token", "text": chunk}
 
     # ------------------------------------------------------------------ #
@@ -439,6 +474,7 @@ class ChatEngine:
         self,
         user_message: str,
         messages: list[dict],
+        model: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Web-search fast path — avoids the non-streaming LLM round-trip that the
@@ -451,7 +487,7 @@ class ChatEngine:
         tool = tools.get("web_search")
 
         if tool is None:
-            async for chunk in llm_gateway.stream_from_raw(messages):
+            async for chunk in llm_gateway.stream_from_raw(messages, model=model):
                 yield {"type": "token", "text": chunk}
             return
 
@@ -475,7 +511,7 @@ class ChatEngine:
         }
 
         enriched = _inject_tool_results(messages, [("web_search", result_text)])
-        async for chunk in llm_gateway.stream_from_raw(enriched):
+        async for chunk in llm_gateway.stream_from_raw(enriched, model=model):
             yield {"type": "token", "text": chunk}
 
     async def _retrieve(self, query: str) -> list[RetrievedChunk]:

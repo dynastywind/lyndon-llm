@@ -109,3 +109,46 @@ async def test_route_decision_properties() -> None:
     d2 = RouteDecision("direct", frozenset(), "test")
     assert d2.needs_rag is False
     assert d2.needs_tools is False
+
+
+# ── edge cases ────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_rag_and_web_signal_with_kb(
+    orchestrator: HeuristicOrchestrator,
+) -> None:
+    """Message with both RAG and web-search signals → deterministic route (rag_and_tools)."""
+    decision = await orchestrator.route(
+        "search the document for today's weather news",
+        has_kb_sources=True,
+    )
+    # Should not raise; must return a valid, deterministic route
+    assert decision.route in ("direct", "rag", "tools", "rag_and_tools")
+    # Both signals are present, so the combined route is expected
+    assert decision.route == "rag_and_tools"
+
+
+@pytest.mark.asyncio
+async def test_legacy_route_decision_has_tools() -> None:
+    """legacy_route_decision() (orchestrator disabled) must return a non-empty tools set."""
+    from chat.orchestrator import legacy_route_decision
+
+    decision = legacy_route_decision()
+    assert decision.tools, "Legacy route must expose at least one tool"
+    assert decision.route == "rag_and_tools"
+
+
+@pytest.mark.asyncio
+async def test_long_message_does_not_hang(
+    orchestrator: HeuristicOrchestrator,
+) -> None:
+    """Heuristic routing on a very long message should complete quickly."""
+    import asyncio
+
+    long_msg = "explain this " + ("word " * 5000)
+    decision = await asyncio.wait_for(
+        orchestrator.route(long_msg, has_kb_sources=False),
+        timeout=2.0,
+    )
+    assert decision.route in ("direct", "rag", "tools", "rag_and_tools")
