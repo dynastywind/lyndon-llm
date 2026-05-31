@@ -14,13 +14,17 @@ async def test_render_chart_coerces_json_string_arrays():
         type="bar",
         title="Quarterly Revenue",
         x_key="quarter",
-        data=json.dumps([
-            {"quarter": "Q1", "revenue": 120},
-            {"quarter": "Q2", "revenue": 180},
-        ]),
-        series=json.dumps([
-            {"key": "revenue", "name": "Revenue", "color": "#6366f1"},
-        ]),
+        data=json.dumps(
+            [
+                {"quarter": "Q1", "revenue": 120},
+                {"quarter": "Q2", "revenue": 180},
+            ]
+        ),
+        series=json.dumps(
+            [
+                {"key": "revenue", "name": "Revenue", "color": "#6366f1"},
+            ]
+        ),
     )
 
     assert result.success
@@ -47,15 +51,17 @@ async def test_agentic_loop_continues_after_successful_chart(monkeypatch):
 
     class FakeFunction:
         name = "render_chart"
-        arguments = json.dumps({
-            "type": "bar",
-            "title": "Quarterly Revenue",
-            "x_key": "quarter",
-            "data": [
-                {"quarter": "Q1", "revenue": 120},
-                {"quarter": "Q2", "revenue": 180},
-            ],
-        })
+        arguments = json.dumps(
+            {
+                "type": "bar",
+                "title": "Quarterly Revenue",
+                "x_key": "quarter",
+                "data": [
+                    {"quarter": "Q1", "revenue": 120},
+                    {"quarter": "Q2", "revenue": 180},
+                ],
+            }
+        )
 
     class FakeToolCall:
         id = "call_chart"

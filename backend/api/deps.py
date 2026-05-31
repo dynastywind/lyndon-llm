@@ -1,7 +1,8 @@
 """FastAPI dependency injection helpers."""
+
 from __future__ import annotations
 
-from fastapi import Header, HTTPException
+from fastapi import Header
 
 from core.permissions.gate import Mode
 from core.session.manager import Session, session_manager

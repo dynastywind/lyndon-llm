@@ -1,4 +1,5 @@
 """File I/O tools — read (Chat-safe) and write (Cowork/Code only)."""
+
 from __future__ import annotations
 
 from pathlib import Path

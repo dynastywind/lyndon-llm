@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from sandbox.runner import run_code, available_languages
 from config.settings import settings
+from sandbox.runner import available_languages, run_code
 
 router = APIRouter()
 

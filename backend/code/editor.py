@@ -1,14 +1,14 @@
 """
 Code Editor — LLM-driven file editing with diff generation.
 """
+
 from __future__ import annotations
 
+from contextlib import suppress
 import difflib
-from pathlib import Path
 
-from code.repo import RepoManager, RepoDiff
-from core.llm.gateway import llm_gateway, LLMMessage
-
+from code.repo import RepoDiff, RepoManager
+from core.llm.gateway import LLMMessage, llm_gateway
 
 EDIT_SYSTEM = """\
 You are an expert software engineer. When asked to modify code, respond with ONLY
@@ -38,10 +38,8 @@ class CodeEditor:
         if context_files:
             parts = []
             for cf in context_files:
-                try:
+                with suppress(Exception):
                     parts.append(f"=== {cf} ===\n{self.repo.file_content(cf)}")
-                except Exception:
-                    pass
             context_block = "\nRelated files for context:\n" + "\n\n".join(parts)
 
         messages = [
@@ -61,12 +59,14 @@ class CodeEditor:
         self.repo.write_file(relative_path, new_content)
 
         # Generate unified diff
-        diff_lines = list(difflib.unified_diff(
-            original.splitlines(keepends=True),
-            new_content.splitlines(keepends=True),
-            fromfile=f"a/{relative_path}",
-            tofile=f"b/{relative_path}",
-        ))
+        diff_lines = list(
+            difflib.unified_diff(
+                original.splitlines(keepends=True),
+                new_content.splitlines(keepends=True),
+                fromfile=f"a/{relative_path}",
+                tofile=f"b/{relative_path}",
+            )
+        )
         diff_text = "".join(diff_lines)
 
         return RepoDiff(

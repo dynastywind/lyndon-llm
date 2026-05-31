@@ -16,6 +16,8 @@ dependencies = [
     "pydantic-settings>=2.3",
     # LLM & Embeddings
     "openai>=1.30",
+    # Observability
+    "langfuse>=2.0",
     # MCP (user-registered tool servers)
     "mcp>=1.0",
     # Vector stores
@@ -41,6 +43,8 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
     "httpx>=0.27",   # for TestClient
+    "ruff>=0.5",
+    "mypy>=1.10",
 ]
 
 [tool.setuptools.packages.find]
@@ -49,3 +53,51 @@ where = ["."]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+# ── Ruff ──────────────────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes (unused imports, undefined names, …)
+    "I",    # isort — import ordering
+    "UP",   # pyupgrade — modernise syntax
+    "B",    # flake8-bugbear — likely bugs / design issues
+    "ASYNC",# flake8-async — async pitfalls
+    "C4",   # flake8-comprehensions — cleaner comprehensions
+    "SIM",  # flake8-simplify — unnecessary complexity
+    "TCH",  # flake8-type-checking — TYPE_CHECKING guards
+]
+ignore = [
+    "E501",    # line too long — formatter handles it
+    "B008",    # function call in default arg (common FastAPI pattern)
+    "SIM108",  # ternary vs if/else — readability call
+    "TC001",   # move app import into TYPE_CHECKING — not needed at runtime here
+    "TC002",   # move third-party import into TYPE_CHECKING — not needed here
+    "TC003",   # move stdlib import into TYPE_CHECKING — not needed here
+    "ASYNC109", # timeout param name — we pass it explicitly to subprocesses, not asyncio.timeout
+    "ASYNC230", # open() in async def — we're writing temp files before subprocess, not I/O bound
+    "ASYNC240", # pathlib in async — one-off mkdir; acceptable
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["api", "chat", "code", "cowork", "config", "core", "db", "sandbox"]
+force-sort-within-sections = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+# ── Mypy ──────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+disallow_untyped_defs = true
+warn_return_any = false
+warn_unused_ignores = true

@@ -2,6 +2,7 @@
 Chunker — splits raw documents into overlapping chunks for embedding.
 Uses recursive character splitting as the default strategy.
 """
+
 from __future__ import annotations
 
 from chat.rag.ingestion.loader import RawDocument
@@ -21,6 +22,7 @@ class RecursiveChunker:
     Splits text by trying separators in order: paragraphs → sentences → words.
     Produces chunks of ~chunk_size tokens with overlap.
     """
+
     SEPARATORS = ["\n\n", "\n", ". ", " ", ""]
 
     def __init__(

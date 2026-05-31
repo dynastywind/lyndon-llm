@@ -1,10 +1,11 @@
 """Test Runner — executes the project's test suite and parses results."""
+
 from __future__ import annotations
 
 import asyncio
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
+import re
 
 
 @dataclass
@@ -40,7 +41,7 @@ class TestRunner:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             output = stdout.decode(errors="replace")
             return self._parse_output(output, proc.returncode)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return TestResult(output=f"Tests timed out after {timeout}s")
         except Exception as e:
             return TestResult(output=str(e))
@@ -72,8 +73,7 @@ class TestRunner:
         result.failures = re.findall(r"FAILED (.+?) -", output)
 
         # If no pytest summary found, use returncode
-        if result.passed == 0 and result.failed == 0 and result.errors == 0:
-            if returncode != 0:
-                result.errors = 1
+        if result.passed == 0 and result.failed == 0 and result.errors == 0 and returncode != 0:
+            result.errors = 1
 
         return result

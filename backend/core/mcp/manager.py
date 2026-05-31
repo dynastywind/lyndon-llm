@@ -1,4 +1,5 @@
 """Runtime registry for MCP servers and dynamic tool classes."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,7 @@ import logging
 from typing import Any
 
 from core.mcp.client import call_mcp_tool, discover_tools, qualified_tool_name
-from core.permissions.gate import Mode, Permission, PermissionGate
+from core.permissions.gate import Mode, Permission
 from core.tools.base import BaseTool, ToolResult
 from core.tools.registry import tool_registry
 from db.base import AsyncSessionLocal
@@ -131,8 +132,7 @@ class McpToolManager:
 
     def _unregister_server(self, server_id: str) -> None:
         to_remove = [
-            qname for qname, meta in self._tool_meta.items()
-            if meta["server_id"] == server_id
+            qname for qname, meta in self._tool_meta.items() if meta["server_id"] == server_id
         ]
         for qname in to_remove:
             self._tool_meta.pop(qname, None)

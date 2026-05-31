@@ -5,9 +5,10 @@ Requires:
   - ChromaDB running at localhost:8001  (docker compose up chroma)
   - Ollama running at localhost:11434   (nomic-embed-text loaded)
 """
+
 import os
 import sys
-import tempfile
+
 import pytest
 
 # Ensure backend/ is on sys.path when running from the repo root
@@ -49,8 +50,7 @@ async def test_ingest_plain_text(tmp_path):
 
     doc = tmp_path / "notes.txt"
     doc.write_text(
-        "The capital of France is Paris.\n"
-        "Paris is known for the Eiffel Tower and fine cuisine.\n"
+        "The capital of France is Paris.\nParis is known for the Eiffel Tower and fine cuisine.\n"
     )
 
     pipeline = IngestPipeline()
@@ -82,6 +82,7 @@ async def test_metadata_includes_source(tmp_path):
 async def test_retrieve_returns_empty_on_empty_kb():
     """Retriever should not crash on an empty knowledge base."""
     from chat.rag.retriever import HybridRetriever
+
     # Use a separate collection name so it doesn't share state with other tests
     retriever = HybridRetriever()
     retriever.COLLECTION_NAME = "test_empty_collection"

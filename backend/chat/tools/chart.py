@@ -6,14 +6,14 @@ JSON payload that the engine detects and forwards as a `chart` SSE event.
 
 Supported chart types:  bar | line | area | pie
 """
+
 from __future__ import annotations
 
 import json
 from typing import Any
 
-from core.permissions.gate import Permission
+from core.permissions.gate import Permission, require_permission
 from core.tools.base import BaseTool, ToolResult
-from core.permissions.gate import require_permission
 
 # Sentinel key used by the engine to identify chart results
 CHART_SPEC_KEY = "__chart_spec__"
@@ -49,7 +49,7 @@ class RenderChartTool(BaseTool):
     permission = Permission.READ
 
     @require_permission(Permission.READ)
-    async def run(                             # type: ignore[override]
+    async def run(  # type: ignore[override]
         self,
         type: str,
         title: str,
@@ -60,20 +60,26 @@ class RenderChartTool(BaseTool):
         # ── Validation ───────────────────────────────────────────────────
         if type not in VALID_TYPES:
             return ToolResult(
-                tool_name=self.name, success=False, output=None,
+                tool_name=self.name,
+                success=False,
+                output=None,
                 error=f"Invalid chart type '{type}'. Must be one of: {', '.join(VALID_TYPES)}",
             )
 
         data, data_error = _coerce_json_array(data, "data")
         if data_error:
             return ToolResult(
-                tool_name=self.name, success=False, output=None,
+                tool_name=self.name,
+                success=False,
+                output=None,
                 error=data_error,
             )
 
         if not data:
             return ToolResult(
-                tool_name=self.name, success=False, output=None,
+                tool_name=self.name,
+                success=False,
+                output=None,
                 error="'data' must be a non-empty array of objects.",
             )
 
@@ -81,7 +87,9 @@ class RenderChartTool(BaseTool):
             series, series_error = _coerce_json_array(series, "series")
             if series_error:
                 return ToolResult(
-                    tool_name=self.name, success=False, output=None,
+                    tool_name=self.name,
+                    success=False,
+                    output=None,
                     error=series_error,
                 )
 
@@ -135,7 +143,7 @@ class RenderChartTool(BaseTool):
                         "description": (
                             "Array of data objects. Each object must contain the x_key "
                             "and one key per series. "
-                            "Example: [{\"month\": \"Jan\", \"sales\": 120, \"costs\": 80}, ...]"
+                            'Example: [{"month": "Jan", "sales": 120, "costs": 80}, ...]'
                         ),
                     },
                     "series": {
@@ -143,15 +151,21 @@ class RenderChartTool(BaseTool):
                         "items": {
                             "type": "object",
                             "properties": {
-                                "key":   {"type": "string", "description": "Data key to plot."},
-                                "name":  {"type": "string", "description": "Display label (optional)."},
-                                "color": {"type": "string", "description": "Hex colour (optional)."},
+                                "key": {"type": "string", "description": "Data key to plot."},
+                                "name": {
+                                    "type": "string",
+                                    "description": "Display label (optional).",
+                                },
+                                "color": {
+                                    "type": "string",
+                                    "description": "Hex colour (optional).",
+                                },
                             },
                             "required": ["key"],
                         },
                         "description": (
                             "Series to plot. If omitted, all keys except x_key are used. "
-                            "Example: [{\"key\": \"sales\", \"name\": \"Sales\", \"color\": \"#6366f1\"}]"
+                            'Example: [{"key": "sales", "name": "Sales", "color": "#6366f1"}]'
                         ),
                     },
                 },

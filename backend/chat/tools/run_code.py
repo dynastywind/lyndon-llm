@@ -6,15 +6,15 @@ asks to run, test, or verify a piece of code.  Execution is fully sandboxed
 (Docker: no network, read-only filesystem, memory + CPU caps) so it is safe
 to classify as READ permission.
 """
+
 from __future__ import annotations
 
 import difflib
 from typing import Any
 
-from core.permissions.gate import Permission
-from core.tools.base import BaseTool, ToolResult
-from core.permissions.gate import require_permission
 from config.settings import settings
+from core.permissions.gate import Permission, require_permission
+from core.tools.base import BaseTool, ToolResult
 
 
 class RunCodeTool(BaseTool):
@@ -23,22 +23,36 @@ class RunCodeTool(BaseTool):
         "Execute a code snippet in a secure, isolated sandbox and return its output. "
         "Use this when the user asks to run, test, execute, or verify code in any language."
     )
-    permission = Permission.READ   # execution is fully sandboxed
+    permission = Permission.READ  # execution is fully sandboxed
 
     @require_permission(Permission.READ)
     async def run(self, language: str, code: str) -> ToolResult:  # type: ignore[override]
-        from sandbox.runner import run_code, LANGUAGES
+        from sandbox.runner import LANGUAGES, run_code
 
         # Fuzzy-match the language key so "Python" → "python", "C++" → "cpp", etc.
         lang_key = language.lower().strip()
         _ALIASES = {
-            "c++": "cpp", "c#": "csharp", "js": "javascript",
-            "ts": "typescript", "node": "javascript", "nodejs": "javascript",
-            "py": "python", "rb": "ruby", "rs": "rust",
-            "hs": "haskell", "ml": "ocaml", "erl": "erlang",
-            "ex": "elixir", "exs": "elixir", "kt": "kotlin",
-            "objc": "objc", "objectivec": "objc", "objective-c": "objc",
-            "cs": "csharp", "sh": "bash", "shell": "bash",
+            "c++": "cpp",
+            "c#": "csharp",
+            "js": "javascript",
+            "ts": "typescript",
+            "node": "javascript",
+            "nodejs": "javascript",
+            "py": "python",
+            "rb": "ruby",
+            "rs": "rust",
+            "hs": "haskell",
+            "ml": "ocaml",
+            "erl": "erlang",
+            "ex": "elixir",
+            "exs": "elixir",
+            "kt": "kotlin",
+            "objc": "objc",
+            "objectivec": "objc",
+            "objective-c": "objc",
+            "cs": "csharp",
+            "sh": "bash",
+            "shell": "bash",
         }
         lang_key = _ALIASES.get(lang_key, lang_key)
 
@@ -46,9 +60,11 @@ class RunCodeTool(BaseTool):
             matches = difflib.get_close_matches(lang_key, LANGUAGES.keys(), n=3)
             hint = f"  Did you mean: {', '.join(matches)}?" if matches else ""
             return ToolResult(
-                tool_name=self.name, success=False, output=None,
+                tool_name=self.name,
+                success=False,
+                output=None,
                 error=f"Unknown language {language!r}.{hint}  "
-                      f"Supported: {', '.join(sorted(LANGUAGES))}",
+                f"Supported: {', '.join(sorted(LANGUAGES))}",
             )
 
         timeout = min(60, settings.sandbox_timeout)
@@ -66,6 +82,7 @@ class RunCodeTool(BaseTool):
 
     def schema(self) -> dict[str, Any]:
         from sandbox.runner import LANGUAGES
+
         lang_ids = sorted(LANGUAGES.keys())
         return {
             "name": self.name,
@@ -98,6 +115,7 @@ class RunCodeTool(BaseTool):
 # ---------------------------------------------------------------------------
 # Output formatter
 # ---------------------------------------------------------------------------
+
 
 def _format_result(r: dict, label: str, code: str = "") -> str:
     """Format the sandbox result dict into a clean string for the LLM."""

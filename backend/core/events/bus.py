@@ -2,12 +2,13 @@
 Event Bus — lightweight pub/sub for internal agent events.
 Used to decouple blocks (e.g. Code block emits diff_ready, frontend subscribes).
 """
+
 from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from typing import Any, Callable, Coroutine
-
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 EventHandler = Callable[[dict[str, Any]], Coroutine[Any, Any, None]]
 
@@ -35,24 +36,24 @@ class Events:
     # Chat
     CHAT_MESSAGE_RECEIVED = "chat.message.received"
     CHAT_RESPONSE_STARTED = "chat.response.started"
-    CHAT_RESPONSE_CHUNK   = "chat.response.chunk"
-    CHAT_RESPONSE_DONE    = "chat.response.done"
-    MEMORY_STORED         = "memory.stored"
+    CHAT_RESPONSE_CHUNK = "chat.response.chunk"
+    CHAT_RESPONSE_DONE = "chat.response.done"
+    MEMORY_STORED = "memory.stored"
 
     # Cowork
-    PLAN_CREATED          = "cowork.plan.created"
-    PLAN_APPROVED         = "cowork.plan.approved"
-    STEP_STARTED          = "cowork.step.started"
-    STEP_DONE             = "cowork.step.done"
-    STEP_FAILED           = "cowork.step.failed"
-    TASK_DONE             = "cowork.task.done"
+    PLAN_CREATED = "cowork.plan.created"
+    PLAN_APPROVED = "cowork.plan.approved"
+    STEP_STARTED = "cowork.step.started"
+    STEP_DONE = "cowork.step.done"
+    STEP_FAILED = "cowork.step.failed"
+    TASK_DONE = "cowork.task.done"
 
     # Code
-    DIFF_READY            = "code.diff.ready"
-    TESTS_PASSED          = "code.tests.passed"
-    TESTS_FAILED          = "code.tests.failed"
-    COMMIT_DONE           = "code.commit.done"
-    DEPLOY_DONE           = "code.deploy.done"
+    DIFF_READY = "code.diff.ready"
+    TESTS_PASSED = "code.tests.passed"
+    TESTS_FAILED = "code.tests.failed"
+    COMMIT_DONE = "code.commit.done"
+    DEPLOY_DONE = "code.deploy.done"
 
 
 # Module-level singleton

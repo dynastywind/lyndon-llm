@@ -6,20 +6,22 @@ Mode permission matrix:
   Cowork → READ + WRITE + EXEC (gated by user approval)
   Code   → READ + WRITE + EXEC on repo (gated by user approval)
 """
+
 from __future__ import annotations
 
-from enum import Enum
+from collections.abc import Callable
+from enum import StrEnum
 from functools import wraps
-from typing import Callable, Any
+from typing import Any
 
 
-class Permission(str, Enum):
+class Permission(StrEnum):
     READ = "read"
     WRITE = "write"
     EXEC = "exec"
 
 
-class Mode(str, Enum):
+class Mode(StrEnum):
     CHAT = "chat"
     COWORK = "cowork"
     CODE = "code"
@@ -27,16 +29,16 @@ class Mode(str, Enum):
 
 # Permissions allowed per mode (no approval needed)
 MODE_PERMISSIONS: dict[Mode, set[Permission]] = {
-    Mode.CHAT:   {Permission.READ},
+    Mode.CHAT: {Permission.READ},
     Mode.COWORK: {Permission.READ, Permission.WRITE, Permission.EXEC},
-    Mode.CODE:   {Permission.READ, Permission.WRITE, Permission.EXEC},
+    Mode.CODE: {Permission.READ, Permission.WRITE, Permission.EXEC},
 }
 
 # Permissions that require explicit user approval before execution
 APPROVAL_REQUIRED: dict[Mode, set[Permission]] = {
-    Mode.CHAT:   set(),
+    Mode.CHAT: set(),
     Mode.COWORK: {Permission.WRITE, Permission.EXEC},
-    Mode.CODE:   {Permission.WRITE, Permission.EXEC},
+    Mode.CODE: {Permission.WRITE, Permission.EXEC},
 }
 
 
@@ -84,6 +86,7 @@ def require_permission(permission: Permission) -> Callable:
             @require_permission(Permission.WRITE)
             async def run(self, ...): ...
     """
+
     def decorator(fn: Callable) -> Callable:
         @wraps(fn)
         async def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
@@ -95,5 +98,7 @@ def require_permission(permission: Permission) -> Callable:
                 )
             gate.check(permission, tool_name=type(self).__name__)
             return await fn(self, *args, **kwargs)
+
         return wrapper
+
     return decorator

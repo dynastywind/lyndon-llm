@@ -1,8 +1,9 @@
 """ORM models for user-registered MCP servers and cached tool metadata."""
+
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import uuid
-from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -11,15 +12,13 @@ from db.base import Base
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class McpServer(Base):
     __tablename__ = "mcp_servers"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # stdio | sse
@@ -39,7 +38,7 @@ class McpServer(Base):
         DateTime(timezone=True), nullable=False, default=_now, onupdate=_now
     )
 
-    tools: Mapped[list["McpToolCache"]] = relationship(
+    tools: Mapped[list[McpToolCache]] = relationship(
         back_populates="server",
         cascade="all, delete-orphan",
     )
@@ -50,9 +49,7 @@ class McpToolCache(Base):
 
     __tablename__ = "mcp_tool_cache"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     server_id: Mapped[str] = mapped_column(
         String(36),
         ForeignKey("mcp_servers.id", ondelete="CASCADE"),
@@ -67,4 +64,4 @@ class McpToolCache(Base):
     input_schema_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    server: Mapped["McpServer"] = relationship(back_populates="tools")
+    server: Mapped[McpServer] = relationship(back_populates="tools")

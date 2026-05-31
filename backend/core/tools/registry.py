@@ -1,6 +1,7 @@
 """
 Tool Registry — central catalogue of all available tools, tagged by mode.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -20,14 +21,14 @@ class ToolRegistry:
     def __init__(self) -> None:
         # mode → {tool_name → tool_class}
         self._registry: dict[Mode, dict[str, type[BaseTool]]] = {
-            Mode.CHAT:   {},
+            Mode.CHAT: {},
             Mode.COWORK: {},
-            Mode.CODE:   {},
+            Mode.CODE: {},
         }
         self._mcp_registry: dict[Mode, dict[str, type[BaseTool]]] = {
-            Mode.CHAT:   {},
+            Mode.CHAT: {},
             Mode.COWORK: {},
-            Mode.CODE:   {},
+            Mode.CODE: {},
         }
 
     def register(self, mode: Mode, tool_cls: type[BaseTool]) -> None:
@@ -53,18 +54,12 @@ class ToolRegistry:
 
     def get_tools(self, mode: Mode, gate: PermissionGate) -> dict[str, BaseTool]:
         """Return instantiated tools for the given mode (internal + MCP)."""
-        return {
-            name: cls(gate)
-            for name, cls in self._all_classes(mode).items()
-        }
+        return {name: cls(gate) for name, cls in self._all_classes(mode).items()}
 
     def get_openai_schemas(self, mode: Mode) -> list[dict]:
         """Return OpenAI-format tool schemas for the given mode (for LLM function calling)."""
         dummy_gate = PermissionGate(mode)
-        return [
-            cls(dummy_gate).to_openai_tool()
-            for cls in self._all_classes(mode).values()
-        ]
+        return [cls(dummy_gate).to_openai_tool() for cls in self._all_classes(mode).values()]
 
     def list_tool_names(self, mode: Mode) -> list[str]:
         return list(self._all_classes(mode).keys())

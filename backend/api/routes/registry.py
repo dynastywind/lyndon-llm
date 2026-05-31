@@ -1,4 +1,5 @@
 """Tool registry API — internal tools + user MCP servers."""
+
 from __future__ import annotations
 
 import json

@@ -1,12 +1,13 @@
 """WebSocket endpoint — streams all agent events to the frontend."""
+
 from __future__ import annotations
 
+from contextlib import suppress
 import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from core.events.bus import event_bus, Events
-from core.session.manager import session_manager
+from core.events.bus import Events, event_bus
 
 router = APIRouter()
 
@@ -16,18 +17,23 @@ async def websocket_stream(websocket: WebSocket, session_id: str):
     await websocket.accept()
 
     async def forward(payload: dict):
-        try:
+        with suppress(Exception):
             await websocket.send_text(json.dumps(payload))
-        except Exception:
-            pass
 
     # Subscribe to all events for this session
     event_names = [
-        Events.CHAT_RESPONSE_CHUNK, Events.CHAT_RESPONSE_DONE,
-        Events.PLAN_CREATED, Events.PLAN_APPROVED,
-        Events.STEP_STARTED, Events.STEP_DONE, Events.STEP_FAILED,
-        Events.TASK_DONE, Events.DIFF_READY, Events.TESTS_PASSED,
-        Events.TESTS_FAILED, Events.COMMIT_DONE,
+        Events.CHAT_RESPONSE_CHUNK,
+        Events.CHAT_RESPONSE_DONE,
+        Events.PLAN_CREATED,
+        Events.PLAN_APPROVED,
+        Events.STEP_STARTED,
+        Events.STEP_DONE,
+        Events.STEP_FAILED,
+        Events.TASK_DONE,
+        Events.DIFF_READY,
+        Events.TESTS_PASSED,
+        Events.TESTS_FAILED,
+        Events.COMMIT_DONE,
     ]
 
     async def session_handler(payload: dict):

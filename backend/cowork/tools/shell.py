@@ -1,12 +1,13 @@
 """Shell execution tool — Cowork/Code modes only, requires EXEC permission."""
+
 from __future__ import annotations
 
 import asyncio
 from typing import Any
 
+from config.settings import settings
 from core.permissions.gate import Permission, require_permission
 from core.tools.base import BaseTool, ToolResult
-from config.settings import settings
 
 
 class ShellTool(BaseTool):
@@ -15,7 +16,9 @@ class ShellTool(BaseTool):
     permission = Permission.EXEC
 
     @require_permission(Permission.EXEC)
-    async def run(self, command: str, cwd: str | None = None, timeout: int | None = None) -> ToolResult:
+    async def run(
+        self, command: str, cwd: str | None = None, timeout: int | None = None
+    ) -> ToolResult:
         t = timeout or settings.cowork_shell_timeout
         try:
             proc = await asyncio.create_subprocess_shell(
@@ -33,9 +36,13 @@ class ShellTool(BaseTool):
                 output=output,
                 error=None if success else f"Exit code {proc.returncode}",
             )
-        except asyncio.TimeoutError:
-            return ToolResult(tool_name=self.name, success=False, output=None,
-                              error=f"Command timed out after {t}s")
+        except TimeoutError:
+            return ToolResult(
+                tool_name=self.name,
+                success=False,
+                output=None,
+                error=f"Command timed out after {t}s",
+            )
         except Exception as e:
             return ToolResult(tool_name=self.name, success=False, output=None, error=str(e))
 

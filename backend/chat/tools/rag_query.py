@@ -1,11 +1,11 @@
 """RAG Query tool — searches the local knowledge base."""
+
 from __future__ import annotations
 
 from typing import Any
 
-from core.permissions.gate import Permission
+from core.permissions.gate import Permission, require_permission
 from core.tools.base import BaseTool, ToolResult
-from core.permissions.gate import require_permission
 
 
 class RAGQueryTool(BaseTool):
@@ -20,6 +20,7 @@ class RAGQueryTool(BaseTool):
     async def run(self, query: str, top_k: int = 5) -> ToolResult:
         try:
             from chat.rag.retriever import retriever
+
             chunks = await retriever.retrieve(query, top_k=top_k)
 
             if not chunks:
@@ -29,10 +30,7 @@ class RAGQueryTool(BaseTool):
                     output="No relevant documents found in the knowledge base.",
                 )
 
-            output = "\n\n---\n\n".join(
-                f"**Source:** {c.source}\n\n{c.content}"
-                for c in chunks
-            )
+            output = "\n\n---\n\n".join(f"**Source:** {c.source}\n\n{c.content}" for c in chunks)
             return ToolResult(tool_name=self.name, success=True, output=output)
         except Exception as e:
             return ToolResult(tool_name=self.name, success=False, output=None, error=str(e))
@@ -45,7 +43,11 @@ class RAGQueryTool(BaseTool):
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "What to search for."},
-                    "top_k": {"type": "integer", "description": "Number of chunks to retrieve.", "default": 5},
+                    "top_k": {
+                        "type": "integer",
+                        "description": "Number of chunks to retrieve.",
+                        "default": 5,
+                    },
                 },
                 "required": ["query"],
             },

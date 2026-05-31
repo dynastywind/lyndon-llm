@@ -4,13 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.deps import get_session
+from core.session.manager import Session
 from cowork.executor import Executor
 from cowork.planner import Plan, Planner
-from core.session.manager import Session
 
 router = APIRouter()
 _planner = Planner()
-_active_plans: dict[str, Plan] = {}   # plan_id → Plan (in-memory, replace with DB)
+_active_plans: dict[str, Plan] = {}  # plan_id → Plan (in-memory, replace with DB)
 
 
 class GoalRequest(BaseModel):

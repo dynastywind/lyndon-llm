@@ -1,6 +1,7 @@
 """
 Hybrid Retriever — combines dense vector search with BM25 sparse retrieval.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ class HybridRetriever:
     async def _get_vector_store(self):
         if self._vector_store is None:
             from db.vector.store import get_vector_store
+
             self._vector_store = await get_vector_store(self.COLLECTION_NAME)
         return self._vector_store
 
@@ -47,13 +49,16 @@ class HybridRetriever:
             results["documents"][0],
             results["metadatas"][0],
             results["distances"][0],
+            strict=False,
         ):
-            chunks.append(RetrievedChunk(
-                content=doc,
-                source=meta.get("source", meta.get("filename", "unknown")),
-                score=1.0 - float(dist),  # convert distance to similarity
-                metadata=meta,
-            ))
+            chunks.append(
+                RetrievedChunk(
+                    content=doc,
+                    source=meta.get("source", meta.get("filename", "unknown")),
+                    score=1.0 - float(dist),  # convert distance to similarity
+                    metadata=meta,
+                )
+            )
         return chunks
 
     def _bm25_search(

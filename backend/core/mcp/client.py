@@ -1,8 +1,9 @@
 """Connect to MCP servers and list/call tools."""
+
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
+import json
 from typing import Any
 
 from db.models.mcp import McpServer
@@ -61,11 +62,10 @@ async def _discover_stdio(server: McpServer) -> list[DiscoveredMcpTool]:
         args=_parse_args(server),
         env=_parse_env(server),
     )
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            response = await session.list_tools()
-            return [_to_discovered(t) for t in response.tools]
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+        response = await session.list_tools()
+        return [_to_discovered(t) for t in response.tools]
 
 
 async def _discover_sse(server: McpServer) -> list[DiscoveredMcpTool]:
@@ -75,11 +75,10 @@ async def _discover_sse(server: McpServer) -> list[DiscoveredMcpTool]:
     if not server.url:
         raise ValueError("sse transport requires a url")
 
-    async with sse_client(server.url) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            response = await session.list_tools()
-            return [_to_discovered(t) for t in response.tools]
+    async with sse_client(server.url) as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+        response = await session.list_tools()
+        return [_to_discovered(t) for t in response.tools]
 
 
 async def call_mcp_tool(
@@ -96,9 +95,7 @@ async def call_mcp_tool(
     raise ValueError(f"Unsupported transport: {server.transport}")
 
 
-async def _call_stdio(
-    server: McpServer, tool_name: str, arguments: dict[str, Any]
-) -> str:
+async def _call_stdio(server: McpServer, tool_name: str, arguments: dict[str, Any]) -> str:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
@@ -107,24 +104,20 @@ async def _call_stdio(
         args=_parse_args(server),
         env=_parse_env(server),
     )
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool(tool_name, arguments=arguments)
-            return _format_call_result(result)
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+        result = await session.call_tool(tool_name, arguments=arguments)
+        return _format_call_result(result)
 
 
-async def _call_sse(
-    server: McpServer, tool_name: str, arguments: dict[str, Any]
-) -> str:
+async def _call_sse(server: McpServer, tool_name: str, arguments: dict[str, Any]) -> str:
     from mcp import ClientSession
     from mcp.client.sse import sse_client
 
-    async with sse_client(server.url or "") as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            result = await session.call_tool(tool_name, arguments=arguments)
-            return _format_call_result(result)
+    async with sse_client(server.url or "") as (read, write), ClientSession(read, write) as session:
+        await session.initialize()
+        result = await session.call_tool(tool_name, arguments=arguments)
+        return _format_call_result(result)
 
 
 def _to_discovered(tool: Any) -> DiscoveredMcpTool:

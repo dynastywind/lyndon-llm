@@ -2,19 +2,36 @@
 LLM Gateway — single entry point for all LLM calls across all modes.
 Uses the OpenAI-compatible API (works with local models, OpenAI, etc.)
 """
+
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 import logging
 import time
-from collections.abc import AsyncGenerator
 from typing import Any
-
-from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletion, ChatCompletionMessage
 
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+# Use Langfuse's drop-in OpenAI wrapper when credentials are configured;
+# fall back to the plain openai client when they are not set.
+if settings.langfuse_secret_key and settings.langfuse_public_key:
+    from langfuse import Langfuse
+    from langfuse.openai import AsyncOpenAI  # type: ignore[assignment]
+
+    # v4 requires explicit instantiation to register the OTEL tracer provider
+    Langfuse(
+        public_key=settings.langfuse_public_key,
+        secret_key=settings.langfuse_secret_key,
+        host=settings.langfuse_host,
+        environment="dev" if settings.environment.value == "development" else "prod",
+    )
+    logger.info("Langfuse observability enabled (host: %s)", settings.langfuse_host)
+else:
+    from openai import AsyncOpenAI
+
+from openai.types.chat import ChatCompletion, ChatCompletionMessage  # noqa: E402
 
 
 class LLMMessage:
@@ -120,7 +137,9 @@ class LLMGateway:
                     logger.info("llm.stream  TTFB %.0f ms", ttfb)
                 token_count += 1
                 yield delta.content
-        logger.info("llm.stream  total %.0f ms  tokens %d", (time.monotonic() - t0) * 1000, token_count)
+        logger.info(
+            "llm.stream  total %.0f ms  tokens %d", (time.monotonic() - t0) * 1000, token_count
+        )
 
     async def complete_with_tools_raw(
         self,
@@ -180,7 +199,8 @@ class LLMGateway:
                 yield delta.content
         logger.info(
             "llm.stream_from_raw  total %.0f ms  tokens %d",
-            (time.monotonic() - t0) * 1000, token_count,
+            (time.monotonic() - t0) * 1000,
+            token_count,
         )
 
     # ------------------------------------------------------------------ #

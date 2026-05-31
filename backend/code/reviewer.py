@@ -1,16 +1,17 @@
 """Code Reviewer — analyses diffs and produces structured review comments."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.llm.gateway import llm_gateway, LLMMessage
+from core.llm.gateway import LLMMessage, llm_gateway
 
 
 @dataclass
 class ReviewComment:
     file_path: str
     line: int | None
-    severity: str      # "info" | "warning" | "error"
+    severity: str  # "info" | "warning" | "error"
     message: str
 
 
@@ -56,7 +57,9 @@ class CodeReviewer:
         ]
 
         response = await llm_gateway.complete(messages=messages, temperature=0.1)
-        cleaned = response.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        cleaned = (
+            response.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        )
 
         try:
             data = json.loads(cleaned)

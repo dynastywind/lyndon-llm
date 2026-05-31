@@ -1,21 +1,33 @@
 """
 RAG management endpoints — file upload, source listing, source deletion.
 """
+
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
+import shutil
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
-from chat.rag.ingestion.pipeline import ingest_pipeline, IngestPipeline
+from chat.rag.ingestion.pipeline import IngestPipeline, ingest_pipeline
 
 router = APIRouter()
 
 ALLOWED_EXTENSIONS = {
-    ".pdf", ".md", ".mdx", ".txt",
-    ".py", ".ts", ".tsx", ".js", ".jsx",
-    ".go", ".rs", ".java", ".cpp", ".c",
+    ".pdf",
+    ".md",
+    ".mdx",
+    ".txt",
+    ".py",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".go",
+    ".rs",
+    ".java",
+    ".cpp",
+    ".c",
 }
 
 # Stable upload directory — kept across restarts so the source path in

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import json
-from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -22,22 +21,25 @@ router = APIRouter()
 
 class AttachmentPayload(BaseModel):
     name: str
-    type: str   # MIME type, e.g. "image/png"
-    data: str   # raw base64 (no "data:...;base64," prefix)
+    type: str  # MIME type, e.g. "image/png"
+    data: str  # raw base64 (no "data:...;base64," prefix)
 
 
 class ChatRequest(BaseModel):
     message: str
     attachments: list[AttachmentPayload] = []
-    system_prompt:  str | None = None   # global instruction injected into system prompt
-    session_prompt: str | None = None   # one-off per-session instruction; prepended to first LLM user turn only
+    system_prompt: str | None = None  # global instruction injected into system prompt
+    session_prompt: str | None = (
+        None  # one-off per-session instruction; prepended to first LLM user turn only
+    )
 
 
 class IngestRequest(BaseModel):
-    source: str   # file path or URL
+    source: str  # file path or URL
 
 
 # ── Chat stream ───────────────────────────────────────────────────────────────
+
 
 def _iso(dt: datetime) -> str:
     """
@@ -50,7 +52,7 @@ def _iso(dt: datetime) -> str:
     the browser convert it correctly to the user's local time.
     """
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt.isoformat()
 
 
@@ -72,8 +74,8 @@ async def chat(
         async for event in engine.stream_response(
             body.message,
             attachments=attachments,
-            custom_system_prompt=body.system_prompt  or None,
-            session_prompt=      body.session_prompt or None,
+            custom_system_prompt=body.system_prompt or None,
+            session_prompt=body.session_prompt or None,
         ):
             evt_type = event["type"]
             payload = {k: v for k, v in event.items() if k != "type"}
@@ -85,12 +87,13 @@ async def chat(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",   # disable nginx buffering
+            "X-Accel-Buffering": "no",  # disable nginx buffering
         },
     )
 
 
 # ── Session management ────────────────────────────────────────────────────────
+
 
 @router.post("/sessions")
 async def create_chat_session(db: AsyncSession = Depends(get_db)):
@@ -171,7 +174,9 @@ async def get_all_session_messages(
 async def get_session_messages(
     session_id: str,
     limit: int = Query(default=5, ge=1, le=50),
-    before: Optional[str] = Query(default=None, description="ISO-8601 cursor — return messages older than this timestamp"),
+    before: str | None = Query(
+        default=None, description="ISO-8601 cursor — return messages older than this timestamp"
+    ),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -199,6 +204,7 @@ async def get_session_messages(
 
 # ── RAG ingest ────────────────────────────────────────────────────────────────
 
+
 @router.post("/ingest")
 async def ingest(body: IngestRequest):
     count = await ingest_pipeline.ingest(body.source)
@@ -207,9 +213,11 @@ async def ingest(body: IngestRequest):
 
 # ── Memory ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/memory")
 async def get_memories(query: str, session: Session = Depends(get_session)):
     from chat.memory.manager import MemoryManager
+
     mgr = MemoryManager(session.session_id)
     memories = await mgr.retrieve_memories(query)
     return {"memories": [m.model_dump(exclude={"embedding"}) for m in memories]}
@@ -219,6 +227,7 @@ async def get_memories(query: str, session: Session = Depends(get_session)):
 async def list_memories():
     """Return all long-term memories, newest-first."""
     from chat.memory.long_term import LongTermMemory
+
     lt = LongTermMemory()
     items = await lt.list_all()
     return {"memories": items, "total": len(items)}
@@ -228,11 +237,13 @@ async def list_memories():
 async def delete_memory(memory_id: str):
     """Permanently delete a long-term memory by ID."""
     from chat.memory.long_term import LongTermMemory
+
     lt = LongTermMemory()
     await lt.delete(memory_id)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _session_dict(row) -> dict:
     return {

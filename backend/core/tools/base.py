@@ -1,6 +1,7 @@
 """
 BaseTool — all tools across Chat, Cowork, and Code implement this interface.
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -28,6 +29,7 @@ class BaseTool(ABC):
       - Implement `run(**kwargs) -> ToolResult`
       - Implement `schema() -> dict` returning an OpenAI-compatible tool schema
     """
+
     name: str = ""
     description: str = ""
     permission: Permission = Permission.READ

@@ -1,8 +1,9 @@
 """CRUD for MCP server registrations."""
+
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import json
-from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,9 +18,7 @@ class McpRepo:
 
     async def list_servers(self) -> list[McpServer]:
         result = await self._db.execute(
-            select(McpServer)
-            .options(selectinload(McpServer.tools))
-            .order_by(McpServer.created_at)
+            select(McpServer).options(selectinload(McpServer.tools)).order_by(McpServer.created_at)
         )
         return list(result.scalars().all())
 
@@ -69,7 +68,7 @@ class McpRepo:
         for key, value in fields.items():
             if hasattr(row, key):
                 setattr(row, key, value)
-        row.updated_at = datetime.now(timezone.utc)
+        row.updated_at = datetime.now(UTC)
         await self._db.commit()
         await self._db.refresh(row)
         return row
@@ -87,7 +86,7 @@ class McpRepo:
         if row is None:
             return
         row.last_error = error
-        row.updated_at = datetime.now(timezone.utc)
+        row.updated_at = datetime.now(UTC)
         await self._db.commit()
 
     async def replace_tool_cache(
@@ -95,9 +94,7 @@ class McpRepo:
         server_id: str,
         tools: list[dict],
     ) -> list[McpToolCache]:
-        await self._db.execute(
-            delete(McpToolCache).where(McpToolCache.server_id == server_id)
-        )
+        await self._db.execute(delete(McpToolCache).where(McpToolCache.server_id == server_id))
         rows: list[McpToolCache] = []
         for t in tools:
             row = McpToolCache(

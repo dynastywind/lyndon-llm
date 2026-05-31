@@ -10,9 +10,10 @@ Retrieval is hybrid:
   2. Recency boost (more recent memories ranked up slightly)
   3. Importance weight
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from chat.memory.types import Memory, MemoryType
 from config.settings import settings
@@ -29,6 +30,7 @@ class LongTermMemory:
     async def _get_vector_store(self):
         if self._vector_store is None:
             from db.vector.store import get_vector_store
+
             self._vector_store = await get_vector_store(self.COLLECTION_NAME)
         return self._vector_store
 
@@ -50,12 +52,14 @@ class LongTermMemory:
             ids=[memory.id],
             embeddings=[memory.embedding],
             documents=[memory.content],
-            metadatas=[{
-                "session_id":   memory.session_id,
-                "memory_type":  memory.memory_type.value,
-                "importance":   memory.importance,
-                "created_at":   memory.created_at.isoformat(),
-            }],
+            metadatas=[
+                {
+                    "session_id": memory.session_id,
+                    "memory_type": memory.memory_type.value,
+                    "importance": memory.importance,
+                    "created_at": memory.created_at.isoformat(),
+                }
+            ],
         )
 
     # ------------------------------------------------------------------ #
@@ -97,16 +101,19 @@ class LongTermMemory:
             results["documents"][0],
             results["metadatas"][0],
             results["distances"][0],
+            strict=False,
         ):
-            memories.append(Memory(
-                session_id=meta.get("session_id", ""),
-                memory_type=MemoryType(meta.get("memory_type", "episodic")),
-                content=doc,
-                importance=float(meta.get("importance", 0.5)),
-                created_at=datetime.fromisoformat(
-                    meta.get("created_at", datetime.now(timezone.utc).isoformat())
-                ),
-            ))
+            memories.append(
+                Memory(
+                    session_id=meta.get("session_id", ""),
+                    memory_type=MemoryType(meta.get("memory_type", "episodic")),
+                    content=doc,
+                    importance=float(meta.get("importance", 0.5)),
+                    created_at=datetime.fromisoformat(
+                        meta.get("created_at", datetime.now(UTC).isoformat())
+                    ),
+                )
+            )
         return memories
 
     async def list_all(self, limit: int = 200) -> list[dict]:
@@ -114,15 +121,17 @@ class LongTermMemory:
         vs = await self._get_vector_store()
         ids, docs, metas = await vs.list_all(limit=limit)
         results = []
-        for id_, doc, meta in zip(ids, docs, metas):
-            results.append({
-                "id":          id_,
-                "content":     doc,
-                "session_id":  meta.get("session_id", ""),
-                "memory_type": meta.get("memory_type", "episodic"),
-                "importance":  float(meta.get("importance", 0.5)),
-                "created_at":  meta.get("created_at", ""),
-            })
+        for id_, doc, meta in zip(ids, docs, metas, strict=False):
+            results.append(
+                {
+                    "id": id_,
+                    "content": doc,
+                    "session_id": meta.get("session_id", ""),
+                    "memory_type": meta.get("memory_type", "episodic"),
+                    "importance": float(meta.get("importance", 0.5)),
+                    "created_at": meta.get("created_at", ""),
+                }
+            )
         results.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return results
 

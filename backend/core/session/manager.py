@@ -1,14 +1,15 @@
 """
 Session Manager — tracks active sessions and their current mode.
 """
+
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
+import uuid
 
-from core.permissions.gate import Mode, PermissionGate
 from config.settings import settings
+from core.permissions.gate import Mode, PermissionGate
 
 
 class Session:
@@ -16,8 +17,8 @@ class Session:
         self.session_id = session_id
         self.mode = mode
         self.gate = PermissionGate(mode)
-        self.created_at = datetime.now(timezone.utc)
-        self.last_active = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
+        self.last_active = datetime.now(UTC)
         self.metadata: dict[str, Any] = {}
 
     def switch_mode(self, mode: Mode) -> None:
@@ -26,11 +27,11 @@ class Session:
         self.touch()
 
     def touch(self) -> None:
-        self.last_active = datetime.now(timezone.utc)
+        self.last_active = datetime.now(UTC)
 
     def is_expired(self) -> bool:
         ttl = timedelta(seconds=settings.session_ttl_seconds)
-        return datetime.now(timezone.utc) - self.last_active > ttl
+        return datetime.now(UTC) - self.last_active > ttl
 
 
 class SessionManager:

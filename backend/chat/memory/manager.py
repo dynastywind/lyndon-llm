@@ -2,14 +2,14 @@
 Memory Manager — unified interface over short-term and long-term memory.
 Every Chat engine interaction goes through this class.
 """
+
 from __future__ import annotations
 
 from chat.memory.long_term import LongTermMemory
 from chat.memory.short_term import ShortTermMemory
 from chat.memory.types import Memory, MemoryType
 from config.settings import settings
-from core.llm.gateway import llm_gateway, LLMMessage
-
+from core.llm.gateway import LLMMessage, llm_gateway
 
 SUMMARISE_SYSTEM = (
     "You are a concise summariser. Given a conversation excerpt, produce a "
@@ -43,10 +43,7 @@ class MemoryManager:
             return base_prompt
 
         mem_block = "\n".join(f"- [{m.memory_type.value}] {m.content}" for m in memories)
-        enriched = (
-            f"{base_prompt}\n\n"
-            f"## Relevant memories from past sessions\n{mem_block}"
-        )
+        enriched = f"{base_prompt}\n\n## Relevant memories from past sessions\n{mem_block}"
         self.short_term.set_system_prompt(enriched)
         return enriched
 
@@ -86,12 +83,14 @@ class MemoryManager:
 
         summary = await self.short_term.compress(_summarise)
         if summary:
-            await self.long_term.store(Memory(
-                session_id=self.session_id,
-                memory_type=MemoryType.EPISODIC,
-                content=summary,
-                importance=0.6,
-            ))
+            await self.long_term.store(
+                Memory(
+                    session_id=self.session_id,
+                    memory_type=MemoryType.EPISODIC,
+                    content=summary,
+                    importance=0.6,
+                )
+            )
 
     async def store_memory(
         self,
@@ -100,12 +99,14 @@ class MemoryManager:
         importance: float = 0.5,
     ) -> None:
         """Explicitly store a fact or outcome to long-term memory."""
-        await self.long_term.store(Memory(
-            session_id=self.session_id,
-            memory_type=memory_type,
-            content=content,
-            importance=importance,
-        ))
+        await self.long_term.store(
+            Memory(
+                session_id=self.session_id,
+                memory_type=memory_type,
+                content=content,
+                importance=importance,
+            )
+        )
 
     async def retrieve_memories(self, query: str) -> list[Memory]:
         return await self.long_term.retrieve(query)
@@ -123,9 +124,11 @@ class MemoryManager:
                 LLMMessage("user", f"Summarise this session:\n{text}"),
             ]
         )
-        await self.long_term.store(Memory(
-            session_id=self.session_id,
-            memory_type=MemoryType.EPISODIC,
-            content=summary,
-            importance=0.7,
-        ))
+        await self.long_term.store(
+            Memory(
+                session_id=self.session_id,
+                memory_type=MemoryType.EPISODIC,
+                content=summary,
+                importance=0.7,
+            )
+        )

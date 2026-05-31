@@ -1,22 +1,23 @@
 """
 Cowork Planner — converts a user goal into a structured, executable plan.
 """
+
 from __future__ import annotations
 
+from enum import StrEnum
 import json
-import uuid
-from enum import Enum
 from typing import Any
+import uuid
 
 from pydantic import BaseModel, Field
 
-from core.llm.gateway import llm_gateway, LLMMessage
+from core.llm.gateway import LLMMessage, llm_gateway
 
 
-class RiskLevel(str, Enum):
-    LOW    = "low"     # read, no side effects
+class RiskLevel(StrEnum):
+    LOW = "low"  # read, no side effects
     MEDIUM = "medium"  # writes files or calls APIs
-    HIGH   = "high"    # deletes, deploys, runs arbitrary shell
+    HIGH = "high"  # deletes, deploys, runs arbitrary shell
 
 
 class PlanStep(BaseModel):
@@ -24,7 +25,7 @@ class PlanStep(BaseModel):
     order: int
     title: str
     description: str
-    tool: str               # tool name that will execute this step
+    tool: str  # tool name that will execute this step
     tool_args: dict[str, Any] = Field(default_factory=dict)
     risk: RiskLevel = RiskLevel.LOW
     depends_on: list[str] = Field(default_factory=list)  # step_ids
@@ -77,12 +78,14 @@ class Planner:
         )
 
         # Strip markdown code fences if present
-        cleaned = response.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        cleaned = (
+            response.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        )
 
         try:
             data = json.loads(cleaned)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Planner returned invalid JSON: {e}\nResponse: {cleaned}")
+            raise ValueError(f"Planner returned invalid JSON: {e}\nResponse: {cleaned}") from e
 
         steps = [PlanStep(**s) for s in data.get("steps", [])]
         return Plan(

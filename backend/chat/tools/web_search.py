@@ -4,15 +4,14 @@ Default provider: DuckDuckGo (free, no API key required).
 Optional upgrade: Google Custom Search JSON API (set GOOGLE_API_KEY + GOOGLE_CSE_ID).
 Legacy providers: Tavily, SerpAPI (set corresponding keys + WEB_SEARCH_PROVIDER env var).
 """
+
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from core.permissions.gate import Permission
-from core.tools.base import BaseTool, ToolResult
-from core.permissions.gate import require_permission
 from config.settings import settings
+from core.permissions.gate import Permission, require_permission
+from core.tools.base import BaseTool, ToolResult
 
 
 class WebSearchTool(BaseTool):
@@ -41,14 +40,12 @@ class WebSearchTool(BaseTool):
 
             if not results:
                 return ToolResult(
-                    tool_name=self.name, success=True,
+                    tool_name=self.name,
+                    success=True,
                     output="No results found for this query.",
                 )
 
-            output = "\n\n".join(
-                f"**{r['title']}** — {r['url']}\n{r['snippet']}"
-                for r in results
-            )
+            output = "\n\n".join(f"**{r['title']}** — {r['url']}\n{r['snippet']}" for r in results)
             return ToolResult(tool_name=self.name, success=True, output=output)
 
         except Exception as e:
@@ -89,6 +86,7 @@ class WebSearchTool(BaseTool):
     async def _google(self, query: str, k: int) -> list[dict]:
         """Google Custom Search JSON API — requires GOOGLE_API_KEY + GOOGLE_CSE_ID."""
         import httpx
+
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
                 "https://www.googleapis.com/customsearch/v1",
@@ -112,6 +110,7 @@ class WebSearchTool(BaseTool):
 
     async def _tavily(self, query: str, k: int) -> list[dict]:
         import httpx
+
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 "https://api.tavily.com/search",
@@ -131,6 +130,7 @@ class WebSearchTool(BaseTool):
 
     async def _serpapi(self, query: str, k: int) -> list[dict]:
         import httpx
+
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
                 "https://serpapi.com/search",

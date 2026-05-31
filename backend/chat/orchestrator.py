@@ -4,10 +4,11 @@ stream directly to the model before each turn.
 
 Heuristic routing is the default; swap to LLM routing via settings when ready.
 """
+
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
+import re
 from typing import Literal, Protocol
 
 from config.settings import settings
@@ -130,12 +131,7 @@ class HeuristicOrchestrator:
             tool_set.add("rag_query")
 
         # Greeting-only short messages with no other signals
-        if (
-            not wants_rag
-            and not tool_set
-            and len(text) < 20
-            and _GREETING_RE.match(text)
-        ):
+        if not wants_rag and not tool_set and len(text) < 20 and _GREETING_RE.match(text):
             return RouteDecision("direct", frozenset(), "greeting")
 
         if wants_rag and tool_set:
@@ -189,9 +185,10 @@ async def kb_has_sources() -> bool:
     stalls the async event loop.  A 3-second timeout ensures we fail fast.
     """
     import asyncio
+
     try:
-        from db.vector.store import get_vector_store
         from chat.rag.retriever import HybridRetriever
+        from db.vector.store import get_vector_store
 
         store = await get_vector_store(HybridRetriever.COLLECTION_NAME)
 
@@ -199,6 +196,7 @@ async def kb_has_sources() -> bool:
         # Qdrant calls — off-load to a thread so blocking I/O can't freeze the loop.
         def _sync_list():
             import asyncio as _aio
+
             return _aio.run(store.list_sources())
 
         loop = asyncio.get_running_loop()

@@ -1,6 +1,7 @@
 """
 Ingest Pipeline — end-to-end: source → load → chunk → embed → store.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,6 +21,7 @@ class IngestPipeline:
     async def _get_vector_store(self):
         if self._vector_store is None:
             from db.vector.store import get_vector_store
+
             self._vector_store = await get_vector_store(self.COLLECTION_NAME)
         return self._vector_store
 
@@ -69,9 +71,20 @@ class IngestPipeline:
         total = 0
         for path in Path(directory).glob(glob):
             if path.is_file() and path.suffix.lower() in {
-                ".pdf", ".md", ".mdx", ".txt",
-                ".py", ".ts", ".tsx", ".js", ".jsx",
-                ".go", ".rs", ".java", ".cpp", ".c",
+                ".pdf",
+                ".md",
+                ".mdx",
+                ".txt",
+                ".py",
+                ".ts",
+                ".tsx",
+                ".js",
+                ".jsx",
+                ".go",
+                ".rs",
+                ".java",
+                ".cpp",
+                ".c",
             }:
                 total += await self.ingest(str(path))
         return total

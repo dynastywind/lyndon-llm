@@ -2,9 +2,10 @@
 Vector Store abstraction — Chroma (dev) or Qdrant (prod).
 Both expose the same async interface so callers don't care which backend is active.
 """
+
 from __future__ import annotations
 
-from config.settings import settings, VectorStoreBackend
+from config.settings import VectorStoreBackend, settings
 
 
 class VectorStoreBase:
@@ -43,6 +44,7 @@ class ChromaVectorStore(VectorStoreBase):
         """Connect to Chroma lazily so startup order doesn't matter."""
         if self._col is None:
             import chromadb
+
             client = chromadb.HttpClient(
                 host=settings.chroma_host,
                 port=settings.chroma_port,
@@ -62,11 +64,11 @@ class ChromaVectorStore(VectorStoreBase):
         )
 
     async def query(self, query_embeddings, n_results=5, where=None) -> dict:
-        kwargs = dict(
-            query_embeddings=query_embeddings,
-            n_results=n_results,
-            include=["documents", "metadatas", "distances"],
-        )
+        kwargs: dict = {
+            "query_embeddings": query_embeddings,
+            "n_results": n_results,
+            "include": ["documents", "metadatas", "distances"],
+        }
         if where:
             kwargs["where"] = where
         return self._get_col().query(**kwargs)
@@ -84,11 +86,9 @@ class ChromaVectorStore(VectorStoreBase):
     async def list_sources(self) -> list[str]:
         """Return sorted list of distinct source paths in the collection."""
         result = self._get_col().get(include=["metadatas"])
-        sources = sorted({
-            m.get("source", "")
-            for m in (result.get("metadatas") or [])
-            if m.get("source")
-        })
+        sources = sorted(
+            {m.get("source", "") for m in (result.get("metadatas") or []) if m.get("source")}
+        )
         return sources
 
     async def list_all(self, limit: int = 200) -> tuple[list[str], list[str], list[dict]]:
@@ -124,25 +124,23 @@ class QdrantVectorStore(VectorStoreBase):
 
     async def upsert(self, ids, embeddings, documents, metadatas) -> None:
         from qdrant_client.models import PointStruct
+
         points = [
             PointStruct(
-                id=abs(hash(id_)) % (2**63),   # Qdrant needs integer IDs
+                id=abs(hash(id_)) % (2**63),  # Qdrant needs integer IDs
                 vector=emb,
                 payload={"text": doc, "_id": id_, **meta},  # _id preserves the string UUID
             )
-            for id_, emb, doc, meta in zip(ids, embeddings, documents, metadatas)
+            for id_, emb, doc, meta in zip(ids, embeddings, documents, metadatas, strict=False)
         ]
         self._client.upsert(collection_name=self._collection, points=points)
 
     async def query(self, query_embeddings, n_results=5, where=None) -> dict:
-        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
 
         qdrant_filter = None
         if where:
-            must = [
-                FieldCondition(key=k, match=MatchValue(value=v))
-                for k, v in where.items()
-            ]
+            must = [FieldCondition(key=k, match=MatchValue(value=v)) for k, v in where.items()]
             qdrant_filter = Filter(must=must)
 
         hits = self._client.search(
@@ -163,6 +161,7 @@ class QdrantVectorStore(VectorStoreBase):
 
     async def delete(self, ids: list[str]) -> None:
         from qdrant_client.models import PointIdsList
+
         int_ids = [abs(hash(i)) % (2**63) for i in ids]
         self._client.delete(
             collection_name=self._collection,
@@ -170,7 +169,8 @@ class QdrantVectorStore(VectorStoreBase):
         )
 
     async def delete_by_source(self, source: str) -> None:
-        from qdrant_client.models import Filter, FieldCondition, MatchValue, FilterSelector
+        from qdrant_client.models import FieldCondition, Filter, FilterSelector, MatchValue
+
         self._client.delete(
             collection_name=self._collection,
             points_selector=FilterSelector(

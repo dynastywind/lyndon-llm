@@ -8,6 +8,7 @@ Strategy:
      and replace those turns with a single SUMMARY turn.
   4. Always preserve the system prompt and the most recent N turns verbatim.
 """
+
 from __future__ import annotations
 
 from chat.memory.types import ConversationTurn
@@ -19,7 +20,7 @@ def _estimate_tokens(text: str) -> int:
 
 
 class ShortTermMemory:
-    ALWAYS_KEEP_RECENT = 6      # never summarise the last N turns
+    ALWAYS_KEEP_RECENT = 6  # never summarise the last N turns
 
     def __init__(self, session_id: str) -> None:
         self.session_id = session_id

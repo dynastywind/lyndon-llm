@@ -2,10 +2,10 @@
 Repo Manager — git operations for the Code block.
 Wraps gitpython with an async-friendly interface.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 from config.settings import settings
 
@@ -25,6 +25,7 @@ class RepoManager:
     def _get_repo(self):
         if self._repo is None:
             import git
+
             self._repo = git.Repo(str(self._path))
         return self._repo
 
@@ -38,8 +39,8 @@ class RepoManager:
     def status(self) -> dict[str, list[str]]:
         repo = self._get_repo()
         return {
-            "modified":  [item.a_path for item in repo.index.diff(None)],
-            "staged":    [item.a_path for item in repo.index.diff("HEAD")],
+            "modified": [item.a_path for item in repo.index.diff(None)],
+            "staged": [item.a_path for item in repo.index.diff("HEAD")],
             "untracked": repo.untracked_files,
         }
 
@@ -47,10 +48,10 @@ class RepoManager:
         repo = self._get_repo()
         return [
             {
-                "sha":     c.hexsha[:8],
+                "sha": c.hexsha[:8],
                 "message": c.message.strip(),
-                "author":  str(c.author),
-                "date":    c.committed_datetime.isoformat(),
+                "author": str(c.author),
+                "date": c.committed_datetime.isoformat(),
             }
             for c in repo.iter_commits(max_count=max_count)
         ]
@@ -60,10 +61,12 @@ class RepoManager:
         diffs = []
         target = repo.index.diff("HEAD") if staged else repo.index.diff(None)
         for diff in target:
-            diffs.append(RepoDiff(
-                file_path=diff.a_path,
-                diff_text=diff.diff.decode(errors="replace") if diff.diff else "",
-            ))
+            diffs.append(
+                RepoDiff(
+                    file_path=diff.a_path,
+                    diff_text=diff.diff.decode(errors="replace") if diff.diff else "",
+                )
+            )
         return diffs
 
     def file_content(self, path: str) -> str:
@@ -113,6 +116,7 @@ class RepoManager:
     def apply_patch(self, patch: str) -> None:
         """Apply a unified diff patch to the working tree."""
         import subprocess
+
         result = subprocess.run(
             ["git", "apply", "--whitespace=fix"],
             input=patch.encode(),

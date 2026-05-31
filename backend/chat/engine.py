@@ -14,29 +14,29 @@ All yields are typed event dicts consumed by the SSE route:
   {"type": "tool_result", "id": "…", "name": "…", "success": bool, "preview": "…"}
   {"type": "error",       "message": "…"}
 """
+
 from __future__ import annotations
 
 import base64 as b64
+from collections.abc import AsyncGenerator
+from dataclasses import dataclass, field
 import json
 import logging
 import re
 import time
-from collections.abc import AsyncGenerator
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from chat.memory.manager import MemoryManager
 from chat.orchestrator import (
-    RouteDecision,
     get_orchestrator,
     kb_has_sources,
     legacy_route_decision,
 )
 from chat.rag.retriever import HybridRetriever, RetrievedChunk
 from config.settings import settings
-from core.events.bus import event_bus, Events
-from core.llm.gateway import llm_gateway, LLMMessage
+from core.events.bus import Events, event_bus
+from core.llm.gateway import llm_gateway
 from core.permissions.gate import Mode, PermissionGate
 from core.session.manager import Session
 from core.tools.registry import tool_registry
@@ -77,6 +77,7 @@ MAX_TOOL_ROUNDS = 5
 @dataclass
 class _Timer:
     """Lightweight wall-clock stopwatch for per-phase request metrics."""
+
     _t0: float = field(default_factory=time.monotonic, init=False)
     phases: dict[str, int] = field(default_factory=dict, init=False)
 
@@ -95,7 +96,7 @@ def _format_context(chunks: list[RetrievedChunk]) -> str:
 
 
 class ChatEngine:
-    def __init__(self, session: Session, db: "AsyncSession | None" = None) -> None:
+    def __init__(self, session: Session, db: AsyncSession | None = None) -> None:
         self.session = session
         self.memory = MemoryManager(session.session_id)
         self._retriever = HybridRetriever()
@@ -116,18 +117,24 @@ class ChatEngine:
     ) -> AsyncGenerator[dict[str, Any], None]:
         timer = _Timer()
 
-        await event_bus.emit(Events.CHAT_MESSAGE_RECEIVED, {
-            "session_id": self.session.session_id,
-            "message": user_message,
-        })
+        await event_bus.emit(
+            Events.CHAT_MESSAGE_RECEIVED,
+            {
+                "session_id": self.session.session_id,
+                "message": user_message,
+            },
+        )
 
         # Persist user message (with attachments so they survive a reload)
         if self._db:
             from db.repos.chat import ChatRepo
+
             _repo = ChatRepo(self._db)
             await _repo.ensure_session(self.session.session_id, "chat")
             await _repo.add_message(
-                self.session.session_id, "user", user_message,
+                self.session.session_id,
+                "user",
+                user_message,
                 attachments=attachments or None,
             )
 
@@ -135,7 +142,8 @@ class ChatEngine:
         if settings.orchestrator_enabled:
             has_kb = await kb_has_sources()
             decision = await get_orchestrator().route(
-                user_message, has_kb_sources=has_kb,
+                user_message,
+                has_kb_sources=has_kb,
             )
         else:
             decision = legacy_route_decision()
@@ -201,7 +209,8 @@ class ChatEngine:
             # This cuts first-token latency roughly in half for news/weather queries.
             if decision.tools == frozenset({"web_search"}):
                 async for event in self._search_and_stream(
-                    user_message, llm_messages,
+                    user_message,
+                    llm_messages,
                 ):
                     if event["type"] == "tool_result":
                         timer.mark("search_ms")
@@ -236,7 +245,8 @@ class ChatEngine:
         timer.mark("total_ms")
         logger.info(
             "chat done  total=%d ms  phases=%s",
-            total_ms, timer.phases,
+            total_ms,
+            timer.phases,
         )
         yield {"type": "metrics", "total_ms": total_ms, "phases": timer.phases}
 
@@ -244,6 +254,7 @@ class ChatEngine:
         if self._db:
             try:
                 from db.repos.metrics import MetricsRepo
+
                 await MetricsRepo(self._db).add(
                     session_id=self.session.session_id,
                     total_ms=total_ms,
@@ -251,7 +262,7 @@ class ChatEngine:
                     route=decision.route,
                 )
             except Exception:
-                pass   # metrics are best-effort — never block the response
+                pass  # metrics are best-effort — never block the response
 
         # 7. Persist assistant turn & update session title
         self.memory.add_assistant_turn(full_response)
@@ -259,15 +270,19 @@ class ChatEngine:
 
         if self._db:
             from db.repos.chat import ChatRepo
+
             _repo = ChatRepo(self._db)
             await _repo.add_message(self.session.session_id, "assistant", full_response)
             await _repo.maybe_set_title(self.session.session_id, user_message)
 
-        await event_bus.emit(Events.CHAT_RESPONSE_DONE, {
-            "session_id": self.session.session_id,
-            "route": decision.route,
-            "rag_sources": [c.source for c in rag_chunks],
-        })
+        await event_bus.emit(
+            Events.CHAT_RESPONSE_DONE,
+            {
+                "session_id": self.session.session_id,
+                "route": decision.route,
+                "rag_sources": [c.source for c in rag_chunks],
+            },
+        )
 
     # ------------------------------------------------------------------ #
     #  Agentic loop                                                        #
@@ -295,8 +310,7 @@ class ChatEngine:
           is attempted because EXO doesn't understand tool / tool_calls messages.
         """
         original_messages: list[dict] = (
-            messages_override if messages_override is not None
-            else self.memory.get_messages()
+            messages_override if messages_override is not None else self.memory.get_messages()
         )
         messages: list[dict] = list(original_messages)
         tool_schemas = tool_registry.get_openai_schemas(Mode.CHAT)
@@ -309,15 +323,15 @@ class ChatEngine:
         try:
             for _round in range(MAX_TOOL_ROUNDS):
                 response_msg = await llm_gateway.complete_with_tools_raw(
-                    messages, tool_schemas,
+                    messages,
+                    tool_schemas,
                 )
 
                 # Primary: structured tool_calls from the API
                 # Fallback: parse tool call JSON embedded in content (EXO / Llama 3.x)
                 is_synthetic = not response_msg.tool_calls
-                effective_calls = (
-                    response_msg.tool_calls
-                    or _parse_tool_calls_from_content(response_msg.content or "", tools)
+                effective_calls = response_msg.tool_calls or _parse_tool_calls_from_content(
+                    response_msg.content or "", tools
                 )
 
                 if not effective_calls:
@@ -327,12 +341,14 @@ class ChatEngine:
                     return
 
                 # ── Execute tool calls ────────────────────────────────────
-                messages.append(_build_tool_call_msg(
-                    content=None if is_synthetic else response_msg.content,
-                    tool_calls=effective_calls,
-                ))
+                messages.append(
+                    _build_tool_call_msg(
+                        content=None if is_synthetic else response_msg.content,
+                        tool_calls=effective_calls,
+                    )
+                )
 
-                round_results: list[tuple[str, str]] = []   # (tool_name, result_text)
+                round_results: list[tuple[str, str]] = []  # (tool_name, result_text)
 
                 for tc in effective_calls:
                     fn_name = tc.function.name
@@ -361,15 +377,22 @@ class ChatEngine:
                             )
 
                     preview = (tool_result_text or "")[:200]
-                    yield {"type": "tool_result", "id": tc.id, "name": fn_name,
-                           "success": success, "preview": preview}
+                    yield {
+                        "type": "tool_result",
+                        "id": tc.id,
+                        "name": fn_name,
+                        "success": success,
+                        "preview": preview,
+                    }
 
                     round_results.append((fn_name, tool_result_text))
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": tool_result_text,
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": tool_result_text,
+                        }
+                    )
 
                 if is_synthetic:
                     # EXO / Llama 3.x path: the server doesn't understand tool-role
@@ -433,14 +456,23 @@ class ChatEngine:
             return
 
         tool_id = f"call_{uuid4().hex[:8]}"
-        yield {"type": "tool_start", "id": tool_id, "name": "web_search",
-               "args": {"query": user_message}}
+        yield {
+            "type": "tool_start",
+            "id": tool_id,
+            "name": "web_search",
+            "args": {"query": user_message},
+        }
 
         result = await self._call_tool(tools, "web_search", {"query": user_message})
         result_text, success = result
 
-        yield {"type": "tool_result", "id": tool_id, "name": "web_search",
-               "success": success, "preview": (result_text or "")[:200]}
+        yield {
+            "type": "tool_result",
+            "id": tool_id,
+            "name": "web_search",
+            "success": success,
+            "preview": (result_text or "")[:200],
+        }
 
         enriched = _inject_tool_results(messages, [("web_search", result_text)])
         async for chunk in llm_gateway.stream_from_raw(enriched):
@@ -468,10 +500,11 @@ class ChatEngine:
 #  in content instead of returning structured tool_calls)             #
 # ------------------------------------------------------------------ #
 
+
 @dataclass
 class _SyntheticFunction:
     name: str
-    arguments: str          # JSON-encoded string, matching OpenAI API shape
+    arguments: str  # JSON-encoded string, matching OpenAI API shape
 
 
 @dataclass
@@ -485,7 +518,7 @@ class _SyntheticToolCall:
 # ------------------------------------------------------------------ #
 
 # Llama 3 special tokens that may wrap tool-call JSON in content
-_LLAMA_TOKEN_RE = re.compile(r'<\|[^|>]+\|>')
+_LLAMA_TOKEN_RE = re.compile(r"<\|[^|>]+\|>")
 
 
 def _extract_json_objects(text: str) -> list[dict]:
@@ -494,11 +527,11 @@ def _extract_json_objects(text: str) -> list[dict]:
     depth = 0
     start = -1
     for i, ch in enumerate(text):
-        if ch == '{':
+        if ch == "{":
             if depth == 0:
                 start = i
             depth += 1
-        elif ch == '}':
+        elif ch == "}":
             depth -= 1
             if depth == 0 and start >= 0:
                 try:
@@ -529,22 +562,22 @@ def _parse_tool_calls_from_content(
         return []
 
     # Strip Llama special tokens so the JSON is cleanly extractable
-    clean = _LLAMA_TOKEN_RE.sub('', content).strip()
+    clean = _LLAMA_TOKEN_RE.sub("", content).strip()
 
     calls: list[_SyntheticToolCall] = []
     seen: set[str] = set()
 
     for obj in _extract_json_objects(clean):
-        name = obj.get('name')
+        name = obj.get("name")
         # Only accept known tool names to avoid false positives
         if not name or name not in available_tools or name in seen:
             continue
         seen.add(name)
 
         params = (
-            obj.get('parameters')       # Llama 3 native
-            or obj.get('arguments')     # OpenAI-alike
-            or obj.get('input')         # some models use "input"
+            obj.get("parameters")  # Llama 3 native
+            or obj.get("arguments")  # OpenAI-alike
+            or obj.get("input")  # some models use "input"
             or {}
         )
         if isinstance(params, str):
@@ -553,13 +586,15 @@ def _parse_tool_calls_from_content(
             except json.JSONDecodeError:
                 params = {}
 
-        calls.append(_SyntheticToolCall(
-            id=f"call_{uuid4().hex[:8]}",
-            function=_SyntheticFunction(
-                name=name,
-                arguments=json.dumps(params),
-            ),
-        ))
+        calls.append(
+            _SyntheticToolCall(
+                id=f"call_{uuid4().hex[:8]}",
+                function=_SyntheticFunction(
+                    name=name,
+                    arguments=json.dumps(params),
+                ),
+            )
+        )
 
     return calls
 
@@ -568,12 +603,14 @@ def _parse_tool_calls_from_content(
 #  Message serialisation helpers                                       #
 # ------------------------------------------------------------------ #
 
+
 def _extract_chart_spec(tool_name: str, result_text: str) -> dict | None:
     """Return the chart spec dict if the result is from render_chart, else None."""
     if tool_name != "render_chart":
         return None
     try:
         from chat.tools.chart import CHART_SPEC_KEY
+
         obj = json.loads(result_text or "")
         return obj.get(CHART_SPEC_KEY)
     except (json.JSONDecodeError, AttributeError, TypeError):
@@ -605,15 +642,17 @@ def _inject_attachments(messages: list[dict], attachments: list[dict]) -> list[d
     text_prefix_parts: list[str] = []
 
     for att in attachments:
-        mime: str  = att.get("type", "")
-        name: str  = att.get("name", "file")
-        data: str  = att.get("data", "")
+        mime: str = att.get("type", "")
+        name: str = att.get("name", "file")
+        data: str = att.get("data", "")
 
         if mime.startswith("image/"):
-            image_blocks.append({
-                "type": "image_url",
-                "image_url": {"url": f"data:{mime};base64,{data}"},
-            })
+            image_blocks.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{data}"},
+                }
+            )
         else:
             # Attempt UTF-8 decode for text / code / JSON files.
             try:
@@ -623,9 +662,7 @@ def _inject_attachments(messages: list[dict], attachments: list[dict]) -> list[d
                 if len(text_content) > 4000:
                     text_content = text_content[:4000] + "\n… (truncated)"
                 lang = name.rsplit(".", 1)[-1] if "." in name else ""
-                text_prefix_parts.append(
-                    f"[Attached file: {name}]\n```{lang}\n{text_content}\n```"
-                )
+                text_prefix_parts.append(f"[Attached file: {name}]\n```{lang}\n{text_content}\n```")
             except Exception:
                 text_prefix_parts.append(f"[Attached binary file: {name}]")
 
@@ -646,9 +683,9 @@ def _inject_attachments(messages: list[dict], attachments: list[dict]) -> list[d
             combined_text = "\n\n".join(pieces)
 
             if image_blocks:
-                new_content: list[dict] | str = (
-                    [{"type": "text", "text": combined_text or " "}] + image_blocks
-                )
+                new_content: list[dict] | str = [
+                    {"type": "text", "text": combined_text or " "}
+                ] + image_blocks
             else:
                 new_content = combined_text
 
@@ -684,14 +721,10 @@ def _inject_first_message_context(
 
     if sys_text:
         parts.append(
-            "[Always follow these guidelines throughout the entire conversation]\n"
-            + sys_text
+            "[Always follow these guidelines throughout the entire conversation]\n" + sys_text
         )
     if ses_text:
-        parts.append(
-            "[Context for this session]\n"
-            + ses_text
-        )
+        parts.append("[Context for this session]\n" + ses_text)
 
     if not parts:
         return messages
@@ -728,9 +761,7 @@ def _inject_tool_results(
     if not tool_results:
         return original_messages
 
-    result_block = "\n\n".join(
-        f"[{name} result]\n{text}" for name, text in tool_results
-    )
+    result_block = "\n\n".join(f"[{name} result]\n{text}" for name, text in tool_results)
 
     enriched = list(original_messages)
     # Find the last user turn and append the results to it

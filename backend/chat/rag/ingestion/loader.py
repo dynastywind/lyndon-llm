@@ -2,10 +2,11 @@
 Document Loaders — reads source files into raw text.
 Supported: PDF, Markdown, plain text, web pages, code files.
 """
+
 from __future__ import annotations
 
-import re
 from pathlib import Path
+import re
 from typing import Protocol
 
 
@@ -24,19 +25,21 @@ class PDFLoader:
     async def load(self, path: str) -> list[RawDocument]:
         try:
             import pypdf
-        except ImportError:
-            raise ImportError("Install pypdf: pip install pypdf")
+        except ImportError as exc:
+            raise ImportError("Install pypdf: pip install pypdf") from exc
 
         reader = pypdf.PdfReader(path)
         pages = []
         for i, page in enumerate(reader.pages):
             text = page.extract_text() or ""
             if text.strip():
-                pages.append(RawDocument(
-                    content=text,
-                    source=path,
-                    metadata={"page": i + 1, "total_pages": len(reader.pages)},
-                ))
+                pages.append(
+                    RawDocument(
+                        content=text,
+                        source=path,
+                        metadata={"page": i + 1, "total_pages": len(reader.pages)},
+                    )
+                )
         return pages
 
 
@@ -54,31 +57,44 @@ class TextLoader:
 
 class CodeLoader:
     """Loads source code files with language metadata."""
+
     EXTENSION_MAP = {
-        ".py": "python", ".ts": "typescript", ".tsx": "typescript",
-        ".js": "javascript", ".jsx": "javascript", ".go": "go",
-        ".rs": "rust", ".java": "java", ".cpp": "cpp", ".c": "c",
-        ".rb": "ruby", ".sh": "bash", ".yaml": "yaml", ".toml": "toml",
+        ".py": "python",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".js": "javascript",
+        ".jsx": "javascript",
+        ".go": "go",
+        ".rs": "rust",
+        ".java": "java",
+        ".cpp": "cpp",
+        ".c": "c",
+        ".rb": "ruby",
+        ".sh": "bash",
+        ".yaml": "yaml",
+        ".toml": "toml",
     }
 
     async def load(self, path: str) -> list[RawDocument]:
         p = Path(path)
         text = p.read_text(encoding="utf-8", errors="replace")
         lang = self.EXTENSION_MAP.get(p.suffix.lower(), "unknown")
-        return [RawDocument(
-            content=text,
-            source=path,
-            metadata={"type": "code", "language": lang, "filename": p.name},
-        )]
+        return [
+            RawDocument(
+                content=text,
+                source=path,
+                metadata={"type": "code", "language": lang, "filename": p.name},
+            )
+        ]
 
 
 class WebPageLoader:
     async def load(self, url: str) -> list[RawDocument]:
         try:
-            import httpx
             from bs4 import BeautifulSoup
-        except ImportError:
-            raise ImportError("Install httpx and beautifulsoup4")
+            import httpx
+        except ImportError as exc:
+            raise ImportError("Install httpx and beautifulsoup4") from exc
 
         async with httpx.AsyncClient(follow_redirects=True, timeout=15) as client:
             response = await client.get(url)

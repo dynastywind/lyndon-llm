@@ -1,11 +1,12 @@
 """
 CRUD operations for chat sessions and messages.
 """
+
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import json
 import uuid
-from datetime import datetime, timezone
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,9 +35,7 @@ class ChatRepo:
         return row
 
     async def get_session(self, session_id: str) -> ChatSession | None:
-        result = await self._db.execute(
-            select(ChatSession).where(ChatSession.id == session_id)
-        )
+        result = await self._db.execute(select(ChatSession).where(ChatSession.id == session_id))
         return result.scalar_one_or_none()
 
     async def list_sessions(
@@ -47,9 +46,7 @@ class ChatRepo:
     ) -> tuple[list[ChatSession], int]:
         total: int = (
             await self._db.execute(
-                select(func.count())
-                .select_from(ChatSession)
-                .where(ChatSession.mode == mode)
+                select(func.count()).select_from(ChatSession).where(ChatSession.mode == mode)
             )
         ).scalar_one()
 
@@ -74,7 +71,7 @@ class ChatRepo:
         await self._db.execute(
             update(ChatSession)
             .where(ChatSession.id == session_id)
-            .values(title=title.strip() or None, updated_at=datetime.now(timezone.utc))
+            .values(title=title.strip() or None, updated_at=datetime.now(UTC))
         )
         await self._db.commit()
         return True
@@ -89,7 +86,7 @@ class ChatRepo:
             await self._db.execute(
                 update(ChatSession)
                 .where(ChatSession.id == session_id)
-                .values(title=title, updated_at=datetime.now(timezone.utc))
+                .values(title=title, updated_at=datetime.now(UTC))
             )
             await self._db.commit()
         else:
@@ -109,7 +106,7 @@ class ChatRepo:
         await self._db.execute(
             update(ChatSession)
             .where(ChatSession.id == session_id)
-            .values(updated_at=datetime.now(timezone.utc))
+            .values(updated_at=datetime.now(UTC))
         )
         await self._db.commit()
 
@@ -187,5 +184,5 @@ class ChatRepo:
         rows = list((await self._db.execute(q)).scalars())
 
         has_more = len(rows) > limit
-        rows = rows[:limit]          # drop the probe row
+        rows = rows[:limit]  # drop the probe row
         return list(reversed(rows)), has_more
