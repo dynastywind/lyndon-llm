@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     short_term_max_tokens: int = 6000  # trigger summarisation above this
     long_term_top_k: int = 5  # memories injected per conversation
     memory_consolidation_interval: int = 10  # consolidate every N sessions
+    session_memory_dir: str = "data/session_memories"  # per-session memory files
 
     # RAG
     rag_chunk_size: int = 512

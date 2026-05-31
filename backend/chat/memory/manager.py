@@ -6,6 +6,7 @@ Every Chat engine interaction goes through this class.
 from __future__ import annotations
 
 from chat.memory.long_term import LongTermMemory
+from chat.memory.session_file import SessionFileMemory
 from chat.memory.short_term import ShortTermMemory
 from chat.memory.types import Memory, MemoryType
 from config.settings import settings
@@ -23,6 +24,7 @@ class MemoryManager:
         self.session_id = session_id
         self.short_term = ShortTermMemory(session_id)
         self.long_term = LongTermMemory()
+        self.session_file = SessionFileMemory()
 
     # ------------------------------------------------------------------ #
     #  Session start — inject relevant memories into system prompt         #
@@ -30,20 +32,31 @@ class MemoryManager:
 
     async def build_system_prompt(self, base_prompt: str, user_message: str) -> str:
         """
-        Retrieve relevant long-term memories and prepend them to the
-        system prompt so the LLM has cross-session context.
-        """
-        self.short_term.set_system_prompt(base_prompt)
+        Retrieve relevant long-term memories and session file memory, then
+        prepend them to the system prompt so the LLM has full context.
 
+        Injection order (after base prompt):
+          1. This session's file memory (conversation summary + user profile)
+          2. Cross-session long-term memories from vector store
+        """
+        enriched = base_prompt
+
+        # 1. Inject per-session file memory (deterministic, no vector search)
+        session_memory = self.session_file.load(self.session_id)
+        if session_memory:
+            enriched = f"{enriched}\n\n## This Session's Memory\n{session_memory}"
+
+        # 2. Inject relevant cross-session long-term memories
         memories = await self.long_term.retrieve(
             query=user_message,
             top_k=settings.long_term_top_k,
         )
-        if not memories:
-            return base_prompt
+        if memories:
+            mem_block = "\n".join(
+                f"- [{m.memory_type.value}] {m.content}" for m in memories
+            )
+            enriched = f"{enriched}\n\n## Relevant memories from past sessions\n{mem_block}"
 
-        mem_block = "\n".join(f"- [{m.memory_type.value}] {m.content}" for m in memories)
-        enriched = f"{base_prompt}\n\n## Relevant memories from past sessions\n{mem_block}"
         self.short_term.set_system_prompt(enriched)
         return enriched
 
@@ -91,6 +104,16 @@ class MemoryManager:
                     importance=0.6,
                 )
             )
+
+    async def update_session_file(self, turns) -> None:
+        """Update the session memory file with the latest turns (fire-and-forget)."""
+        if not turns:
+            return
+        await self.session_file.update(
+            self.session_id,
+            turns,
+            llm_gateway.complete,
+        )
 
     async def store_memory(
         self,

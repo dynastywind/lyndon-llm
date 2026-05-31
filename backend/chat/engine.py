@@ -301,6 +301,12 @@ class ChatEngine:
         self.memory.add_assistant_turn(full_response)
         await self.memory.maybe_compress()
 
+        # 8. Update per-session memory file (fire-and-forget — never blocks SSE)
+        import asyncio as _asyncio
+        _asyncio.create_task(
+            self.memory.update_session_file(self.memory.short_term.last_n(20))
+        )
+
         if self._db:
             from db.repos.chat import ChatRepo
 
