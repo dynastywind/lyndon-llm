@@ -57,7 +57,9 @@
       "Bash(.venv/bin/pytest tests/test_session_manager.py tests/test_chat/test_orchestrator.py tests/test_chat/test_short_term_memory.py tests/test_db/test_chat_repo.py -v --tb=short)",
       "Bash(.venv/bin/pytest tests/test_chat/test_engine.py tests/test_api/test_chat_route.py -v --tb=short)",
       "Bash(.venv/bin/pytest tests/test_chat/test_engine.py tests/test_api/test_chat_route.py tests/test_session_manager.py tests/test_chat/test_orchestrator.py tests/test_chat/test_short_term_memory.py tests/test_db/test_chat_repo.py -v --tb=short)",
-      "Bash(.venv/bin/pytest -v --tb=short)"
+      "Bash(.venv/bin/pytest -v --tb=short)",
+      "Bash(.venv/bin/python -m pytest tests/test_chat/test_memory_manager.py tests/test_chat/test_engine.py tests/test_chat/test_short_term_memory.py -v)",
+      "Bash(.venv/bin/python -m pytest tests/ -v --ignore=tests/test_chat/test_rag.py)"
     ]
   }
 }
