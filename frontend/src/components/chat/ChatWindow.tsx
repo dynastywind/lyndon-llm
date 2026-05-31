@@ -2208,6 +2208,8 @@ export function ChatWindow() {
                       width: '100%',
                       background: 'transparent',
                       border: 'none',
+                      padding: 0,       // suppress browser-default textarea padding (Safari adds ~2px)
+                      margin: 0,
                       resize: 'none',
                       outline: 'none',
                       fontFamily: 'var(--font-sans)',
