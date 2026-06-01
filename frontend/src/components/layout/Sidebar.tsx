@@ -277,14 +277,8 @@ export function Sidebar() {
   useEffect(() => {
     if (!sessionId) return
     const current = sessions.find((s) => s.session_id === sessionId)
-    if (current) {
-      setSessionTitle(current.title)
-    } else if (!loading) {
-      // Session is gone from the list (deleted or expired) — reset to new-chat state
-      setSessionId(null)
-      setSessionTitle(null)
-    }
-  }, [sessions, sessionId, loading, setSessionId, setSessionTitle])
+    if (current) setSessionTitle(current.title)
+  }, [sessions, sessionId, setSessionTitle])
 
   const handleNewChat = () => {
     if (!sessionId) return
