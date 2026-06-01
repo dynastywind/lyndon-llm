@@ -2,7 +2,14 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { AlertCircle, CheckCircle2, Loader2, Moon, RefreshCw, Search, Sun, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { deleteRagSource, listRagSources, reindexRagSource, uploadRagFile, type RagSource } from '@/api/client'
+import {
+  checkRagSourceName,
+  deleteRagSource,
+  listRagSources,
+  reindexRagSource,
+  uploadRagFile,
+  type RagSource,
+} from '@/api/client'
 import { useAppStore } from '@/store'
 import { CODE_THEME_OPTIONS } from '@/config/codeThemes'
 import { ToolsRegistryPanel } from './ToolsRegistryPanel'
@@ -10,7 +17,7 @@ import { MemoryPanel } from './MemoryPanel'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
-type UploadStatus = 'pending' | 'uploading' | 'done' | 'error'
+type UploadStatus = 'checking' | 'conflict' | 'pending' | 'uploading' | 'done' | 'error'
 
 interface UploadItem {
   id: string
@@ -18,6 +25,7 @@ interface UploadItem {
   status: UploadStatus
   chunks?: number
   error?: string
+  existingPath?: string // populated when status === 'conflict'
 }
 
 export type SettingsTab = 'knowledge' | 'tools' | 'memory' | 'prompts' | 'appearance'
@@ -56,40 +64,57 @@ function fileTypeLabel(path: string): string {
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }: Props) {
+  const PAGE_SIZE = 10
+
   const [tab, setTab] = useState<SettingsTab>(initialTab)
   const [queue, setQueue] = useState<UploadItem[]>([])
   const [sources, setSources] = useState<RagSource[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(0)
   const [loadingSources, setLoadingSources] = useState(false)
   const [reindexing, setReindexing] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // ── debounce search query ─────────────────────────────────────────────────
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
+
+  // reset to page 0 when search changes
+  useEffect(() => { setPage(0) }, [debouncedQuery])
 
   // ── fetch indexed sources ──────────────────────────────────────────────────
 
-  const fetchSources = useCallback(async () => {
+  const fetchSources = useCallback(async (pg = page, q = debouncedQuery) => {
     setLoadingSources(true)
     try {
-      const { sources } = await listRagSources()
-      setSources(sources)
+      const res = await listRagSources(PAGE_SIZE, pg * PAGE_SIZE, q)
+      setSources(res.sources)
+      setTotal(res.total)
     } catch {
       // silently ignore — backend may not be up
     } finally {
       setLoadingSources(false)
     }
-  }, [])
+  }, [page, debouncedQuery])
 
   useEffect(() => {
-    if (open) {
-      setTab(initialTab)
-      fetchSources()
-    }
-  }, [open, initialTab, fetchSources])
+    if (open && tab === 'knowledge') fetchSources(page, debouncedQuery)
+  }, [open, tab, page, debouncedQuery]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (open) setTab(initialTab)
+  }, [open, initialTab])
 
   const handleOpenChange = (v: boolean) => {
     onOpenChange(v)
-    if (!v) setQueue([]) // clear queue on close
+    if (!v) { setQueue([]); setPage(0); setSearchQuery('') }
   }
 
   // ── uploads ───────────────────────────────────────────────────────────────
@@ -104,8 +129,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
             i.id === item.id ? { ...i, status: 'done', chunks: result.chunks_stored } : i,
           ),
         )
-        // Refresh the indexed sources list after a successful upload
-        fetchSources()
+        // Refresh the current page after a successful upload
+        fetchSources(page, debouncedQuery)
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Upload failed'
         setQueue((q) =>
@@ -113,18 +138,40 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
         )
       }
     },
-    [fetchSources],
+    [fetchSources, page, debouncedQuery],
   )
 
   const enqueue = useCallback(
-    (files: FileList | File[]) => {
-      const items: UploadItem[] = Array.from(files).map((file) => ({
+    async (files: FileList | File[]) => {
+      const fileArr = Array.from(files)
+      // Add all to queue as 'checking' first
+      const items: UploadItem[] = fileArr.map((file) => ({
         id: `${file.name}-${Date.now()}-${Math.random()}`,
         file,
-        status: 'pending',
+        status: 'checking',
       }))
       setQueue((q) => [...q, ...items])
-      items.forEach(uploadOne)
+
+      // Check each file for name conflicts, then decide status
+      for (const item of items) {
+        try {
+          const { exists, path } = await checkRagSourceName(item.file.name)
+          if (exists) {
+            setQueue((q) =>
+              q.map((i) =>
+                i.id === item.id ? { ...i, status: 'conflict', existingPath: path ?? undefined } : i,
+              ),
+            )
+          } else {
+            setQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: 'pending' } : i)))
+            uploadOne({ ...item, status: 'pending' })
+          }
+        } catch {
+          // If check fails, proceed with upload anyway
+          setQueue((q) => q.map((i) => (i.id === item.id ? { ...i, status: 'pending' } : i)))
+          uploadOne({ ...item, status: 'pending' })
+        }
+      }
     },
     [uploadOne],
   )
@@ -150,8 +197,13 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
   const handleDelete = async (source: RagSource) => {
     setDeleting(source.path)
     try {
-      await deleteRagSource(source.path, /* deleteFile= */ true)
-      setSources((s) => s.filter((x) => x.path !== source.path))
+      // deleteFile=true (default) removes the file from disk;
+      // delete_by_source removes all chunks from the vector store.
+      await deleteRagSource(source.path)
+      // Refetch current page (total may decrease)
+      const newPage = sources.length === 1 && page > 0 ? page - 1 : page
+      setPage(newPage)
+      fetchSources(newPage, debouncedQuery)
     } catch {
       // TODO: surface error toast
     } finally {
@@ -166,6 +218,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
     setDragging(false)
     if (e.dataTransfer.files.length) enqueue(e.dataTransfer.files)
   }
+
+  const totalPages = Math.ceil(total / PAGE_SIZE)
 
   // ─── render ───────────────────────────────────────────────────────────────
 
@@ -380,8 +434,19 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
                           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--lv-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {item.file.name}
                           </div>
+                          {item.status === 'conflict' && (
+                            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--lv-mute)', marginTop: 4 }}>
+                              Already indexed
+                            </div>
+                          )}
                         </div>
-                        {item.status === 'uploading' && <Loader2 size={13} className="animate-spin" style={{ color: 'var(--lv-gold)', flexShrink: 0 }} />}
+                        {/* Status indicators */}
+                        {(item.status === 'checking') && (
+                          <Loader2 size={13} className="animate-spin" style={{ color: 'var(--lv-mute)', flexShrink: 0 }} />
+                        )}
+                        {item.status === 'uploading' && (
+                          <Loader2 size={13} className="animate-spin" style={{ color: 'var(--lv-gold)', flexShrink: 0 }} />
+                        )}
                         {item.status === 'done' && (
                           <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--lv-gold)', flexShrink: 0 }}>
                             <CheckCircle2 size={12} /> {item.chunks} chunks
@@ -395,6 +460,23 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
                         {item.status === 'pending' && (
                           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--lv-mute)', flexShrink: 0 }}>Queued</span>
                         )}
+                        {/* Conflict: Replace / Skip buttons */}
+                        {item.status === 'conflict' && (
+                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                            <button
+                              onClick={() => uploadOne({ ...item, status: 'pending' })}
+                              style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--lv-gold)', background: 'none', border: '1px solid var(--lv-gold)', padding: '3px 10px', cursor: 'pointer' }}
+                            >
+                              Replace
+                            </button>
+                            <button
+                              onClick={() => setQueue((q) => q.filter((i) => i.id !== item.id))}
+                              style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--lv-mute)', background: 'none', border: '1px solid var(--lv-rule-strong)', padding: '3px 10px', cursor: 'pointer' }}
+                            >
+                              Skip
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -405,16 +487,14 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
                   <div style={{ padding: '32px', display: 'flex', alignItems: 'center', gap: 10, color: 'var(--lv-mute)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em' }}>
                     <Loader2 size={13} className="animate-spin" /> Loading…
                   </div>
-                ) : (() => {
-                  const q = searchQuery.toLowerCase()
-                  const filtered = q ? sources.filter((s) => s.name.toLowerCase().includes(q) || s.path.toLowerCase().includes(q)) : sources
-                  return filtered.length === 0 ? (
-                    <div style={{ padding: '40px 32px', fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--lv-mute)' }}>
-                      {searchQuery ? 'No matches' : 'No documents indexed yet'}
-                    </div>
-                  ) : (
+                ) : sources.length === 0 ? (
+                  <div style={{ padding: '40px 32px', fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--lv-mute)' }}>
+                    {debouncedQuery ? 'No matches' : 'No documents indexed yet'}
+                  </div>
+                ) : (
+                  <>
                     <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-                      {filtered.map((src) => (
+                      {sources.map((src) => (
                         <KnowledgeRow
                           key={src.path}
                           src={src}
@@ -426,8 +506,63 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
                         />
                       ))}
                     </ul>
-                  )
-                })()}
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '14px 32px',
+                        borderTop: '1px solid var(--lv-rule)',
+                      }}>
+                        <button
+                          onClick={() => setPage((p) => Math.max(0, p - 1))}
+                          disabled={page === 0}
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 9.5,
+                            letterSpacing: '0.18em',
+                            textTransform: 'uppercase',
+                            color: page === 0 ? 'var(--lv-rule-strong)' : 'var(--lv-mute)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: page === 0 ? 'default' : 'pointer',
+                            padding: 0,
+                            transition: 'color 0.15s',
+                          }}
+                          onMouseEnter={(e) => { if (page > 0) e.currentTarget.style.color = 'var(--lv-gold)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = page === 0 ? 'var(--lv-rule-strong)' : 'var(--lv-mute)' }}
+                        >
+                          ← Prev
+                        </button>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.18em', color: 'var(--lv-mute)', textTransform: 'uppercase' }}>
+                          {page + 1} / {totalPages}
+                        </span>
+                        <button
+                          onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                          disabled={page >= totalPages - 1}
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 9.5,
+                            letterSpacing: '0.18em',
+                            textTransform: 'uppercase',
+                            color: page >= totalPages - 1 ? 'var(--lv-rule-strong)' : 'var(--lv-mute)',
+                            background: 'none',
+                            border: 'none',
+                            cursor: page >= totalPages - 1 ? 'default' : 'pointer',
+                            padding: 0,
+                            transition: 'color 0.15s',
+                          }}
+                          onMouseEnter={(e) => { if (page < totalPages - 1) e.currentTarget.style.color = 'var(--lv-gold)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = page >= totalPages - 1 ? 'var(--lv-rule-strong)' : 'var(--lv-mute)' }}
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>

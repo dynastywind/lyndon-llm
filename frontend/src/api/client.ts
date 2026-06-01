@@ -266,9 +266,26 @@ export interface RagSource {
   size_bytes: number | null
 }
 
-export async function listRagSources(): Promise<{ sources: RagSource[] }> {
-  const res = await fetch(`${BASE}/rag/sources`, { headers: authHeader() })
+export async function listRagSources(
+  limit = 10,
+  offset = 0,
+  query = '',
+): Promise<{ sources: RagSource[]; total: number }> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  if (query) params.set('query', query)
+  const res = await fetch(`${BASE}/rag/sources?${params}`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to list sources: ${res.statusText}`)
+  return res.json()
+}
+
+export async function checkRagSourceName(
+  name: string,
+): Promise<{ exists: boolean; path: string | null }> {
+  const res = await fetch(
+    `${BASE}/rag/sources/check?name=${encodeURIComponent(name)}`,
+    { headers: authHeader() },
+  )
+  if (!res.ok) throw new Error(`Failed to check source name: ${res.statusText}`)
   return res.json()
 }
 
@@ -284,9 +301,8 @@ export async function reindexRagSource(source: string): Promise<{ path: string; 
   return res.json()
 }
 
-export async function deleteRagSource(source: string, deleteFile = false): Promise<void> {
-  const params = new URLSearchParams({ source })
-  if (deleteFile) params.set('delete_file', 'true')
+export async function deleteRagSource(source: string, deleteFile = true): Promise<void> {
+  const params = new URLSearchParams({ source, delete_file: String(deleteFile) })
   const res = await fetch(`${BASE}/rag/sources?${params}`, {
     method: 'DELETE',
     headers: authHeader(),

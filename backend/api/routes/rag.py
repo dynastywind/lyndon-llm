@@ -68,34 +68,63 @@ async def upload_file(
     }
 
 
+@router.get("/sources/check")
+async def check_source_name(
+    name: str = Query(..., description="Filename to check for existence"),
+    user: User = Depends(get_current_user),
+):
+    """Return whether a file with this name already exists for the user."""
+    dest = UPLOADS_DIR / user.id / name
+    exists = dest.exists()
+    return {"exists": exists, "path": str(dest) if exists else None}
+
+
 @router.get("/sources")
-async def list_sources(user: User = Depends(get_current_user)):
-    """Return all sources for the authenticated user with chunk counts and file size."""
+async def list_sources(
+    limit: int = Query(10, ge=1, le=200, description="Page size"),
+    offset: int = Query(0, ge=0, description="Number of records to skip"),
+    query: str = Query("", description="Filter sources by filename (case-insensitive)"),
+    user: User = Depends(get_current_user),
+):
+    """
+    Return paginated sources for the authenticated user with chunk counts and
+    file size.  Supports optional name search and limit/offset pagination.
+    """
     from db.vector.store import get_vector_store
 
     vs = await get_vector_store(IngestPipeline.COLLECTION_NAME)
-    ids, _docs, metas = await vs.list_all(limit=100_000)
+    _ids, _docs, metas = await vs.list_all(limit=100_000)
 
     # Count chunks per source for this user
     counts: dict[str, int] = {}
-    for i, meta in zip(ids, metas):
+    for meta in metas:
         if meta.get("user_id") != user.id:
             continue
         src = meta.get("source", "")
         if src:
             counts[src] = counts.get(src, 0) + 1
 
-    result = []
-    for src, chunk_count in sorted(counts.items()):
+    # Build full result list (sorted by name for stable ordering)
+    all_sources = []
+    for src, chunk_count in sorted(counts.items(), key=lambda kv: Path(kv[0]).name.lower()):
         p = Path(src)
         size_bytes = p.stat().st_size if p.exists() else None
-        result.append({
+        all_sources.append({
             "path": src,
             "name": p.name,
             "chunks": chunk_count,
             "size_bytes": size_bytes,
         })
-    return {"sources": result}
+
+    # Server-side search filter
+    if query:
+        q = query.lower()
+        all_sources = [s for s in all_sources if q in s["name"].lower()]
+
+    total = len(all_sources)
+    page_sources = all_sources[offset : offset + limit]
+
+    return {"sources": page_sources, "total": total}
 
 
 @router.post("/reindex")
@@ -109,8 +138,8 @@ async def reindex_source(
     user_dir = (UPLOADS_DIR / user.id).resolve()
     try:
         p.resolve().relative_to(user_dir)
-    except ValueError:
-        raise HTTPException(403, "Access denied")
+    except ValueError as exc:
+        raise HTTPException(403, "Access denied") from exc
 
     if not p.exists():
         raise HTTPException(404, "File not found on disk")
@@ -122,10 +151,13 @@ async def reindex_source(
 @router.delete("/sources")
 async def delete_source(
     source: str = Query(..., description="Source path to remove"),
-    delete_file: bool = Query(False, description="Also delete the file from disk"),
+    delete_file: bool = Query(True, description="Also delete the file from disk"),
     user: User = Depends(get_current_user),
 ):
-    """Remove all chunks for the given source from the vector store."""
+    """
+    Remove all chunks for the given source from the vector store and
+    (by default) delete the file from disk.
+    """
     from db.vector.store import get_vector_store
 
     vs = await get_vector_store(IngestPipeline.COLLECTION_NAME)
