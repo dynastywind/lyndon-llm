@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AlertCircle, CheckCircle2, FileText, Loader2, Moon, RefreshCw, Sun, Trash2, Upload, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2, Moon, RefreshCw, Search, Sun, Trash2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { deleteRagSource, listRagSources, reindexRagSource, uploadRagFile, type RagSource } from '@/api/client'
 import { useAppStore } from '@/store'
@@ -38,6 +38,21 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function fileExt(path: string): string {
+  return (path.split('.').pop() ?? '').toUpperCase() || 'FILE'
+}
+
+function fileTypeLabel(path: string): string {
+  const ext = (path.split('.').pop() ?? '').toLowerCase()
+  const map: Record<string, string> = {
+    txt: 'NOTE', md: 'NOTE', mdx: 'NOTE',
+    pdf: 'PDF',
+    py: 'CODE', ts: 'CODE', tsx: 'CODE', js: 'CODE', jsx: 'CODE',
+    go: 'CODE', rs: 'CODE', java: 'CODE', cpp: 'CODE', c: 'CODE',
+  }
+  return map[ext] ?? (ext.toUpperCase() || 'FILE')
+}
+
 // ─── component ────────────────────────────────────────────────────────────────
 
 export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }: Props) {
@@ -48,6 +63,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
   const [reindexing, setReindexing] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   // ── fetch indexed sources ──────────────────────────────────────────────────
@@ -163,7 +179,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
         <Dialog.Content
           className={cn(
             'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50',
-            'w-[580px] max-h-[82vh] bg-card border border-border rounded-xl shadow-2xl',
+            'w-[680px] max-h-[86vh] bg-card border border-border shadow-2xl',
             'flex flex-col overflow-hidden',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
             'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
@@ -200,7 +216,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
           </div>
 
           {/* ── Body ── */}
-          <div className="flex-1 overflow-y-auto p-5">
+          <div className={cn('flex-1 overflow-y-auto', tab === 'knowledge' ? '' : 'p-5')}>
             {tab === 'tools' ? (
               <ToolsRegistryPanel active={open && tab === 'tools'} />
             ) : tab === 'memory' ? (
@@ -210,164 +226,325 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
             ) : tab === 'appearance' ? (
               <AppearancePanel />
             ) : (
-              <div className="space-y-7">
-                {/* ── Upload section ── */}
-                <section>
-                  <SectionLabel>Knowledge Base — Upload</SectionLabel>
+              /* ── Knowledge Base ── */
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={handleDrop}
+                style={{
+                  outline: dragging ? '2px solid var(--lv-gold)' : 'none',
+                  outlineOffset: -2,
+                  transition: 'outline 0.15s',
+                }}
+              >
+                {/* hidden file input */}
+                <input
+                  ref={inputRef}
+                  type="file"
+                  accept={ACCEPTED}
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files) enqueue(e.target.files)
+                    e.target.value = ''
+                  }}
+                />
 
-                  {/* Drop zone */}
-                  <div
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      setDragging(true)
-                    }}
-                    onDragLeave={() => setDragging(false)}
-                    onDrop={handleDrop}
-                    onClick={() => inputRef.current?.click()}
-                    className={cn(
-                      'border-2 border-dashed rounded-lg px-4 py-8 text-center cursor-pointer',
-                      'transition-colors select-none',
-                      dragging
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border hover:border-primary/40 hover:bg-accent/20',
-                    )}
-                  >
-                    <Upload size={20} className="mx-auto mb-2 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground">
-                      Drop files here or <span className="text-primary font-medium">browse</span>
-                    </p>
-                    <p className="text-xs text-muted-foreground/50 mt-1">
-                      PDF · MD · TXT · Python · TypeScript · Go · Rust · Java…
-                    </p>
+                {/* Panel header */}
+                <div style={{ padding: '28px 32px 20px' }}>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9.5,
+                    letterSpacing: '0.28em',
+                    color: 'var(--lv-gold)',
+                    textTransform: 'uppercase',
+                    marginBottom: 10,
+                  }}>
+                    No. 07 — Knowledge Base
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 14 }}>
+                    <span style={{
+                      fontFamily: 'var(--font-display)',
+                      fontStyle: 'italic',
+                      fontWeight: 500,
+                      fontSize: 38,
+                      color: 'var(--lv-ink)',
+                      letterSpacing: '-0.015em',
+                      lineHeight: 1,
+                    }}>
+                      Documents
+                    </span>
+                    <span style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9.5,
+                      letterSpacing: '0.22em',
+                      color: 'var(--lv-mute)',
+                      textTransform: 'uppercase',
+                    }}>
+                      {sources.length} on file
+                    </span>
+                  </div>
+                </div>
+
+                {/* Search + Add row */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 16,
+                  padding: '0 32px 0',
+                  borderBottom: '1px solid var(--lv-rule)',
+                  paddingBottom: 18,
+                }}>
+                  {/* Search input */}
+                  <div style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    borderBottom: '1px solid var(--lv-rule-strong)',
+                    paddingBottom: 8,
+                  }}>
+                    <Search size={12} style={{ color: 'var(--lv-mute)', flexShrink: 0 }} />
                     <input
-                      ref={inputRef}
-                      type="file"
-                      accept={ACCEPTED}
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files) enqueue(e.target.files)
-                        // reset so same file can be re-uploaded
-                        e.target.value = ''
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search documents"
+                      style={{
+                        flex: 1,
+                        background: 'none',
+                        border: 'none',
+                        outline: 'none',
+                        fontFamily: 'var(--font-sans)',
+                        fontSize: 13,
+                        color: 'var(--lv-ink)',
                       }}
                     />
                   </div>
+                  {/* Add document button */}
+                  <button
+                    onClick={() => inputRef.current?.click()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 18px',
+                      border: '1px solid var(--lv-rule-strong)',
+                      borderRadius: 999,
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9.5,
+                      letterSpacing: '0.18em',
+                      textTransform: 'uppercase',
+                      color: 'var(--lv-ink)',
+                      whiteSpace: 'nowrap',
+                      transition: 'border-color 0.15s, color 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--lv-gold)'
+                      e.currentTarget.style.color = 'var(--lv-gold)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'var(--lv-rule-strong)'
+                      e.currentTarget.style.color = 'var(--lv-ink)'
+                    }}
+                  >
+                    Add Document →
+                  </button>
+                </div>
 
-                  {/* Upload queue */}
-                  {queue.length > 0 && (
-                    <ul className="mt-3 space-y-1.5">
-                      {queue.map((item) => (
-                        <li
-                          key={item.id}
-                          className="flex items-center gap-3 bg-background rounded-lg px-3 py-2 text-sm"
-                        >
-                          <FileText size={14} className="text-muted-foreground shrink-0" />
-                          <span className="flex-1 truncate">{item.file.name}</span>
-
-                          {item.status === 'uploading' && (
-                            <Loader2 size={14} className="animate-spin text-primary shrink-0" />
-                          )}
-                          {item.status === 'done' && (
-                            <span className="flex items-center gap-1 text-xs text-green-400 shrink-0">
-                              <CheckCircle2 size={13} />
-                              {item.chunks} chunks
-                            </span>
-                          )}
-                          {item.status === 'error' && (
-                            <span
-                              className="flex items-center gap-1 text-xs text-red-400 shrink-0 max-w-[180px] truncate"
-                              title={item.error}
-                            >
-                              <AlertCircle size={13} className="shrink-0" />
-                              {item.error}
-                            </span>
-                          )}
-                          {item.status === 'pending' && (
-                            <span className="text-xs text-muted-foreground shrink-0">Queued</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-
-                {/* ── Indexed sources section ── */}
-                <section>
-                  <div className="flex items-center justify-between mb-3">
-                    <SectionLabel className="mb-0">Documents</SectionLabel>
-                    <button
-                      onClick={fetchSources}
-                      disabled={loadingSources}
-                      title="Refresh list"
-                      className="text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <RefreshCw size={13} className={loadingSources ? 'animate-spin' : ''} />
-                    </button>
-                  </div>
-
-                  {loadingSources ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 size={14} className="animate-spin" />
-                      Loading…
-                    </div>
-                  ) : sources.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No documents indexed yet.</p>
-                  ) : (
-                    <ul className="space-y-1.5">
-                      {sources.map((src) => (
-                        <li
-                          key={src.path}
-                          className="flex items-center gap-3 bg-background rounded-lg px-3 py-2 group"
-                        >
-                          <FileText size={14} className="text-muted-foreground shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm truncate" title={src.path}>{src.name}</p>
-                            <p className="text-xs text-muted-foreground/60">
-                              {src.chunks} chunk{src.chunks !== 1 ? 's' : ''}
-                              {src.size_bytes != null && (
-                                <> · {formatBytes(src.size_bytes)}</>
-                              )}
-                            </p>
+                {/* Upload queue (inline, above list) */}
+                {queue.length > 0 && (
+                  <div style={{ padding: '12px 32px 0', borderBottom: '1px solid var(--lv-rule)' }}>
+                    {queue.map((item) => (
+                      <div
+                        key={item.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '10px 0',
+                          borderBottom: '1px solid var(--lv-rule)',
+                        }}
+                      >
+                        <div style={{
+                          width: 52, height: 52, flexShrink: 0,
+                          border: '1px solid var(--lv-rule-strong)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', color: 'var(--lv-mute)', textTransform: 'uppercase' }}>
+                            {fileExt(item.file.name)}
+                          </span>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--lv-soft)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.file.name}
                           </div>
-                          {/* Re-index */}
-                          <button
-                            onClick={() => handleReindex(src)}
-                            disabled={reindexing === src.path || deleting === src.path}
-                            title="Re-index this file"
-                            className={cn(
-                              'text-muted-foreground/40 hover:text-primary transition-colors shrink-0',
-                              'opacity-0 group-hover:opacity-100',
-                            )}
-                          >
-                            {reindexing === src.path
-                              ? <Loader2 size={13} className="animate-spin" />
-                              : <RefreshCw size={13} />}
-                          </button>
-                          {/* Delete */}
-                          <button
-                            onClick={() => handleDelete(src)}
-                            disabled={deleting === src.path || reindexing === src.path}
-                            title={`Remove "${src.name}"`}
-                            className={cn(
-                              'text-muted-foreground/40 hover:text-red-400 transition-colors shrink-0',
-                              'opacity-0 group-hover:opacity-100',
-                            )}
-                          >
-                            {deleting === src.path
-                              ? <Loader2 size={13} className="animate-spin" />
-                              : <Trash2 size={13} />}
-                          </button>
-                        </li>
+                        </div>
+                        {item.status === 'uploading' && <Loader2 size={13} className="animate-spin" style={{ color: 'var(--lv-gold)', flexShrink: 0 }} />}
+                        {item.status === 'done' && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--lv-gold)', flexShrink: 0 }}>
+                            <CheckCircle2 size={12} /> {item.chunks} chunks
+                          </span>
+                        )}
+                        {item.status === 'error' && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#dc2626', flexShrink: 0, maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.error}>
+                            <AlertCircle size={12} /> {item.error}
+                          </span>
+                        )}
+                        {item.status === 'pending' && (
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--lv-mute)', flexShrink: 0 }}>Queued</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Document list */}
+                {loadingSources ? (
+                  <div style={{ padding: '32px', display: 'flex', alignItems: 'center', gap: 10, color: 'var(--lv-mute)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em' }}>
+                    <Loader2 size={13} className="animate-spin" /> Loading…
+                  </div>
+                ) : (() => {
+                  const q = searchQuery.toLowerCase()
+                  const filtered = q ? sources.filter((s) => s.name.toLowerCase().includes(q) || s.path.toLowerCase().includes(q)) : sources
+                  return filtered.length === 0 ? (
+                    <div style={{ padding: '40px 32px', fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--lv-mute)' }}>
+                      {searchQuery ? 'No matches' : 'No documents indexed yet'}
+                    </div>
+                  ) : (
+                    <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                      {filtered.map((src) => (
+                        <KnowledgeRow
+                          key={src.path}
+                          src={src}
+                          reindexing={reindexing === src.path}
+                          deleting={deleting === src.path}
+                          busy={reindexing !== null || deleting !== null}
+                          onReindex={() => handleReindex(src)}
+                          onDelete={() => handleDelete(src)}
+                        />
                       ))}
                     </ul>
-                  )}
-                </section>
+                  )
+                })()}
               </div>
             )}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  )
+}
+
+// ─── KnowledgeRow ─────────────────────────────────────────────────────────────
+
+function KnowledgeRow({
+  src, reindexing, deleting, busy, onReindex, onDelete,
+}: {
+  src: RagSource
+  reindexing: boolean
+  deleting: boolean
+  busy: boolean
+  onReindex: () => void
+  onDelete: () => void
+}) {
+  const [hov, setHov] = useState(false)
+  const ext = fileExt(src.path)
+  const typeLabel = fileTypeLabel(src.path)
+  const meta = [
+    typeLabel,
+    src.size_bytes != null ? formatBytes(src.size_bytes) : null,
+    `${src.chunks} chunk${src.chunks !== 1 ? 's' : ''}`,
+  ].filter(Boolean).join(' · ')
+
+  return (
+    <li
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 20,
+        padding: '18px 32px',
+        borderBottom: '1px solid var(--lv-rule)',
+        background: hov ? 'rgba(var(--lv-wash-rgb),0.03)' : 'transparent',
+        transition: 'background 0.15s',
+      }}
+    >
+      {/* File type badge */}
+      <div style={{
+        width: 52, height: 52, flexShrink: 0,
+        border: `1px solid ${hov ? 'var(--lv-rule-strong)' : 'var(--lv-rule)'}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'border-color 0.15s',
+      }}>
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          letterSpacing: '0.1em',
+          color: 'var(--lv-gold)',
+          textTransform: 'uppercase',
+        }}>
+          {ext.slice(0, 4)}
+        </span>
+      </div>
+
+      {/* Name + meta */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 16,
+          fontWeight: 500,
+          color: 'var(--lv-ink)',
+          letterSpacing: '-0.01em',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          marginBottom: 5,
+        }} title={src.path}>
+          {src.name}
+        </div>
+        <div style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9.5,
+          letterSpacing: '0.18em',
+          textTransform: 'uppercase',
+          color: 'var(--lv-mute)',
+        }}>
+          {meta}
+        </div>
+      </div>
+
+      {/* Actions — visible on hover */}
+      <div style={{
+        display: 'flex',
+        gap: 8,
+        opacity: hov ? 1 : 0,
+        transition: 'opacity 0.15s',
+        flexShrink: 0,
+      }}>
+        <button
+          onClick={onReindex}
+          disabled={busy}
+          title="Re-index"
+          style={{ background: 'none', border: 'none', cursor: busy ? 'default' : 'pointer', color: 'var(--lv-mute)', padding: 4, display: 'flex' }}
+          onMouseEnter={(e) => { if (!busy) e.currentTarget.style.color = 'var(--lv-gold)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--lv-mute)' }}
+        >
+          {reindexing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+        </button>
+        <button
+          onClick={onDelete}
+          disabled={busy}
+          title="Remove"
+          style={{ background: 'none', border: 'none', cursor: busy ? 'default' : 'pointer', color: 'var(--lv-mute)', padding: 4, display: 'flex' }}
+          onMouseEnter={(e) => { if (!busy) e.currentTarget.style.color = '#dc2626' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--lv-mute)' }}
+        >
+          {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+        </button>
+      </div>
+    </li>
   )
 }
 
