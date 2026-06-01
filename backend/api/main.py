@@ -52,6 +52,9 @@ async def _migrate(conn) -> None:
         # v4 — login audit records (table created by create_all; index is idempotent via IF NOT EXISTS)
         "CREATE INDEX IF NOT EXISTS ix_login_records_user_id ON login_records (user_id)",
         "CREATE INDEX IF NOT EXISTS ix_login_records_created_at ON login_records (created_at)",
+        # v5 — OAuth provider fields on users
+        "ALTER TABLE users ADD COLUMN oauth_provider TEXT",
+        "ALTER TABLE users ADD COLUMN oauth_sub TEXT",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore

@@ -7,7 +7,7 @@ import { CodeWindow } from '@/components/code/CodeWindow'
 import { SandboxWindow } from '@/components/sandbox/SandboxWindow'
 
 export default function App() {
-  const { mode, sessionId, uiTheme } = useAppStore()
+  const { mode, sessionId, uiTheme, setUser, setPendingOAuthToken, bumpSessionVersion } = useAppStore()
 
   // Apply theme class to <html> whenever uiTheme changes
   useEffect(() => {
@@ -20,6 +20,35 @@ export default function App() {
       root.classList.add('dark')
     }
   }, [uiTheme])
+
+  // Handle OAuth redirects on mount
+  useEffect(() => {
+    // Case 1: new Google user — pending token in query string
+    const params = new URLSearchParams(window.location.search)
+    const pendingToken = params.get('oauth_pending')
+    if (pendingToken) {
+      window.history.replaceState({}, '', '/')
+      setPendingOAuthToken(pendingToken)
+      return
+    }
+
+    // Case 2: returning Google user — full JWT in URL hash
+    const hash = new URLSearchParams(window.location.hash.slice(1))
+    const token = hash.get('token')
+    if (token) {
+      window.history.replaceState({}, '', '/')
+      try {
+        // Decode payload without verification (we trust our own backend redirect)
+        const payloadB64 = token.split('.')[1]
+        const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')))
+        setUser({ id: payload.sub, username: payload.username, token })
+        bumpSessionVersion()
+      } catch {
+        // malformed token — ignore
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div

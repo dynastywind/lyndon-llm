@@ -107,6 +107,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_days: int = 30
 
+    # Auth — Google OAuth
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
+    frontend_url: str = "http://localhost:5173"
+    oauth_pending_expire_minutes: int = 10
+
     # Langfuse observability (leave blank to disable)
     langfuse_secret_key: str = ""
     langfuse_public_key: str = ""

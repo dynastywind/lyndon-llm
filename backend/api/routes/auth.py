@@ -1,4 +1,4 @@
-"""Authentication endpoints — register, login, delete account."""
+"""Authentication endpoints — register, login, OAuth, delete account."""
 
 from __future__ import annotations
 
@@ -6,10 +6,13 @@ import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import re
+import secrets
 
 import bcrypt
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from jose import jwt
+from fastapi.responses import RedirectResponse
+from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,6 +48,11 @@ class TokenResponse(BaseModel):
 class ResetPasswordRequest(BaseModel):
     username: str
     new_password: str
+
+
+class OAuthCompleteRequest(BaseModel):
+    pending_token: str
+    username: str
 
 
 class LoginRecordOut(BaseModel):
@@ -221,7 +229,11 @@ async def login(
     """Authenticate and return a JWT."""
     repo = UserRepo(db)
     user = await repo.get_by_username(body.username)
-    if user is None or not _verify_password(body.password, user.hashed_password):
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
+    if user.hashed_password is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This account uses Google login. Please sign in with Google.")
+    if not _verify_password(body.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -279,6 +291,121 @@ async def reset_password(
         )
     await repo.update_password(user.id, _hash_password(body.new_password))
     return {"ok": True}
+
+
+@router.get("/google/authorize")
+async def google_authorize():
+    """Return the Google OAuth consent URL. Frontend redirects to this URL."""
+    if not settings.google_client_id:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Google login is not configured.")
+    state = secrets.token_urlsafe(16)
+    params = {
+        "client_id": settings.google_client_id,
+        "redirect_uri": settings.google_redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "state": state,
+        "access_type": "online",
+    }
+    from urllib.parse import urlencode
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+    return {"url": url}
+
+
+@router.get("/google/callback")
+async def google_callback(
+    code: str,
+    state: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Exchange Google auth code for tokens, then redirect to frontend."""
+    if error:
+        return RedirectResponse(f"{settings.frontend_url}/?oauth_error={error}")
+
+    # Exchange code for tokens
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": settings.google_client_id,
+                "client_secret": settings.google_client_secret,
+                "redirect_uri": settings.google_redirect_uri,
+                "grant_type": "authorization_code",
+            },
+        )
+    if token_resp.status_code != 200:
+        return RedirectResponse(f"{settings.frontend_url}/?oauth_error=token_exchange_failed")
+
+    token_data = token_resp.json()
+    id_token_str = token_data.get("id_token")
+    if not id_token_str:
+        return RedirectResponse(f"{settings.frontend_url}/?oauth_error=no_id_token")
+
+    # Decode id_token (without signature verification — Google's token is trusted via HTTPS)
+    try:
+        # jose.jwt.decode without key just parses the payload
+        payload = jwt.get_unverified_claims(id_token_str)
+    except Exception:
+        return RedirectResponse(f"{settings.frontend_url}/?oauth_error=invalid_id_token")
+
+    google_sub = payload.get("sub")
+    email = payload.get("email", "")
+    if not google_sub:
+        return RedirectResponse(f"{settings.frontend_url}/?oauth_error=missing_sub")
+
+    repo = UserRepo(db)
+    user = await repo.get_by_oauth("google", google_sub)
+
+    if user:
+        # Existing user — issue full JWT and redirect with token in hash
+        full_token = _create_token(user)
+        return RedirectResponse(f"{settings.frontend_url}/#token={full_token}")
+
+    # New Google user — issue short-lived pending token and ask frontend to pick a username
+    expire = datetime.now(UTC) + timedelta(minutes=settings.oauth_pending_expire_minutes)
+    pending_payload = {
+        "pending": True,
+        "oauth_provider": "google",
+        "oauth_sub": google_sub,
+        "email": email,
+        "exp": expire,
+    }
+    pending_token = jwt.encode(pending_payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    return RedirectResponse(f"{settings.frontend_url}/?oauth_pending={pending_token}")
+
+
+@router.post("/oauth/complete", response_model=TokenResponse, status_code=201)
+async def oauth_complete(
+    body: OAuthCompleteRequest, request: Request, db: AsyncSession = Depends(get_db)
+):
+    """Complete OAuth sign-up: validate pending token, pick username, create account."""
+    try:
+        payload = jwt.decode(body.pending_token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token.")
+
+    if not payload.get("pending"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a pending OAuth token.")
+
+    provider = payload.get("oauth_provider")
+    sub = payload.get("oauth_sub")
+    if not provider or not sub:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Malformed pending token.")
+
+    repo = UserRepo(db)
+    if await repo.get_by_username(body.username):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
+
+    is_first_user = (await repo.count()) == 0
+    user = await repo.create_oauth(body.username, provider, sub)
+
+    if is_first_user:
+        await _migrate_orphan_data(user.id, db)
+
+    await _record_login(user, request, None, db)
+    return TokenResponse(access_token=_create_token(user), username=user.username, id=user.id)
 
 
 @router.delete("/me", status_code=204)

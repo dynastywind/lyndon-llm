@@ -16,6 +16,9 @@ interface AppState {
   user: AuthUser | null
   setUser: (user: AuthUser | null) => void
   logout: () => void
+  /** Non-null when an OAuth callback needs the user to choose a username. */
+  pendingOAuthToken: string | null
+  setPendingOAuthToken: (token: string | null) => void
 
   // Session
   sessionId: string | null
@@ -105,6 +108,8 @@ export const useAppStore = create<AppState>()(
       // ── Auth ─────────────────────────────────────────────────────────
       user: null,
       setUser: (user) => set({ user }),
+      pendingOAuthToken: null,
+      setPendingOAuthToken: (token) => set({ pendingOAuthToken: token }),
       logout: () =>
         set({
           user: null,

@@ -102,6 +102,31 @@ export async function checkUsername(username: string): Promise<{ available: bool
   return res.json()
 }
 
+export async function getGoogleAuthUrl(): Promise<{ url: string }> {
+  const res = await fetch(`${BASE}/auth/google/authorize`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export async function completeOAuthLogin(
+  pendingToken: string,
+  username: string,
+): Promise<AuthResponse> {
+  const res = await fetch(`${BASE}/auth/oauth/complete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pending_token: pendingToken, username }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
 export async function resetPassword(username: string, newPassword: string): Promise<void> {
   const res = await fetch(`${BASE}/auth/reset-password`, {
     method: 'POST',

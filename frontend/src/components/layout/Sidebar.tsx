@@ -229,10 +229,17 @@ export function Sidebar() {
     setSessionPrompt,
     user,
     logout,
+    pendingOAuthToken,
+    setPendingOAuthToken,
   } = useAppStore()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
+
+  // Auto-open LoginDialog in oauth-username mode when App detects a pending OAuth token
+  useEffect(() => {
+    if (pendingOAuthToken) setLoginOpen(true)
+  }, [pendingOAuthToken])
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('knowledge')
 
@@ -887,7 +894,14 @@ export function Sidebar() {
       </div>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} initialTab={settingsTab} />
-      <LoginDialog open={loginOpen} onOpenChange={setLoginOpen} />
+      <LoginDialog
+        open={loginOpen}
+        onOpenChange={(o) => {
+          setLoginOpen(o)
+          if (!o) setPendingOAuthToken(null)
+        }}
+        pendingOAuthToken={pendingOAuthToken}
+      />
       <DeleteAccountDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen} />
     </aside>
   )

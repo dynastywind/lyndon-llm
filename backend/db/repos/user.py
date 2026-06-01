@@ -33,6 +33,19 @@ class UserRepo:
         await self._db.refresh(row)
         return row
 
+    async def get_by_oauth(self, provider: str, sub: str) -> User | None:
+        result = await self._db.execute(
+            select(User).where(User.oauth_provider == provider, User.oauth_sub == sub)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_oauth(self, username: str, provider: str, sub: str) -> User:
+        row = User(username=username, oauth_provider=provider, oauth_sub=sub)
+        self._db.add(row)
+        await self._db.commit()
+        await self._db.refresh(row)
+        return row
+
     async def update_password(self, user_id: str, hashed_password: str) -> None:
         row = await self.get_by_id(user_id)
         if row:
