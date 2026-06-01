@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -66,6 +67,19 @@ No extra commentary, no markdown fences, no headings other than the two above.\
 
 _FILENAME = "cross_session_memory.md"
 
+# Matches the first ## section heading (User Profile or Key Facts) and everything after
+_SECTIONS_RE = re.compile(r"(## (?:User Profile|Key Facts).+)", re.DOTALL)
+
+
+def _sections_only(content: str) -> str:
+    """Strip the '# Cross-Session Memory / Updated:' file header.
+
+    Returns only the '## User Profile' … '## Key Facts' sections so the LLM
+    never sees (or echoes back) the header, preventing header accumulation.
+    """
+    m = _SECTIONS_RE.search(content)
+    return m.group(1).strip() if m else content.strip()
+
 
 class CrossSessionFileMemory:
     """Read/write the single cross-session memory Markdown file."""
@@ -79,7 +93,7 @@ class CrossSessionFileMemory:
     # ------------------------------------------------------------------ #
 
     def load(self) -> str | None:
-        """Return the file contents, or None if the file does not exist."""
+        """Return the full file contents, or None if the file does not exist."""
         try:
             return self._path.read_text(encoding="utf-8")
         except FileNotFoundError:
@@ -87,6 +101,19 @@ class CrossSessionFileMemory:
         except Exception:
             logger.exception("Failed to load cross-session memory file")
             return None
+
+    def load_sections(self) -> str | None:
+        """Return only the '## User Profile' / '## Key Facts' sections (no header).
+
+        Use this for injection into the system prompt and for passing to the
+        LLM — it prevents the file header from being echoed back and
+        accumulating on every update.
+        """
+        raw = self.load()
+        if raw is None:
+            return None
+        sections = _sections_only(raw)
+        return sections or None
 
     def save(self, sections_content: str) -> None:
         """Write the cross-session memory file atomically."""
@@ -124,7 +151,9 @@ class CrossSessionFileMemory:
         """
         from core.llm.gateway import LLMMessage
 
-        existing = self.load() or "None"
+        # Use load_sections() so the file header is never fed back to the LLM,
+        # preventing the header from being echoed into the output and saved.
+        existing = self.load_sections() or "None"
         user_message = (
             f"Existing cross-session memory:\n{existing}\n\n"
             f"Updated User Profile from latest session:\n{new_user_profile_section}"

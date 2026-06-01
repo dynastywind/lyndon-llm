@@ -74,8 +74,10 @@ class MemoryManager:
         """
         enriched = base_prompt
 
-        # 1. Inject cross-session memory (persistent user profile + key facts)
-        cross_memory = self.cross_session_file.load()
+        # 1. Inject cross-session memory (persistent user profile + key facts).
+        # Use load_sections() to strip the file header so the model receives
+        # clean ## User Profile / ## Key Facts content without metadata noise.
+        cross_memory = self.cross_session_file.load_sections()
         if cross_memory:
             enriched = f"{enriched}\n\n## Cross-Session Memory\n{cross_memory}"
 
