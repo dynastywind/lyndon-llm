@@ -127,12 +127,14 @@ class SessionFileMemory:
         )
 
         try:
-            result = await llm_complete_fn(
+            raw = await llm_complete_fn(
                 messages=[
                     LLMMessage("system", SUMMARISE_SYSTEM),
                     LLMMessage("user", user_message),
                 ]
             )
+            # llm_gateway.complete returns (text, usage) — unwrap if needed
+            result = raw[0] if isinstance(raw, tuple) else raw
         except Exception:
             logger.exception(
                 "LLM summarisation failed for session %s — skipping file update",

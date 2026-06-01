@@ -126,12 +126,14 @@ class CrossSessionFileMemory:
         )
 
         try:
-            result = await llm_complete_fn(
+            raw = await llm_complete_fn(
                 messages=[
                     LLMMessage("system", CROSS_SESSION_SUMMARISE_SYSTEM),
                     LLMMessage("user", user_message),
                 ]
             )
+            # llm_gateway.complete returns (text, usage) — unwrap if needed
+            result = raw[0] if isinstance(raw, tuple) else raw
         except Exception:
             logger.exception(
                 "LLM call failed while updating cross-session memory — skipping"

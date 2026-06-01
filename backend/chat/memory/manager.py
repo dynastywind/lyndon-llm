@@ -108,12 +108,13 @@ class MemoryManager:
 
         async def _summarise(turns):
             text = "\n".join(f"{t.role}: {t.content}" for t in turns)
-            return await llm_gateway.complete(
+            result = await llm_gateway.complete(
                 messages=[
                     LLMMessage("system", SUMMARISE_SYSTEM),
                     LLMMessage("user", text),
                 ]
             )
+            return result[0] if isinstance(result, tuple) else result
 
         summary = await self.short_term.compress(_summarise)
         if summary:
@@ -210,12 +211,13 @@ class MemoryManager:
             return
 
         text = "\n".join(f"{t.role}: {t.content}" for t in turns)
-        summary = await llm_gateway.complete(
+        raw = await llm_gateway.complete(
             messages=[
                 LLMMessage("system", SUMMARISE_SYSTEM),
                 LLMMessage("user", f"Summarise this session:\n{text}"),
             ]
         )
+        summary = raw[0] if isinstance(raw, tuple) else raw
         await self.long_term.store(
             Memory(
                 session_id=self.session_id,
