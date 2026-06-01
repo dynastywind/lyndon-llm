@@ -5,6 +5,7 @@ Every Chat engine interaction goes through this class.
 
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 
@@ -15,6 +16,8 @@ from chat.memory.short_term import ShortTermMemory
 from chat.memory.types import Memory, MemoryType
 from config.settings import settings
 from core.llm.gateway import LLMMessage, llm_gateway
+
+logger = logging.getLogger(__name__)
 
 
 def _extract_user_profile(content: str) -> str:
@@ -149,23 +152,34 @@ class MemoryManager:
         if not content:
             return
 
-        # Sync updated session summary to Chroma.
-        stable_id = str(
-            uuid.uuid5(uuid.NAMESPACE_DNS, f"session-summary:{self.session_id}")
-        )
-        await self.long_term.store(
-            Memory(
-                id=stable_id,
-                session_id=self.session_id,
-                memory_type=MemoryType.EPISODIC,
-                content=content,
-                importance=0.8,
-            ),
-            user_id=self.user_id,
-        )
+        # Sync updated session summary to Chroma (best-effort — never blocks
+        # the cross-session update below even if Chroma is unavailable).
+        try:
+            stable_id = str(
+                uuid.uuid5(uuid.NAMESPACE_DNS, f"session-summary:{self.session_id}")
+            )
+            await self.long_term.store(
+                Memory(
+                    id=stable_id,
+                    session_id=self.session_id,
+                    memory_type=MemoryType.EPISODIC,
+                    content=content,
+                    importance=0.8,
+                ),
+                user_id=self.user_id,
+            )
+        except Exception:
+            logger.warning(
+                "Chroma store failed for session %s — cross-session update will still run",
+                self.session_id,
+                exc_info=True,
+            )
 
-        # If the User Profile changed, update the cross-session memory file.
-        new_profile = _extract_user_profile(content)
+        # Read back what was actually saved so both profile comparisons use the
+        # same source (the full file with header), avoiding inconsistencies if
+        # the LLM omits the '## User Profile' heading in its raw output.
+        saved_content = self.session_file.load(self.session_id) or content
+        new_profile = _extract_user_profile(saved_content)
         if new_profile and new_profile != old_profile:
             await self.cross_session_file.update(new_profile, llm_gateway.complete)
 
