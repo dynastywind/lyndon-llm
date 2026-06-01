@@ -20,10 +20,28 @@ from core.llm.gateway import LLMMessage, llm_gateway
 logger = logging.getLogger(__name__)
 
 
+_EMPTY_VALUES = re.compile(r"^\s*(unknown|none|n/a|–|-|)\s*$", re.IGNORECASE)
+
+
 def _extract_user_profile(content: str) -> str:
     """Return the '## User Profile' block from a memory file, or '' if absent."""
     match = re.search(r"(## User Profile\n.*?)(?=\n## |\Z)", content, re.DOTALL)
     return match.group(1).strip() if match else ""
+
+
+def _has_meaningful_profile(profile: str) -> bool:
+    """Return True only if the profile contains at least one real (non-placeholder) value.
+
+    Prevents sessions that never mentioned personal info from triggering a
+    cross-session update that would overwrite previously confirmed facts.
+    """
+    for line in profile.splitlines():
+        if ":" not in line:
+            continue
+        value = line.split(":", 1)[1]
+        if not _EMPTY_VALUES.match(value):
+            return True
+    return False
 
 SUMMARISE_SYSTEM = (
     "You are a concise summariser. Given a conversation excerpt, produce a "
@@ -181,7 +199,11 @@ class MemoryManager:
         # the LLM omits the '## User Profile' heading in its raw output.
         saved_content = self.session_file.load(self.session_id) or content
         new_profile = _extract_user_profile(saved_content)
-        if new_profile and new_profile != old_profile:
+        # Only propagate to cross-session memory when this session actually
+        # learned something new about the user — skip if the profile only
+        # contains Unknown/None placeholders (e.g. session never mentioned
+        # personal info) to avoid overwriting previously confirmed facts.
+        if new_profile and new_profile != old_profile and _has_meaningful_profile(new_profile):
             await self.cross_session_file.update(new_profile, llm_gateway.complete)
 
     async def store_memory(
