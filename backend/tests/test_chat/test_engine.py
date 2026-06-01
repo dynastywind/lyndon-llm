@@ -100,10 +100,12 @@ async def test_max_tool_rounds_terminates(monkeypatch):
     async def fake_complete_with_tools(messages, tool_schemas, model=None):
         nonlocal call_count
         call_count += 1
+        from core.llm.gateway import LLMUsage
+
         msg = MagicMock()
         msg.tool_calls = [_make_tc()]
         msg.content = None
-        return msg
+        return msg, LLMUsage()
 
     async def fake_stream(messages, model=None):
         yield "final answer"
@@ -186,6 +188,8 @@ async def test_tool_failure_continues_to_final_answer(monkeypatch):
     async def fake_complete(messages, tool_schemas, model=None):
         nonlocal call_round
         call_round += 1
+        from core.llm.gateway import LLMUsage
+
         msg = MagicMock()
         # First round: request a tool.  Second round: plain answer.
         if call_round == 1:
@@ -194,7 +198,7 @@ async def test_tool_failure_continues_to_final_answer(monkeypatch):
         else:
             msg.tool_calls = []
             msg.content = "answer"
-        return msg
+        return msg, LLMUsage()
 
     async def fake_stream(messages, model=None):
         yield "done"
@@ -241,6 +245,156 @@ async def test_tool_failure_continues_to_final_answer(monkeypatch):
     tokens = [e for e in events if e["type"] == "token"]
     assert failed, "Expected at least one failed tool_result event"
     assert tokens, "Expected final token stream after tool failure"
+
+
+# ── model forwarding through all three code paths ────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_model_forwarded_on_direct_path():
+    """route=direct: model param must reach llm_gateway.stream_from_raw."""
+    from unittest.mock import AsyncMock, patch
+
+    engine = _make_engine("model-direct")
+    received_model: list = []
+
+    async def capturing_stream(messages, model=None):
+        received_model.append(model)
+        yield "answer"
+
+    async def fake_route(message, *, has_kb_sources):
+        from chat.orchestrator import RouteDecision
+
+        return RouteDecision("direct", frozenset(), "test")
+
+    with (
+        patch("chat.engine.llm_gateway") as gw,
+        patch("chat.engine.get_orchestrator") as get_orch,
+        patch("chat.engine.kb_has_sources", new=AsyncMock(return_value=False)),
+        patch.object(engine.memory, "build_system_prompt", new=AsyncMock(return_value="")),
+        patch.object(engine.memory, "maybe_compress", new=AsyncMock()),
+        patch.object(engine.memory, "add_user_turn"),
+        patch.object(engine.memory, "get_messages", return_value=[]),
+        patch.object(engine.memory, "add_assistant_turn"),
+    ):
+        gw.stream_from_raw = capturing_stream
+        orch = AsyncMock()
+        orch.route = fake_route
+        get_orch.return_value = orch
+
+        await _collect(engine.stream_response("hello", model="llama3:8b"))
+
+    assert received_model == ["llama3:8b"], (
+        f"Expected model='llama3:8b' on direct path, got {received_model}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_model_forwarded_on_web_search_fast_path():
+    """route=tools(web_search only): model param must reach the fast-path stream call."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    engine = _make_engine("model-search")
+    received_model: list = []
+
+    async def capturing_stream(messages, model=None):
+        received_model.append(model)
+        yield "answer"
+
+    def _ok_result():
+        r = MagicMock()
+        r.success = True
+        r.output = "search result"
+        return r
+
+    fake_tool = MagicMock()
+    fake_tool.run = AsyncMock(side_effect=lambda **kw: _ok_result())
+
+    async def fake_route(message, *, has_kb_sources):
+        from chat.orchestrator import RouteDecision
+
+        return RouteDecision("tools", frozenset({"web_search"}), "test")
+
+    with (
+        patch("chat.engine.llm_gateway") as gw,
+        patch("chat.engine.tool_registry") as reg,
+        patch("chat.engine.get_orchestrator") as get_orch,
+        patch("chat.engine.kb_has_sources", new=AsyncMock(return_value=False)),
+        patch.object(engine.memory, "build_system_prompt", new=AsyncMock(return_value="")),
+        patch.object(engine.memory, "maybe_compress", new=AsyncMock()),
+        patch.object(engine.memory, "add_user_turn"),
+        patch.object(engine.memory, "get_messages", return_value=[{"role": "user", "content": "weather?"}]),
+        patch.object(engine.memory, "add_assistant_turn"),
+    ):
+        gw.stream_from_raw = capturing_stream
+        reg.get_tools.return_value = {"web_search": fake_tool}
+        orch = AsyncMock()
+        orch.route = fake_route
+        get_orch.return_value = orch
+
+        await _collect(engine.stream_response("weather?", model="gemma2:9b"))
+
+    assert "gemma2:9b" in received_model, (
+        f"Expected model='gemma2:9b' on web-search fast path, got {received_model}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_model_forwarded_on_agentic_loop_path():
+    """route=rag_and_tools: model param must reach complete_with_tools_raw and stream_from_raw."""
+    from unittest.mock import AsyncMock, MagicMock, patch
+
+    engine = _make_engine("model-agentic")
+    received_complete_model: list = []
+    received_stream_model: list = []
+
+    async def capturing_complete(messages, tool_schemas, model=None):
+        received_complete_model.append(model)
+        from core.llm.gateway import LLMUsage
+
+        msg = MagicMock()
+        msg.tool_calls = []
+        msg.content = "done"
+        return msg, LLMUsage()
+
+    async def capturing_stream(messages, model=None):
+        received_stream_model.append(model)
+        yield "final"
+
+    async def fake_route(message, *, has_kb_sources):
+        from chat.orchestrator import RouteDecision
+
+        # Use rag_and_tools with render_chart to avoid the web_search fast path
+        return RouteDecision("rag_and_tools", frozenset({"render_chart"}), "test")
+
+    with (
+        patch("chat.engine.llm_gateway") as gw,
+        patch("chat.engine.tool_registry") as reg,
+        patch("chat.engine.get_orchestrator") as get_orch,
+        patch("chat.engine.kb_has_sources", new=AsyncMock(return_value=False)),
+        patch.object(engine._retriever, "retrieve", new=AsyncMock(return_value=[])),
+        patch.object(engine.memory, "build_system_prompt", new=AsyncMock(return_value="")),
+        patch.object(engine.memory, "maybe_compress", new=AsyncMock()),
+        patch.object(engine.memory, "add_user_turn"),
+        patch.object(engine.memory, "get_messages", return_value=[{"role": "user", "content": "chart"}]),
+        patch.object(engine.memory, "add_assistant_turn"),
+    ):
+        gw.complete_with_tools_raw = AsyncMock(side_effect=capturing_complete)
+        gw.stream_from_raw = capturing_stream
+        reg.get_openai_schemas.return_value = [{"function": {"name": "render_chart"}, "type": "function"}]
+        reg.get_tools.return_value = {}
+        orch = AsyncMock()
+        orch.route = fake_route
+        get_orch.return_value = orch
+
+        await _collect(engine.stream_response("make a chart", model="phi3:mini"))
+
+    assert received_complete_model == ["phi3:mini"], (
+        f"complete_with_tools_raw got model={received_complete_model}"
+    )
+    assert "phi3:mini" in received_stream_model, (
+        f"stream_from_raw got model={received_stream_model}"
+    )
 
 
 # ── LLM gateway exception ─────────────────────────────────────────────────────

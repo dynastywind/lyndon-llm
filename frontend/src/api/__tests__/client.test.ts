@@ -3,7 +3,7 @@
  * All network calls are intercepted with vi.stubGlobal('fetch', ...).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { streamChat, createChatSession, deleteChatSession } from '../client'
+import { streamChat, createChatSession, deleteChatSession, getModels } from '../client'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -133,6 +133,81 @@ describe('streamChat', () => {
     const errEvents = events.filter((e) => e.type === 'error')
     expect(errEvents).toHaveLength(1)
     expect((errEvents[0].data as { message: string }).message).toBe('LLM unavailable')
+  })
+
+  // ── model param serialisation ────────────────────────────────────────────
+
+  it('includes model in request body when provided', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init.body as string)
+        return Promise.resolve({ ok: true, body: makeStream([]) })
+      }),
+    )
+
+    await streamChat('hello', 'sid', vi.fn(), undefined, undefined, undefined, 'mistral:7b')
+
+    expect(capturedBody).toHaveProperty('model', 'mistral:7b')
+  })
+
+  it('omits model key from request body when undefined', async () => {
+    let capturedBody: Record<string, unknown> = {}
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+        capturedBody = JSON.parse(init.body as string)
+        return Promise.resolve({ ok: true, body: makeStream([]) })
+      }),
+    )
+
+    await streamChat('hello', 'sid', vi.fn())
+
+    expect(capturedBody).not.toHaveProperty('model')
+  })
+})
+
+// ── getModels ─────────────────────────────────────────────────────────────────
+
+describe('getModels', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('returns parsed models list on success', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ models: ['llama3:8b', 'mistral:7b'] }),
+      }),
+    )
+
+    const result = await getModels()
+    expect(result).toEqual({ models: ['llama3:8b', 'mistral:7b'] })
+  })
+
+  it('returns empty models array when none are running', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ models: [] }),
+      }),
+    )
+
+    const result = await getModels()
+    expect(result.models).toHaveLength(0)
+  })
+
+  it('throws on non-2xx response', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, statusText: 'Service Unavailable' }),
+    )
+
+    await expect(getModels()).rejects.toThrow('Failed to fetch models')
   })
 })
 

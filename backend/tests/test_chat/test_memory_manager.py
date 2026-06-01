@@ -6,7 +6,7 @@ async def test_build_system_prompt_sets_base_prompt_without_memories(monkeypatch
     from chat.memory.long_term import LongTermMemory
     from chat.memory.manager import MemoryManager
 
-    async def no_memories(self, query, top_k=None):
+    async def no_memories(self, query, top_k=None, **kwargs):
         return []
 
     monkeypatch.setattr(LongTermMemory, "retrieve", no_memories)

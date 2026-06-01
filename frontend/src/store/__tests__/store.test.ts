@@ -136,3 +136,46 @@ describe('prependSessionMessages', () => {
     expect(msgs[1].content).toBe('newer')
   })
 })
+
+// ── selectedModel ─────────────────────────────────────────────────────────────
+
+describe('selectedModel', () => {
+  beforeEach(() => {
+    useAppStore.setState({ selectedModel: null })
+    localStorage.clear()
+  })
+
+  it('defaults to null', () => {
+    expect(useAppStore.getState().selectedModel).toBeNull()
+  })
+
+  it('setSelectedModel updates the value', () => {
+    useAppStore.getState().setSelectedModel('mistral:7b')
+    expect(useAppStore.getState().selectedModel).toBe('mistral:7b')
+  })
+
+  it('setSelectedModel can be cleared back to null', () => {
+    useAppStore.getState().setSelectedModel('llama3:8b')
+    useAppStore.getState().setSelectedModel(null)
+    expect(useAppStore.getState().selectedModel).toBeNull()
+  })
+
+  it('selectedModel is independent of sessionId', () => {
+    useAppStore.setState({ sessionId: 'sess-a' })
+    useAppStore.getState().setSelectedModel('phi3:mini')
+
+    // Switch session — model should not change
+    useAppStore.setState({ sessionId: 'sess-b' })
+    expect(useAppStore.getState().selectedModel).toBe('phi3:mini')
+  })
+
+  it('selectedModel is written to localStorage (persisted)', () => {
+    useAppStore.getState().setSelectedModel('gemma2:9b')
+
+    // The persist middleware writes to localStorage on every setState.
+    const stored = localStorage.getItem('lyndon-llm-store')
+    expect(stored).not.toBeNull()
+    const parsed = JSON.parse(stored!)
+    expect(parsed?.state?.selectedModel).toBe('gemma2:9b')
+  })
+})

@@ -81,7 +81,9 @@ async def test_agentic_loop_continues_after_successful_chart(monkeypatch):
     async def fake_complete_with_tools_raw(messages, tools, model=None):
         nonlocal calls
         calls += 1
-        return FakeMessage() if calls == 1 else FinalMessage()
+        from core.llm.gateway import LLMUsage
+
+        return (FakeMessage() if calls == 1 else FinalMessage()), LLMUsage()
 
     async def fake_stream_from_raw(messages, model=None):
         nonlocal streamed_messages
@@ -103,7 +105,9 @@ async def test_agentic_loop_continues_after_successful_chart(monkeypatch):
 
     events = [event async for event in engine._agentic_loop()]
 
-    assert [event["type"] for event in events] == [
+    # Filter out internal _usage bookkeeping events before asserting the public sequence
+    public_events = [e for e in events if e["type"] != "_usage"]
+    assert [e["type"] for e in public_events] == [
         "tool_start",
         "chart",
         "tool_result",

@@ -244,6 +244,7 @@ export const useAppStore = create<AppState>()(
         codeTheme: s.codeTheme,
         systemPrompt: s.systemPrompt,
         appliedSessionPrompts: s.appliedSessionPrompts,
+        selectedModel: s.selectedModel,
       }),
     },
   ),

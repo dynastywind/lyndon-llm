@@ -184,6 +184,82 @@ async def test_chat_stream_always_ends_with_done_frame(client):
     assert "event: done" in resp.text
 
 
+# ── model field forwarding ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_chat_model_param_forwarded_to_engine(client):
+    """model field in the request body must be passed to ChatEngine.stream_response."""
+    received_kwargs: dict = {}
+
+    async def capturing_stream(*args, **kwargs):
+        received_kwargs.update(kwargs)
+        yield {"type": "token", "text": "ok"}
+
+    with patch("api.routes.chat.ChatEngine") as MockEngine:
+        instance = MagicMock()
+        instance.stream_response = capturing_stream
+        MockEngine.return_value = instance
+
+        async with client as c:
+            await c.post(
+                "/api/chat/",
+                json={"message": "hello", "model": "mistral:7b"},
+                headers={"x-session-id": "model-fwd", "x-mode": "chat"},
+            )
+
+    assert received_kwargs.get("model") == "mistral:7b"
+
+
+@pytest.mark.asyncio
+async def test_chat_model_defaults_to_none_when_omitted(client):
+    """When model is absent from the request, None is forwarded to the engine."""
+    received_kwargs: dict = {}
+
+    async def capturing_stream(*args, **kwargs):
+        received_kwargs.update(kwargs)
+        yield {"type": "token", "text": "ok"}
+
+    with patch("api.routes.chat.ChatEngine") as MockEngine:
+        instance = MagicMock()
+        instance.stream_response = capturing_stream
+        MockEngine.return_value = instance
+
+        async with client as c:
+            await c.post(
+                "/api/chat/",
+                json={"message": "hello"},
+                headers={"x-session-id": "model-none", "x-mode": "chat"},
+            )
+
+    assert received_kwargs.get("model") is None
+
+
+@pytest.mark.asyncio
+async def test_chat_model_empty_string_treated_as_none(client):
+    """An empty string model field must be treated as None (no override)."""
+    received_kwargs: dict = {}
+
+    async def capturing_stream(*args, **kwargs):
+        received_kwargs.update(kwargs)
+        yield {"type": "token", "text": "ok"}
+
+    with patch("api.routes.chat.ChatEngine") as MockEngine:
+        instance = MagicMock()
+        instance.stream_response = capturing_stream
+        MockEngine.return_value = instance
+
+        async with client as c:
+            await c.post(
+                "/api/chat/",
+                json={"message": "hello", "model": ""},
+                headers={"x-session-id": "model-empty", "x-mode": "chat"},
+            )
+
+    # body.model or None → "" becomes None in the route handler
+    assert received_kwargs.get("model") is None
+
+
 # ── message pagination endpoint ───────────────────────────────────────────────
 
 
