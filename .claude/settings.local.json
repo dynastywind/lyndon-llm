@@ -92,7 +92,10 @@
       "Bash(python3.12 -m venv .venv)",
       "Bash(xattr /Users/lyndon/Documents/projects/lyndonLLM/backend/.venv/pyvenv.cfg)",
       "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM checkout HEAD -- .claude/launch.json .claude/settings.local.json)",
-      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM diff --stat)"
+      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM diff --stat)",
+      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM diff --stat HEAD)",
+      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM add .claude/settings.local.json)",
+      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM commit -m ' *)"
     ]
   }
 }
