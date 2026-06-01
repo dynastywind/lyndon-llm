@@ -38,7 +38,7 @@ class LongTermMemory:
     #  Write                                                               #
     # ------------------------------------------------------------------ #
 
-    async def store(self, memory: Memory) -> None:
+    async def store(self, memory: Memory, user_id: str | None = None) -> None:
         """Persist a memory to both the DB and vector store."""
         from core.llm.gateway import llm_gateway
 
@@ -47,19 +47,21 @@ class LongTermMemory:
             embeddings = await llm_gateway.embed([memory.content])
             memory.embedding = embeddings[0]
 
+        meta: dict = {
+            "session_id": memory.session_id,
+            "memory_type": memory.memory_type.value,
+            "importance": memory.importance,
+            "created_at": memory.created_at.isoformat(),
+        }
+        if user_id:
+            meta["user_id"] = user_id
+
         vs = await self._get_vector_store()
         await vs.upsert(
             ids=[memory.id],
             embeddings=[memory.embedding],
             documents=[memory.content],
-            metadatas=[
-                {
-                    "session_id": memory.session_id,
-                    "memory_type": memory.memory_type.value,
-                    "importance": memory.importance,
-                    "created_at": memory.created_at.isoformat(),
-                }
-            ],
+            metadatas=[meta],
         )
 
     # ------------------------------------------------------------------ #
@@ -72,10 +74,11 @@ class LongTermMemory:
         session_id: str | None = None,
         memory_type: MemoryType | None = None,
         top_k: int | None = None,
+        user_id: str | None = None,
     ) -> list[Memory]:
         """
         Retrieve the most relevant memories for a query.
-        Optionally filter by session or memory type.
+        Optionally filter by session, memory type, or user.
         """
         from core.llm.gateway import llm_gateway
 
@@ -88,6 +91,8 @@ class LongTermMemory:
             where["session_id"] = session_id
         if memory_type:
             where["memory_type"] = memory_type.value
+        if user_id:
+            where["user_id"] = user_id
 
         vs = await self._get_vector_store()
         results = await vs.query(
@@ -116,10 +121,21 @@ class LongTermMemory:
             )
         return memories
 
-    async def list_all(self, limit: int = 200) -> list[dict]:
+    async def list_all(self, limit: int = 200, user_id: str | None = None) -> list[dict]:
         """Return all memories as plain dicts, sorted newest-first."""
         vs = await self._get_vector_store()
-        ids, docs, metas = await vs.list_all(limit=limit)
+        all_ids, all_docs, all_metas = await vs.list_all(limit=limit)
+        if user_id:
+            filtered = [
+                (i, d, m)
+                for i, d, m in zip(all_ids, all_docs, all_metas)
+                if m.get("user_id") == user_id
+            ]
+            ids = [x[0] for x in filtered]
+            docs = [x[1] for x in filtered]
+            metas = [x[2] for x in filtered]
+        else:
+            ids, docs, metas = all_ids, all_docs, all_metas
         results = []
         for id_, doc, meta in zip(ids, docs, metas, strict=False):
             results.append(

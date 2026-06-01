@@ -36,7 +36,7 @@ from chat.orchestrator import (
 from chat.rag.retriever import HybridRetriever, RetrievedChunk
 from config.settings import settings
 from core.events.bus import Events, event_bus
-from core.llm.gateway import llm_gateway
+from core.llm.gateway import LLMUsage, llm_gateway
 from core.permissions.gate import Mode, PermissionGate
 from core.session.manager import Session
 from core.tools.registry import tool_registry
@@ -108,9 +108,11 @@ def _format_context(chunks: list[RetrievedChunk]) -> str:
 
 
 class ChatEngine:
-    def __init__(self, session: Session, db: AsyncSession | None = None) -> None:
+    def __init__(
+        self, session: Session, db: AsyncSession | None = None, user_id: str | None = None
+    ) -> None:
         self.session = session
-        self.memory = MemoryManager(session.session_id)
+        self.memory = MemoryManager(session.session_id, user_id=user_id)
         self._retriever = HybridRetriever()
         self._db = db
         # Build a permissive gate for Chat mode — web_search is READ only
@@ -233,6 +235,7 @@ class ChatEngine:
         # 5. Tool loop or direct stream — collect text for memory
         full_response = ""
         first_token = False
+        total_usage = LLMUsage()
         if decision.needs_tools:
             # Fast path: when web_search is the only tool needed, skip the
             # non-streaming "pick a tool" LLM round-trip.  Run the search
@@ -251,6 +254,9 @@ class ChatEngine:
                             first_token = True
                             timer.mark("ttft_ms")
                         full_response += event["text"]
+                    elif event["type"] == "_usage":
+                        total_usage += event["usage"]
+                        continue  # internal event — do not forward to client
                     yield event
             else:
                 async for event in self._agentic_loop(
@@ -265,39 +271,32 @@ class ChatEngine:
                         full_response += event["text"]
                     elif event["type"] == "chart":
                         full_response += _chart_spec_to_markdown(event["spec"])
+                    elif event["type"] == "_usage":
+                        total_usage += event["usage"]
+                        continue  # internal event — do not forward to client
                     yield event
         else:
-            async for chunk in llm_gateway.stream_from_raw(llm_messages, model=model):
-                if not first_token:
-                    first_token = True
-                    timer.mark("ttft_ms")
-                full_response += chunk
-                yield {"type": "token", "text": chunk}
+            async for item in llm_gateway.stream_from_raw(llm_messages, model=model):
+                if isinstance(item, LLMUsage):
+                    total_usage += item
+                else:
+                    if not first_token:
+                        first_token = True
+                        timer.mark("ttft_ms")
+                    full_response += item
+                    yield {"type": "token", "text": item}
 
         total_ms = timer.elapsed_ms()
         timer.mark("total_ms")
         logger.info(
-            "chat done  total=%d ms  phases=%s",
+            "chat done  total=%d ms  usage=%s  phases=%s",
             total_ms,
+            total_usage.to_dict(),
             timer.phases,
         )
-        yield {"type": "metrics", "total_ms": total_ms, "phases": timer.phases}
+        yield {"type": "metrics", "total_ms": total_ms, "phases": timer.phases, "usage": total_usage.to_dict()}
 
-        # 6. Persist metrics
-        if self._db:
-            try:
-                from db.repos.metrics import MetricsRepo
-
-                await MetricsRepo(self._db).add(
-                    session_id=self.session.session_id,
-                    total_ms=total_ms,
-                    phases=timer.phases,
-                    route=decision.route,
-                )
-            except Exception:
-                pass  # metrics are best-effort — never block the response
-
-        # 7. Persist assistant turn & update session title
+        # 6. Persist assistant turn & update session title
         self.memory.add_assistant_turn(full_response)
         await self.memory.maybe_compress()
 
@@ -362,11 +361,12 @@ class ChatEngine:
 
         try:
             for _round in range(MAX_TOOL_ROUNDS):
-                response_msg = await llm_gateway.complete_with_tools_raw(
+                response_msg, call_usage = await llm_gateway.complete_with_tools_raw(
                     messages,
                     tool_schemas,
                     model=model,
                 )
+                yield {"type": "_usage", "usage": call_usage}
 
                 # Primary: structured tool_calls from the API
                 # Fallback: parse tool call JSON embedded in content (EXO / Llama 3.x)
@@ -377,8 +377,11 @@ class ChatEngine:
 
                 if not effective_calls:
                     # No tool calls — stream the final answer
-                    async for chunk in llm_gateway.stream_from_raw(messages, model=model):
-                        yield {"type": "token", "text": chunk}
+                    async for item in llm_gateway.stream_from_raw(messages, model=model):
+                        if isinstance(item, LLMUsage):
+                            yield {"type": "_usage", "usage": item}
+                        else:
+                            yield {"type": "token", "text": item}
                     return
 
                 # ── Execute tool calls ────────────────────────────────────
@@ -440,19 +443,28 @@ class ChatEngine:
                     # messages.  Inject results into the user message and stream once
                     # — no second round-trip.
                     final_msgs = _inject_tool_results(original_messages, round_results)
-                    async for chunk in llm_gateway.stream_from_raw(final_msgs, model=model):
-                        yield {"type": "token", "text": chunk}
+                    async for item in llm_gateway.stream_from_raw(final_msgs, model=model):
+                        if isinstance(item, LLMUsage):
+                            yield {"type": "_usage", "usage": item}
+                        else:
+                            yield {"type": "token", "text": item}
                     return
 
             # Max rounds reached — stream final answer
-            async for chunk in llm_gateway.stream_from_raw(messages, model=model):
-                yield {"type": "token", "text": chunk}
+            async for item in llm_gateway.stream_from_raw(messages, model=model):
+                if isinstance(item, LLMUsage):
+                    yield {"type": "_usage", "usage": item}
+                else:
+                    yield {"type": "token", "text": item}
 
         except Exception as exc:
             yield {"type": "error", "message": str(exc)}
             # Fall back: plain streaming without tools
-            async for chunk in llm_gateway.stream_from_raw(original_messages, model=model):
-                yield {"type": "token", "text": chunk}
+            async for item in llm_gateway.stream_from_raw(original_messages, model=model):
+                if isinstance(item, LLMUsage):
+                    yield {"type": "_usage", "usage": item}
+                else:
+                    yield {"type": "token", "text": item}
 
     # ------------------------------------------------------------------ #
     #  Helpers                                                             #
@@ -493,8 +505,11 @@ class ChatEngine:
         tool = tools.get("web_search")
 
         if tool is None:
-            async for chunk in llm_gateway.stream_from_raw(messages, model=model):
-                yield {"type": "token", "text": chunk}
+            async for item in llm_gateway.stream_from_raw(messages, model=model):
+                if isinstance(item, LLMUsage):
+                    yield {"type": "_usage", "usage": item}
+                else:
+                    yield {"type": "token", "text": item}
             return
 
         tool_id = f"call_{uuid4().hex[:8]}"
@@ -517,8 +532,11 @@ class ChatEngine:
         }
 
         enriched = _inject_tool_results(messages, [("web_search", result_text)])
-        async for chunk in llm_gateway.stream_from_raw(enriched, model=model):
-            yield {"type": "token", "text": chunk}
+        async for item in llm_gateway.stream_from_raw(enriched, model=model):
+            if isinstance(item, LLMUsage):
+                yield {"type": "_usage", "usage": item}
+            else:
+                yield {"type": "token", "text": item}
 
     async def _retrieve(self, query: str) -> list[RetrievedChunk]:
         try:

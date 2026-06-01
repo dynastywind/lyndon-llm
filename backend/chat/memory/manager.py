@@ -22,8 +22,9 @@ SUMMARISE_SYSTEM = (
 
 
 class MemoryManager:
-    def __init__(self, session_id: str) -> None:
+    def __init__(self, session_id: str, user_id: str | None = None) -> None:
         self.session_id = session_id
+        self.user_id = user_id
         self.short_term = ShortTermMemory(session_id)
         self.long_term = LongTermMemory()
         self.session_file = SessionFileMemory()
@@ -52,6 +53,7 @@ class MemoryManager:
         memories = await self.long_term.retrieve(
             query=user_message,
             top_k=settings.long_term_top_k,
+            user_id=self.user_id,
         )
         if memories:
             mem_block = "\n".join(
@@ -104,7 +106,8 @@ class MemoryManager:
                     memory_type=MemoryType.EPISODIC,
                     content=summary,
                     importance=0.6,
-                )
+                ),
+                user_id=self.user_id,
             )
 
     async def update_session_file(self, turns) -> None:
@@ -131,7 +134,8 @@ class MemoryManager:
                     memory_type=MemoryType.EPISODIC,
                     content=content,
                     importance=0.8,
-                )
+                ),
+                user_id=self.user_id,
             )
 
     async def store_memory(
@@ -147,11 +151,12 @@ class MemoryManager:
                 memory_type=memory_type,
                 content=content,
                 importance=importance,
-            )
+            ),
+            user_id=self.user_id,
         )
 
     async def retrieve_memories(self, query: str) -> list[Memory]:
-        return await self.long_term.retrieve(query)
+        return await self.long_term.retrieve(query, user_id=self.user_id)
 
     async def end_session(self) -> None:
         """Called when a session closes — summarise and persist the whole conversation."""
@@ -172,5 +177,6 @@ class MemoryManager:
                 memory_type=MemoryType.EPISODIC,
                 content=summary,
                 importance=0.7,
-            )
+            ),
+            user_id=self.user_id,
         )

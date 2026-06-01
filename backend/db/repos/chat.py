@@ -20,8 +20,10 @@ class ChatRepo:
 
     # ── Sessions ──────────────────────────────────────────────────────────────
 
-    async def create_session(self, session_id: str, mode: str = "chat") -> ChatSession:
-        row = ChatSession(id=session_id, mode=mode)
+    async def create_session(
+        self, session_id: str, mode: str = "chat", user_id: str | None = None
+    ) -> ChatSession:
+        row = ChatSession(id=session_id, mode=mode, user_id=user_id)
         self._db.add(row)
         await self._db.commit()
         await self._db.refresh(row)
@@ -43,10 +45,15 @@ class ChatRepo:
         mode: str = "chat",
         limit: int = 20,
         offset: int = 0,
+        user_id: str | None = None,
     ) -> tuple[list[ChatSession], int]:
+        base_filter = [ChatSession.mode == mode]
+        if user_id is not None:
+            base_filter.append(ChatSession.user_id == user_id)
+
         total: int = (
             await self._db.execute(
-                select(func.count()).select_from(ChatSession).where(ChatSession.mode == mode)
+                select(func.count()).select_from(ChatSession).where(*base_filter)
             )
         ).scalar_one()
 
@@ -54,7 +61,7 @@ class ChatRepo:
             (
                 await self._db.execute(
                     select(ChatSession)
-                    .where(ChatSession.mode == mode)
+                    .where(*base_filter)
                     .order_by(ChatSession.updated_at.desc())
                     .limit(limit)
                     .offset(offset)

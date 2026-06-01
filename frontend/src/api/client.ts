@@ -15,6 +15,7 @@ import type {
   McpServerCreate,
   McpServerTool,
 } from '@/types'
+import { useAppStore } from '@/store'
 
 // When the app runs inside Tauri (production desktop build) the frontend is
 // served from the tauri:// custom protocol — there is no Vite proxy, so
@@ -31,12 +32,71 @@ export interface AttachmentPayload {
   data: string // raw base64 (no "data:...;base64," prefix)
 }
 
+function authHeader(): Record<string, string> {
+  const token = useAppStore.getState().user?.token
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 function headers(sessionId: string, mode: string) {
   return {
     'Content-Type': 'application/json',
     'x-session-id': sessionId,
     'x-mode': mode,
+    ...authHeader(),
   }
+}
+
+function jsonHeaders() {
+  return { 'Content-Type': 'application/json', ...authHeader() }
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+export interface AuthResponse {
+  access_token: string
+  token_type: string
+  username: string
+  id: string
+}
+
+export async function login(username: string, password: string): Promise<AuthResponse> {
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export async function register(username: string, password: string): Promise<AuthResponse> {
+  const res = await fetch(`${BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export async function checkUsername(username: string): Promise<{ available: boolean }> {
+  const res = await fetch(`${BASE}/auth/check-username?username=${encodeURIComponent(username)}`)
+  if (!res.ok) throw new Error('Failed to check username')
+  return res.json()
+}
+
+export async function deleteAccount(): Promise<void> {
+  const res = await fetch(`${BASE}/auth/me`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  })
+  if (!res.ok) throw new Error('Failed to delete account')
 }
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
@@ -112,7 +172,7 @@ export async function streamChat(
 // ── Chat sessions ─────────────────────────────────────────────────────────────
 
 export async function createChatSession(): Promise<ChatSession> {
-  const res = await fetch(`${BASE}/chat/sessions`, { method: 'POST' })
+  const res = await fetch(`${BASE}/chat/sessions`, { method: 'POST', headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to create session: ${res.statusText}`)
   return res.json()
 }
@@ -122,7 +182,9 @@ export async function listChatSessions(
   limit = 20,
   offset = 0,
 ): Promise<ChatSessionsResponse> {
-  const res = await fetch(`${BASE}/chat/sessions?mode=${mode}&limit=${limit}&offset=${offset}`)
+  const res = await fetch(`${BASE}/chat/sessions?mode=${mode}&limit=${limit}&offset=${offset}`, {
+    headers: authHeader(),
+  })
   if (!res.ok) throw new Error(`Failed to list sessions: ${res.statusText}`)
   return res.json()
 }
@@ -178,7 +240,7 @@ export async function uploadRagFile(
 ): Promise<{ filename: string; path: string; chunks_stored: number }> {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`${BASE}/rag/upload`, { method: 'POST', body: form })
+  const res = await fetch(`${BASE}/rag/upload`, { method: 'POST', body: form, headers: authHeader() })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? res.statusText)
@@ -187,7 +249,7 @@ export async function uploadRagFile(
 }
 
 export async function listRagSources(): Promise<{ sources: string[] }> {
-  const res = await fetch(`${BASE}/rag/sources`)
+  const res = await fetch(`${BASE}/rag/sources`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to list sources: ${res.statusText}`)
   return res.json()
 }
@@ -195,6 +257,7 @@ export async function listRagSources(): Promise<{ sources: string[] }> {
 export async function deleteRagSource(source: string): Promise<void> {
   const res = await fetch(`${BASE}/rag/sources?source=${encodeURIComponent(source)}`, {
     method: 'DELETE',
+    headers: authHeader(),
   })
   if (!res.ok) throw new Error(`Failed to delete source: ${res.statusText}`)
 }
@@ -202,7 +265,7 @@ export async function deleteRagSource(source: string): Promise<void> {
 // ── Tool registry (MCP + internal) ───────────────────────────────────────────
 
 export async function getToolRegistry(): Promise<ToolRegistry> {
-  const res = await fetch(`${BASE}/registry`)
+  const res = await fetch(`${BASE}/registry`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to load tool registry: ${res.statusText}`)
   return res.json()
 }
@@ -210,7 +273,7 @@ export async function getToolRegistry(): Promise<ToolRegistry> {
 export async function createMcpServer(body: McpServerCreate): Promise<McpServer> {
   const res = await fetch(`${BASE}/registry/mcp/servers`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -226,7 +289,7 @@ export async function updateMcpServer(
 ): Promise<McpServer> {
   const res = await fetch(`${BASE}/registry/mcp/servers/${serverId}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders(),
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -239,6 +302,7 @@ export async function updateMcpServer(
 export async function deleteMcpServer(serverId: string): Promise<void> {
   const res = await fetch(`${BASE}/registry/mcp/servers/${serverId}`, {
     method: 'DELETE',
+    headers: authHeader(),
   })
   if (!res.ok) throw new Error(`Failed to delete MCP server: ${res.statusText}`)
 }
@@ -246,6 +310,7 @@ export async function deleteMcpServer(serverId: string): Promise<void> {
 export async function refreshMcpServer(serverId: string): Promise<McpServer> {
   const res = await fetch(`${BASE}/registry/mcp/servers/${serverId}/refresh`, {
     method: 'POST',
+    headers: authHeader(),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
@@ -263,7 +328,7 @@ export async function toggleMcpTool(
     `${BASE}/registry/mcp/servers/${serverId}/tools/${encodeURIComponent(qualifiedName)}`,
     {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: jsonHeaders(),
       body: JSON.stringify({ enabled }),
     },
   )
@@ -359,7 +424,7 @@ export async function runSandbox(
 // ── Memory ────────────────────────────────────────────────────────────────────
 
 export async function getMemories(): Promise<MemoriesResponse> {
-  const res = await fetch(`${BASE}/chat/memories`)
+  const res = await fetch(`${BASE}/chat/memories`, { headers: authHeader() })
   if (!res.ok) throw new Error('Failed to fetch memories')
   return res.json()
 }
@@ -367,6 +432,7 @@ export async function getMemories(): Promise<MemoriesResponse> {
 export async function deleteMemory(memoryId: string): Promise<void> {
   const res = await fetch(`${BASE}/chat/memories/${encodeURIComponent(memoryId)}`, {
     method: 'DELETE',
+    headers: authHeader(),
   })
   if (!res.ok) throw new Error('Failed to delete memory')
 }

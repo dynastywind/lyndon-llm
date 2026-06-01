@@ -8,6 +8,8 @@ const MORE_LIMIT = 5
 
 export function useChatHistory(mode = 'chat') {
   const sessionListVersion = useAppStore((s) => s.sessionListVersion)
+  // Re-fetch when the logged-in user changes (login / logout)
+  const userId = useAppStore((s) => s.user?.id ?? null)
 
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [total, setTotal] = useState(0)
@@ -19,6 +21,12 @@ export function useChatHistory(mode = 'chat') {
   // ── Initial / refresh fetch ────────────────────────────────────────────────
 
   const fetchInitial = useCallback(async () => {
+    // No user logged in — clear the list immediately, don't fetch
+    if (!userId) {
+      setSessions([])
+      setTotal(0)
+      return
+    }
     setLoading(true)
     try {
       const data = await listChatSessions(mode, INITIAL_LIMIT, 0)
@@ -29,13 +37,13 @@ export function useChatHistory(mode = 'chat') {
     } finally {
       setLoading(false)
     }
-  }, [mode])
+  }, [mode, userId])
 
   // Re-fetch whenever the session list is bumped (after a message completes
   // or a new session is created).
   useEffect(() => {
     fetchInitial()
-  }, [fetchInitial, sessionListVersion])
+  }, [fetchInitial, sessionListVersion, userId])
 
   // ── Load more (called by IntersectionObserver in Sidebar) ─────────────────
 

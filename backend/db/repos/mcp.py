@@ -16,10 +16,11 @@ class McpRepo:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
 
-    async def list_servers(self) -> list[McpServer]:
-        result = await self._db.execute(
-            select(McpServer).options(selectinload(McpServer.tools)).order_by(McpServer.created_at)
-        )
+    async def list_servers(self, user_id: str | None = None) -> list[McpServer]:
+        q = select(McpServer).options(selectinload(McpServer.tools)).order_by(McpServer.created_at)
+        if user_id is not None:
+            q = q.where(McpServer.user_id == user_id)
+        result = await self._db.execute(q)
         return list(result.scalars().all())
 
     async def get_server(self, server_id: str) -> McpServer | None:
@@ -41,6 +42,7 @@ class McpRepo:
         env: dict[str, str],
         url: str | None,
         enabled: bool,
+        user_id: str | None = None,
     ) -> McpServer:
         row = McpServer(
             name=name,
@@ -51,6 +53,7 @@ class McpRepo:
             env_json=json.dumps(env),
             url=url,
             enabled=enabled,
+            user_id=user_id,
         )
         self._db.add(row)
         await self._db.commit()

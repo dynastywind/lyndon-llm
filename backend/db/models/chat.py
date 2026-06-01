@@ -10,6 +10,7 @@ import uuid
 from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+
 from db.base import Base
 
 
@@ -29,6 +30,9 @@ class ChatSession(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
+    )
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     messages: Mapped[list[ChatMessage]] = relationship(

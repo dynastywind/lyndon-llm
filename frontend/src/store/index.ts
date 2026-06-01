@@ -5,7 +5,18 @@ import type { Mode, Message, Plan, FileDiff } from '@/types'
 import { CODE_THEME_DEFAULT } from '@/config/codeThemes'
 import type { CodeThemeName } from '@/config/codeThemes'
 
+export interface AuthUser {
+  id: string
+  username: string
+  token: string
+}
+
 interface AppState {
+  // Auth
+  user: AuthUser | null
+  setUser: (user: AuthUser | null) => void
+  logout: () => void
+
   // Session
   sessionId: string | null
   setSessionId: (id: string | null) => void
@@ -89,6 +100,19 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
+      // ── Auth ─────────────────────────────────────────────────────────
+      user: null,
+      setUser: (user) => set({ user }),
+      logout: () =>
+        set({
+          user: null,
+          sessionId: null,
+          sessionMessages: {},
+          drafts: {},
+          streamingSet: {},
+          isStreaming: false,
+        }),
+
       // ── Session ──────────────────────────────────────────────────────
       sessionId: null,
       setSessionId: (id) => set({ sessionId: id }),
@@ -214,6 +238,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'lyndon-llm-store',
       partialize: (s) => ({
+        user: s.user,
         sessionId: s.sessionId,
         repoPath: s.repoPath,
         codeTheme: s.codeTheme,

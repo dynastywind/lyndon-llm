@@ -28,7 +28,7 @@ class VectorStoreBase:
 
     async def delete_by_source(self, source: str) -> None: ...
 
-    async def list_sources(self) -> list[str]: ...
+    async def list_sources(self, user_id: str | None = None) -> list[str]: ...
 
     async def list_all(self, limit: int = 200) -> tuple[list[str], list[str], list[dict]]:
         """Return (ids, documents, metadatas) for up to *limit* items."""
@@ -83,9 +83,12 @@ class ChromaVectorStore(VectorStoreBase):
         if result["ids"]:
             col.delete(ids=result["ids"])
 
-    async def list_sources(self) -> list[str]:
+    async def list_sources(self, user_id: str | None = None) -> list[str]:
         """Return sorted list of distinct source paths in the collection."""
-        result = self._get_col().get(include=["metadatas"])
+        kwargs: dict = {"include": ["metadatas"]}
+        if user_id:
+            kwargs["where"] = {"user_id": user_id}
+        result = self._get_col().get(**kwargs)
         sources = sorted(
             {m.get("source", "") for m in (result.get("metadatas") or []) if m.get("source")}
         )
@@ -178,8 +181,16 @@ class QdrantVectorStore(VectorStoreBase):
             ),
         )
 
-    async def list_sources(self) -> list[str]:
+    async def list_sources(self, user_id: str | None = None) -> list[str]:
         """Scroll all points and collect distinct source values."""
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        qdrant_filter = None
+        if user_id:
+            qdrant_filter = Filter(
+                must=[FieldCondition(key="user_id", match=MatchValue(value=user_id))]
+            )
+
         sources: set[str] = set()
         offset = None
         while True:
@@ -188,6 +199,7 @@ class QdrantVectorStore(VectorStoreBase):
                 with_payload=True,
                 limit=256,
                 offset=offset,
+                query_filter=qdrant_filter,
             )
             for point in results:
                 src = (point.payload or {}).get("source", "")

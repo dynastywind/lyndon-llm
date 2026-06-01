@@ -102,6 +102,11 @@ class Settings(BaseSettings):
     # Session
     session_ttl_seconds: int = 86400  # 24 hours
 
+    # Auth — JWT
+    jwt_secret_key: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_days: int = 30
+
     # Langfuse observability (leave blank to disable)
     langfuse_secret_key: str = ""
     langfuse_public_key: str = ""

@@ -2,3 +2,4 @@
 from db.models.chat import ChatMessage, ChatSession  # noqa: F401
 from db.models.mcp import McpServer, McpToolCache  # noqa: F401
 from db.models.metrics import ChatMetric  # noqa: F401
+from db.models.user import User  # noqa: F401

@@ -8,10 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth_deps import get_current_user, get_optional_user
 from core.mcp.manager import mcp_tool_manager
 from core.permissions.gate import Mode
 from core.tools.registry import tool_registry
 from db.base import get_db
+from db.models.user import User
 from db.repos.mcp import McpRepo
 
 router = APIRouter()
@@ -119,7 +121,10 @@ def _server_to_out(server) -> McpServerOut:
 
 
 @router.get("", response_model=RegistryOut)
-async def get_registry(db: AsyncSession = Depends(get_db)):
+async def get_registry(
+    db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Full tool registry for Settings UI."""
     internal: list[RegistryToolOut] = []
     for mode in (Mode.CHAT, Mode.COWORK, Mode.CODE):
@@ -127,7 +132,7 @@ async def get_registry(db: AsyncSession = Depends(get_db)):
             internal.append(RegistryToolOut(**t))
 
     repo = McpRepo(db)
-    servers = await repo.list_servers()
+    servers = await repo.list_servers(user_id=user.id if user else None)
     return RegistryOut(
         internal_tools=internal,
         mcp_servers=[_server_to_out(s) for s in servers],
@@ -135,7 +140,11 @@ async def get_registry(db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/mcp/servers", response_model=McpServerOut, status_code=201)
-async def create_mcp_server(body: McpServerCreate, db: AsyncSession = Depends(get_db)):
+async def create_mcp_server(
+    body: McpServerCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     transport = body.transport.lower()
     if transport == "stdio" and not body.command:
         raise HTTPException(400, "stdio transport requires command")
@@ -152,6 +161,7 @@ async def create_mcp_server(body: McpServerCreate, db: AsyncSession = Depends(ge
         env=body.env,
         url=body.url,
         enabled=body.enabled,
+        user_id=user.id,
     )
     try:
         server = await mcp_tool_manager.refresh_server(server.id)
@@ -169,6 +179,7 @@ async def update_mcp_server(
     server_id: str,
     body: McpServerUpdate,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     repo = McpRepo(db)
     fields = body.model_dump(exclude_unset=True)
@@ -188,7 +199,11 @@ async def update_mcp_server(
 
 
 @router.delete("/mcp/servers/{server_id}", status_code=204)
-async def delete_mcp_server(server_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_mcp_server(
+    server_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     repo = McpRepo(db)
     if not await repo.delete_server(server_id):
         raise HTTPException(404, "MCP server not found")
@@ -196,7 +211,11 @@ async def delete_mcp_server(server_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/mcp/servers/{server_id}/refresh", response_model=McpServerOut)
-async def refresh_mcp_server(server_id: str, db: AsyncSession = Depends(get_db)):
+async def refresh_mcp_server(
+    server_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     try:
         server = await mcp_tool_manager.refresh_server(server_id)
     except ValueError:
@@ -215,6 +234,7 @@ async def toggle_mcp_tool(
     qualified_name: str,
     body: McpToolToggle,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     repo = McpRepo(db)
     row = await repo.set_tool_enabled(server_id, qualified_name, body.enabled)

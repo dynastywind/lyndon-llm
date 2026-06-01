@@ -1,0 +1,40 @@
+"""CRUD for user accounts."""
+
+from __future__ import annotations
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models.user import User
+
+
+class UserRepo:
+    def __init__(self, db: AsyncSession) -> None:
+        self._db = db
+
+    async def get_by_id(self, user_id: str) -> User | None:
+        result = await self._db.execute(select(User).where(User.id == user_id))
+        return result.scalar_one_or_none()
+
+    async def get_by_username(self, username: str) -> User | None:
+        result = await self._db.execute(select(User).where(User.username == username))
+        return result.scalar_one_or_none()
+
+    async def count(self) -> int:
+        from sqlalchemy import func
+
+        result = await self._db.execute(select(func.count()).select_from(User))
+        return result.scalar_one()
+
+    async def create(self, username: str, hashed_password: str) -> User:
+        row = User(username=username, hashed_password=hashed_password)
+        self._db.add(row)
+        await self._db.commit()
+        await self._db.refresh(row)
+        return row
+
+    async def delete(self, user_id: str) -> None:
+        row = await self.get_by_id(user_id)
+        if row:
+            await self._db.delete(row)
+            await self._db.commit()

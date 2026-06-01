@@ -25,7 +25,7 @@ class IngestPipeline:
             self._vector_store = await get_vector_store(self.COLLECTION_NAME)
         return self._vector_store
 
-    async def ingest(self, source: str) -> int:
+    async def ingest(self, source: str, user_id: str | None = None) -> int:
         """
         Ingest a single source (file path or URL).
         Returns the number of chunks stored.
@@ -58,11 +58,12 @@ class IngestPipeline:
         # Per-document chunk_index resets to 0 for each page/section (e.g. PDF
         # pages), which would produce duplicate IDs like source::0 appearing
         # multiple times in one upsert call.
+        extra_meta = {"user_id": user_id} if user_id else {}
         await vs.upsert(
             ids=[f"{source}::{i}" for i in range(len(all_chunks))],
             embeddings=embeddings,
             documents=texts,
-            metadatas=[{"source": c.source, **c.metadata} for c in all_chunks],
+            metadatas=[{"source": c.source, **c.metadata, **extra_meta} for c in all_chunks],
         )
         return len(all_chunks)
 

@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import chat, code, cowork, metrics, rag, registry, sandbox
+from api.routes import auth, chat, code, cowork, rag, registry, sandbox
 from api.ws.stream import router as ws_router
 from config.settings import settings
 
@@ -46,6 +46,9 @@ async def _migrate(conn) -> None:
     migrations = [
         # v2 — persist file/image attachments with each user message
         "ALTER TABLE chat_messages ADD COLUMN attachments_json TEXT",
+        # v3 — per-user scoping for MCP servers and chat sessions
+        "ALTER TABLE mcp_servers ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE",
+        "ALTER TABLE chat_sessions ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE SET NULL",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore
@@ -97,12 +100,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(cowork.router, prefix="/api/cowork", tags=["cowork"])
 app.include_router(code.router, prefix="/api/code", tags=["code"])
 app.include_router(rag.router, prefix="/api/rag", tags=["rag"])
 app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
-app.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])
 app.include_router(sandbox.router, prefix="/api/sandbox", tags=["sandbox"])
 app.include_router(ws_router, prefix="/ws", tags=["websocket"])
 

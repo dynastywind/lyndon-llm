@@ -8,12 +8,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth_deps import get_current_user, get_optional_user
 from api.deps import get_session
 from chat.engine import ChatEngine
 from chat.rag.ingestion.pipeline import ingest_pipeline
 from core.permissions.gate import Mode
 from core.session.manager import Session, session_manager
 from db.base import get_db
+from db.models.user import User
 from db.repos.chat import ChatRepo
 
 router = APIRouter()
@@ -67,8 +69,9 @@ async def chat(
     body: ChatRequest,
     session: Session = Depends(get_session),
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
-    engine = ChatEngine(session, db=db)
+    engine = ChatEngine(session, db=db, user_id=user.id if user else None)
     attachments = [a.model_dump() for a in body.attachments] if body.attachments else None
 
     async def _generate():
@@ -98,11 +101,14 @@ async def chat(
 
 
 @router.post("/sessions")
-async def create_chat_session(db: AsyncSession = Depends(get_db)):
+async def create_chat_session(
+    db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     """Create a new in-memory + DB session and return its ID."""
     session = session_manager.create(mode=Mode.CHAT)
     repo = ChatRepo(db)
-    row = await repo.create_session(session.session_id, mode="chat")
+    row = await repo.create_session(session.session_id, mode="chat", user_id=user.id if user else None)
     return _session_dict(row)
 
 
@@ -112,10 +118,13 @@ async def list_chat_sessions(
     limit: int = 20,
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     """Paginated list of sessions ordered by most recently active."""
+    if user is None:
+        return {"sessions": [], "total": 0}
     repo = ChatRepo(db)
-    rows, total = await repo.list_sessions(mode=mode, limit=limit, offset=offset)
+    rows, total = await repo.list_sessions(mode=mode, limit=limit, offset=offset, user_id=user.id)
     return {"sessions": [_session_dict(r) for r in rows], "total": total}
 
 
@@ -217,26 +226,30 @@ async def ingest(body: IngestRequest):
 
 
 @router.get("/memory")
-async def get_memories(query: str, session: Session = Depends(get_session)):
+async def get_memories(
+    query: str,
+    session: Session = Depends(get_session),
+    user: User | None = Depends(get_optional_user),
+):
     from chat.memory.manager import MemoryManager
 
-    mgr = MemoryManager(session.session_id)
+    mgr = MemoryManager(session.session_id, user_id=user.id if user else None)
     memories = await mgr.retrieve_memories(query)
     return {"memories": [m.model_dump(exclude={"embedding"}) for m in memories]}
 
 
 @router.get("/memories")
-async def list_memories():
-    """Return all long-term memories, newest-first."""
+async def list_memories(user: User = Depends(get_current_user)):
+    """Return all long-term memories for the authenticated user, newest-first."""
     from chat.memory.long_term import LongTermMemory
 
     lt = LongTermMemory()
-    items = await lt.list_all()
+    items = await lt.list_all(user_id=user.id)
     return {"memories": items, "total": len(items)}
 
 
 @router.delete("/memories/{memory_id}", status_code=204)
-async def delete_memory(memory_id: str):
+async def delete_memory(memory_id: str, user: User = Depends(get_current_user)):
     """Permanently delete a long-term memory by ID."""
     from chat.memory.long_term import LongTermMemory
 
