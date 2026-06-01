@@ -277,8 +277,14 @@ export function Sidebar() {
   useEffect(() => {
     if (!sessionId) return
     const current = sessions.find((s) => s.session_id === sessionId)
-    if (current) setSessionTitle(current.title)
-  }, [sessions, sessionId, setSessionTitle])
+    if (current) {
+      setSessionTitle(current.title)
+    } else if (!loading) {
+      // Session is gone from the list (deleted or expired) — reset to new-chat state
+      setSessionId(null)
+      setSessionTitle(null)
+    }
+  }, [sessions, sessionId, loading, setSessionId, setSessionTitle])
 
   const handleNewChat = () => {
     if (!sessionId) return
@@ -294,12 +300,14 @@ export function Sidebar() {
   const handleDeleteSession = (session: ChatSession) => {
     removeSession(session.session_id)
     clearSessionMessages(session.session_id)
-    // If the deleted session was active, deselect — same as clicking "+ New chat"
+    // If the deleted session was active, immediately reset to new-chat state
     if (session.session_id === sessionId) {
       setSessionId(null)
       setSessionTitle(null)
     }
-    deleteChatSession(session.session_id).catch(() => {})
+    deleteChatSession(session.session_id)
+      .then(() => bumpSessionVersion()) // refresh list + total from backend
+      .catch(() => {})
   }
 
   // ── render ─────────────────────────────────────────────────────────────────
