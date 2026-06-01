@@ -135,6 +135,60 @@ describe('streamChat', () => {
     expect((errEvents[0].data as { message: string }).message).toBe('LLM unavailable')
   })
 
+  // ── SSE parser regression ─────────────────────────────────────────────────
+
+  it('handles a data-only SSE frame (no event: line) as type "message"', async () => {
+    // SSE spec: frames without an event: line default to type "message"
+    const frame = `data: ${JSON.stringify({ text: 'implicit' })}\n\n`
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, body: makeStream([frame]) }),
+    )
+
+    const events: Array<{ type: string; data: object }> = []
+    await streamChat('hi', 'sid', (type, data) => events.push({ type, data }))
+
+    // Our client defaults eventType to 'message' when no event: line present
+    expect(events.some((e) => e.type === 'message')).toBe(true)
+  })
+
+  it('parses multiple SSE frames arriving in one chunk', async () => {
+    // Two complete frames delivered in a single read() call
+    const chunk =
+      sseFrame('token', { text: 'first' }) + sseFrame('token', { text: 'second' })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, body: makeStream([chunk]) }),
+    )
+
+    const events: Array<{ type: string; data: object }> = []
+    await streamChat('hi', 'sid', (type, data) => events.push({ type, data }))
+
+    const tokens = events.filter((e) => e.type === 'token')
+    expect(tokens).toHaveLength(2)
+    expect((tokens[0].data as { text: string }).text).toBe('first')
+    expect((tokens[1].data as { text: string }).text).toBe('second')
+  })
+
+  it('survives malformed JSON in an SSE data field without throwing', async () => {
+    const badFrame = 'event: token\ndata: {not valid json}\n\n'
+    const goodFrame = sseFrame('token', { text: 'recovered' })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, body: makeStream([badFrame, goodFrame]) }),
+    )
+
+    const events: Array<{ type: string }> = []
+    await expect(
+      streamChat('hi', 'sid', (type) => events.push({ type })),
+    ).resolves.toBeUndefined()
+
+    // The malformed frame is skipped; the valid one is delivered
+    expect(events.some((e) => e.type === 'token')).toBe(true)
+  })
+
   // ── model param serialisation ────────────────────────────────────────────
 
   it('includes model in request body when provided', async () => {
