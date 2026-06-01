@@ -33,6 +33,12 @@ class UserRepo:
         await self._db.refresh(row)
         return row
 
+    async def update_password(self, user_id: str, hashed_password: str) -> None:
+        row = await self.get_by_id(user_id)
+        if row:
+            row.hashed_password = hashed_password
+            await self._db.commit()
+
     async def delete(self, user_id: str) -> None:
         row = await self.get_by_id(user_id)
         if row:

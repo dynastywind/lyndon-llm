@@ -102,6 +102,18 @@ export async function checkUsername(username: string): Promise<{ available: bool
   return res.json()
 }
 
+export async function resetPassword(username: string, newPassword: string): Promise<void> {
+  const res = await fetch(`${BASE}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, new_password: newPassword }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+}
+
 export async function deleteAccount(): Promise<void> {
   const res = await fetch(`${BASE}/auth/me`, {
     method: 'DELETE',

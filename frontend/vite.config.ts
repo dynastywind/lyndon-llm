@@ -21,5 +21,8 @@ export default defineConfig({
       '/api': 'http://localhost:8000',
       '/ws': { target: 'ws://localhost:8000', ws: true },
     },
+    allowedHosts: [
+      "lyndon-llm.taild77c8f.ts.net"
+    ]
   },
 })

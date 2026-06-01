@@ -42,6 +42,11 @@ class TokenResponse(BaseModel):
     id: str
 
 
+class ResetPasswordRequest(BaseModel):
+    username: str
+    new_password: str
+
+
 class LoginRecordOut(BaseModel):
     id: str
     device_id: str | None
@@ -254,6 +259,26 @@ async def login_history(
         )
         for r in records
     ]
+
+
+@router.post("/reset-password")
+async def reset_password(
+    body: ResetPasswordRequest, db: AsyncSession = Depends(get_db)
+):
+    """Reset a user's password without requiring the old one.
+    The new password is hashed with bcrypt — never stored as plaintext.
+    """
+    repo = UserRepo(db)
+    user = await repo.get_by_username(body.username)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.hashed_password is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This account uses Google login and has no password.",
+        )
+    await repo.update_password(user.id, _hash_password(body.new_password))
+    return {"ok": True}
 
 
 @router.delete("/me", status_code=204)
