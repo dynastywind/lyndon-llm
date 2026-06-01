@@ -109,6 +109,7 @@ export const useAppStore = create<AppState>()(
         set({
           user: null,
           sessionId: null,
+          sessionTitle: null,
           sessionMessages: {},
           drafts: {},
           streamingSet: {},

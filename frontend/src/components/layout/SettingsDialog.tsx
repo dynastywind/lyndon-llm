@@ -13,7 +13,6 @@ import {
 import { useAppStore } from '@/store'
 import { CODE_THEME_OPTIONS } from '@/config/codeThemes'
 import { ToolsRegistryPanel } from './ToolsRegistryPanel'
-import { MemoryPanel } from './MemoryPanel'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -28,7 +27,7 @@ interface UploadItem {
   existingPath?: string // populated when status === 'conflict'
 }
 
-export type SettingsTab = 'knowledge' | 'tools' | 'memory' | 'prompts' | 'appearance'
+export type SettingsTab = 'knowledge' | 'tools' | 'prompts' | 'appearance'
 
 interface Props {
   open: boolean
@@ -258,9 +257,6 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
             <TabButton active={tab === 'tools'} onClick={() => setTab('tools')}>
               MCP
             </TabButton>
-            <TabButton active={tab === 'memory'} onClick={() => setTab('memory')}>
-              Memory
-            </TabButton>
             <TabButton active={tab === 'prompts'} onClick={() => setTab('prompts')}>
               Prompts
             </TabButton>
@@ -273,8 +269,6 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
           <div className={cn('flex-1 overflow-y-auto', tab === 'knowledge' ? '' : 'p-5')}>
             {tab === 'tools' ? (
               <ToolsRegistryPanel active={open && tab === 'tools'} />
-            ) : tab === 'memory' ? (
-              <MemoryPanel active={open && tab === 'memory'} />
             ) : tab === 'prompts' ? (
               <PromptsPanel />
             ) : tab === 'appearance' ? (

@@ -7,7 +7,7 @@ import {
   Trash2,
   Loader2,
   Pencil,
-  BrainCircuit,
+  MessageSquare,
   MoreHorizontal,
   MessageSquarePlus,
 } from 'lucide-react'
@@ -780,7 +780,7 @@ export function Sidebar() {
                   [
                     { tab: 'knowledge' as SettingsTab, icon: BookOpen, label: 'Knowledge' },
                     { tab: 'tools' as SettingsTab, icon: Server, label: 'MCP' },
-                    { tab: 'memory' as SettingsTab, icon: BrainCircuit, label: 'Memory' },
+                    { tab: 'prompts' as SettingsTab, icon: MessageSquare, label: 'Prompts' },
                   ] as const
                 ).map(({ tab, icon: Icon, label }) => (
                   <DropdownMenu.Item
