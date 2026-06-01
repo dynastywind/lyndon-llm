@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AlertCircle, CheckCircle2, FileText, Loader2, RefreshCw, Trash2, Upload, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, FileText, Loader2, Moon, RefreshCw, Sun, Trash2, Upload, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { deleteRagSource, listRagSources, reindexRagSource, uploadRagFile, type RagSource } from '@/api/client'
 import { useAppStore } from '@/store'
+import { CODE_THEME_OPTIONS } from '@/config/codeThemes'
 import { ToolsRegistryPanel } from './ToolsRegistryPanel'
 import { MemoryPanel } from './MemoryPanel'
 
@@ -19,7 +20,7 @@ interface UploadItem {
   error?: string
 }
 
-export type SettingsTab = 'knowledge' | 'tools' | 'memory' | 'prompts'
+export type SettingsTab = 'knowledge' | 'tools' | 'memory' | 'prompts' | 'appearance'
 
 interface Props {
   open: boolean
@@ -193,6 +194,9 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
             <TabButton active={tab === 'prompts'} onClick={() => setTab('prompts')}>
               Prompts
             </TabButton>
+            <TabButton active={tab === 'appearance'} onClick={() => setTab('appearance')}>
+              Appearance
+            </TabButton>
           </div>
 
           {/* ── Body ── */}
@@ -203,6 +207,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
               <MemoryPanel active={open && tab === 'memory'} />
             ) : tab === 'prompts' ? (
               <PromptsPanel />
+            ) : tab === 'appearance' ? (
+              <AppearancePanel />
             ) : (
               <div className="space-y-7">
                 {/* ── Upload section ── */}
@@ -362,6 +368,103 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  )
+}
+
+// ─── AppearancePanel ──────────────────────────────────────────────────────────
+
+function AppearancePanel() {
+  const { uiTheme, setUiTheme, codeTheme, setCodeTheme } = useAppStore()
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+      {/* ── UI Theme ── */}
+      <section>
+        <SectionLabel>Theme</SectionLabel>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {([
+            { value: 'dark', icon: Moon, label: 'Dark' },
+            { value: 'light', icon: Sun, label: 'Light' },
+          ] as const).map(({ value, icon: Icon, label }) => {
+            const active = uiTheme === value
+            return (
+              <button
+                key={value}
+                onClick={() => setUiTheme(value)}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  padding: '10px 0',
+                  border: active
+                    ? '1px solid var(--lv-gold)'
+                    : '1px solid var(--lv-rule-strong)',
+                  background: active ? 'var(--lv-wash)' : 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: 12.5,
+                  fontWeight: active ? 600 : 400,
+                  color: active ? 'var(--lv-gold)' : 'var(--lv-mute)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <Icon size={14} strokeWidth={1.5} />
+                {label}
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
+      {/* ── Code Theme ── */}
+      <section>
+        <SectionLabel>Code Theme</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {CODE_THEME_OPTIONS.map(({ value, label }) => {
+            const active = codeTheme === value
+            return (
+              <button
+                key={value}
+                onClick={() => setCodeTheme(value)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
+                  border: active
+                    ? '1px solid var(--lv-gold)'
+                    : '1px solid var(--lv-rule)',
+                  background: active ? 'var(--lv-wash)' : 'transparent',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: 12.5,
+                  color: active ? 'var(--lv-gold)' : 'var(--lv-soft)',
+                  textAlign: 'left',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <span>{label}</span>
+                {active && (
+                  <span style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 9,
+                    letterSpacing: '0.12em',
+                    color: 'var(--lv-gold)',
+                    textTransform: 'uppercase',
+                  }}>
+                    Active
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </section>
+
+    </div>
   )
 }
 
