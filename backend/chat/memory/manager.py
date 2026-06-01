@@ -5,14 +5,22 @@ Every Chat engine interaction goes through this class.
 
 from __future__ import annotations
 
+import re
 import uuid
 
+from chat.memory.cross_session_file import CrossSessionFileMemory
 from chat.memory.long_term import LongTermMemory
 from chat.memory.session_file import SessionFileMemory
 from chat.memory.short_term import ShortTermMemory
 from chat.memory.types import Memory, MemoryType
 from config.settings import settings
 from core.llm.gateway import LLMMessage, llm_gateway
+
+
+def _extract_user_profile(content: str) -> str:
+    """Return the '## User Profile' block from a memory file, or '' if absent."""
+    match = re.search(r"(## User Profile\n.*?)(?=\n## |\Z)", content, re.DOTALL)
+    return match.group(1).strip() if match else ""
 
 SUMMARISE_SYSTEM = (
     "You are a concise summariser. Given a conversation excerpt, produce a "
@@ -28,6 +36,7 @@ class MemoryManager:
         self.short_term = ShortTermMemory(session_id)
         self.long_term = LongTermMemory()
         self.session_file = SessionFileMemory()
+        self.cross_session_file = CrossSessionFileMemory()
 
     # ------------------------------------------------------------------ #
     #  Session start — inject relevant memories into system prompt         #
@@ -44,12 +53,17 @@ class MemoryManager:
         """
         enriched = base_prompt
 
-        # 1. Inject per-session file memory (deterministic, no vector search)
+        # 1. Inject cross-session memory (persistent user profile + key facts)
+        cross_memory = self.cross_session_file.load()
+        if cross_memory:
+            enriched = f"{enriched}\n\n## Cross-Session Memory\n{cross_memory}"
+
+        # 2. Inject per-session file memory (conversation summary + user profile)
         session_memory = self.session_file.load(self.session_id)
         if session_memory:
             enriched = f"{enriched}\n\n## This Session's Memory\n{session_memory}"
 
-        # 2. Inject relevant cross-session long-term memories
+        # 3. Inject relevant cross-session long-term memories
         memories = await self.long_term.retrieve(
             query=user_message,
             top_k=settings.long_term_top_k,
@@ -113,30 +127,47 @@ class MemoryManager:
     async def update_session_file(self, turns) -> None:
         """Update the session memory file and sync the result to Chroma.
 
+        Also triggers a cross-session memory update when the User Profile
+        section changes — ensuring factual personal info is propagated to
+        the persistent cross-session file.
+
         Uses a deterministic UUID derived from the session_id so that every
-        update overwrites the same Chroma document (upsert — no duplicates).
+        Chroma upsert overwrites the same document (no duplicates).
         """
         if not turns:
             return
+
+        # Capture the User Profile before the update so we can detect changes.
+        old_content = self.session_file.load(self.session_id) or ""
+        old_profile = _extract_user_profile(old_content)
+
         content = await self.session_file.update(
             self.session_id,
             turns,
             llm_gateway.complete,
         )
-        if content:
-            stable_id = str(
-                uuid.uuid5(uuid.NAMESPACE_DNS, f"session-summary:{self.session_id}")
-            )
-            await self.long_term.store(
-                Memory(
-                    id=stable_id,
-                    session_id=self.session_id,
-                    memory_type=MemoryType.EPISODIC,
-                    content=content,
-                    importance=0.8,
-                ),
-                user_id=self.user_id,
-            )
+        if not content:
+            return
+
+        # Sync updated session summary to Chroma.
+        stable_id = str(
+            uuid.uuid5(uuid.NAMESPACE_DNS, f"session-summary:{self.session_id}")
+        )
+        await self.long_term.store(
+            Memory(
+                id=stable_id,
+                session_id=self.session_id,
+                memory_type=MemoryType.EPISODIC,
+                content=content,
+                importance=0.8,
+            ),
+            user_id=self.user_id,
+        )
+
+        # If the User Profile changed, update the cross-session memory file.
+        new_profile = _extract_user_profile(content)
+        if new_profile and new_profile != old_profile:
+            await self.cross_session_file.update(new_profile, llm_gateway.complete)
 
     async def store_memory(
         self,
