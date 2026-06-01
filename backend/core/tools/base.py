@@ -34,8 +34,9 @@ class BaseTool(ABC):
     description: str = ""
     permission: Permission = Permission.READ
 
-    def __init__(self, gate: PermissionGate) -> None:
+    def __init__(self, gate: PermissionGate, user_id: str | None = None) -> None:
         self.gate = gate
+        self.user_id = user_id
 
     @abstractmethod
     async def run(self, **kwargs: Any) -> ToolResult:

@@ -177,7 +177,7 @@ def get_orchestrator() -> Orchestrator:
     return HeuristicOrchestrator()
 
 
-async def kb_has_sources() -> bool:
+async def kb_has_sources(user_id: str | None = None) -> bool:
     """Return True if the RAG knowledge base has at least one ingested source.
 
     ChromaVectorStore.list_sources() calls chromadb synchronously (blocking I/O).
@@ -197,7 +197,7 @@ async def kb_has_sources() -> bool:
         def _sync_list():
             import asyncio as _aio
 
-            return _aio.run(store.list_sources())
+            return _aio.run(store.list_sources(user_id=user_id))
 
         loop = asyncio.get_running_loop()
         sources = await asyncio.wait_for(

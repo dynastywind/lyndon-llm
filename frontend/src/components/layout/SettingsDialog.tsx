@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AlertCircle, CheckCircle2, FileText, Loader2, Trash2, Upload, X } from 'lucide-react'
+import { AlertCircle, CheckCircle2, FileText, Loader2, RefreshCw, Trash2, Upload, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { deleteRagSource, listRagSources, uploadRagFile } from '@/api/client'
+import { deleteRagSource, listRagSources, reindexRagSource, uploadRagFile, type RagSource } from '@/api/client'
 import { useAppStore } from '@/store'
 import { ToolsRegistryPanel } from './ToolsRegistryPanel'
 import { MemoryPanel } from './MemoryPanel'
@@ -31,8 +31,10 @@ interface Props {
 
 const ACCEPTED = '.pdf,.md,.mdx,.txt,.py,.ts,.tsx,.js,.jsx,.go,.rs,.java,.cpp,.c'
 
-function basename(path: string) {
-  return path.split('/').pop() ?? path
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 // ─── component ────────────────────────────────────────────────────────────────
@@ -40,8 +42,10 @@ function basename(path: string) {
 export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }: Props) {
   const [tab, setTab] = useState<SettingsTab>(initialTab)
   const [queue, setQueue] = useState<UploadItem[]>([])
-  const [sources, setSources] = useState<string[]>([])
+  const [sources, setSources] = useState<RagSource[]>([])
   const [loadingSources, setLoadingSources] = useState(false)
+  const [reindexing, setReindexing] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -60,13 +64,15 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
   }, [])
 
   useEffect(() => {
-    if (open) setTab(initialTab)
-  }, [open, initialTab])
+    if (open) {
+      setTab(initialTab)
+      fetchSources()
+    }
+  }, [open, initialTab, fetchSources])
 
   const handleOpenChange = (v: boolean) => {
     onOpenChange(v)
-    if (v) fetchSources()
-    else setQueue([]) // clear queue on close
+    if (!v) setQueue([]) // clear queue on close
   }
 
   // ── uploads ───────────────────────────────────────────────────────────────
@@ -106,14 +112,33 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
     [uploadOne],
   )
 
+  // ── reindex ───────────────────────────────────────────────────────────────
+
+  const handleReindex = async (source: RagSource) => {
+    setReindexing(source.path)
+    try {
+      const result = await reindexRagSource(source.path)
+      setSources((s) =>
+        s.map((x) => (x.path === source.path ? { ...x, chunks: result.chunks_stored } : x)),
+      )
+    } catch {
+      // silently ignore
+    } finally {
+      setReindexing(null)
+    }
+  }
+
   // ── delete ────────────────────────────────────────────────────────────────
 
-  const handleDelete = async (source: string) => {
+  const handleDelete = async (source: RagSource) => {
+    setDeleting(source.path)
     try {
-      await deleteRagSource(source)
-      setSources((s) => s.filter((x) => x !== source))
+      await deleteRagSource(source.path, /* deleteFile= */ true)
+      setSources((s) => s.filter((x) => x.path !== source.path))
     } catch {
       // TODO: surface error toast
+    } finally {
+      setDeleting(null)
     }
   }
 
@@ -262,7 +287,17 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
 
                 {/* ── Indexed sources section ── */}
                 <section>
-                  <SectionLabel>Knowledge Base — Indexed</SectionLabel>
+                  <div className="flex items-center justify-between mb-3">
+                    <SectionLabel className="mb-0">Documents</SectionLabel>
+                    <button
+                      onClick={fetchSources}
+                      disabled={loadingSources}
+                      title="Refresh list"
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <RefreshCw size={13} className={loadingSources ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
 
                   {loadingSources ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -275,22 +310,46 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'knowledge' }:
                     <ul className="space-y-1.5">
                       {sources.map((src) => (
                         <li
-                          key={src}
+                          key={src.path}
                           className="flex items-center gap-3 bg-background rounded-lg px-3 py-2 group"
                         >
                           <FileText size={14} className="text-muted-foreground shrink-0" />
-                          <span className="flex-1 text-sm truncate" title={src}>
-                            {basename(src)}
-                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm truncate" title={src.path}>{src.name}</p>
+                            <p className="text-xs text-muted-foreground/60">
+                              {src.chunks} chunk{src.chunks !== 1 ? 's' : ''}
+                              {src.size_bytes != null && (
+                                <> · {formatBytes(src.size_bytes)}</>
+                              )}
+                            </p>
+                          </div>
+                          {/* Re-index */}
+                          <button
+                            onClick={() => handleReindex(src)}
+                            disabled={reindexing === src.path || deleting === src.path}
+                            title="Re-index this file"
+                            className={cn(
+                              'text-muted-foreground/40 hover:text-primary transition-colors shrink-0',
+                              'opacity-0 group-hover:opacity-100',
+                            )}
+                          >
+                            {reindexing === src.path
+                              ? <Loader2 size={13} className="animate-spin" />
+                              : <RefreshCw size={13} />}
+                          </button>
+                          {/* Delete */}
                           <button
                             onClick={() => handleDelete(src)}
-                            title={`Remove "${basename(src)}" from index`}
+                            disabled={deleting === src.path || reindexing === src.path}
+                            title={`Remove "${src.name}"`}
                             className={cn(
                               'text-muted-foreground/40 hover:text-red-400 transition-colors shrink-0',
                               'opacity-0 group-hover:opacity-100',
                             )}
                           >
-                            <Trash2 size={13} />
+                            {deleting === src.path
+                              ? <Loader2 size={13} className="animate-spin" />
+                              : <Trash2 size={13} />}
                           </button>
                         </li>
                       ))}
@@ -407,9 +466,9 @@ function PromptsPanel() {
 
 // ─── tiny sub-component ───────────────────────────────────────────────────────
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+    <h3 className={cn('text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3', className)}>
       {children}
     </h3>
   )

@@ -52,9 +52,11 @@ class ToolRegistry:
         merged.update(self._mcp_registry[mode])
         return merged
 
-    def get_tools(self, mode: Mode, gate: PermissionGate) -> dict[str, BaseTool]:
+    def get_tools(
+        self, mode: Mode, gate: PermissionGate, user_id: str | None = None
+    ) -> dict[str, BaseTool]:
         """Return instantiated tools for the given mode (internal + MCP)."""
-        return {name: cls(gate) for name, cls in self._all_classes(mode).items()}
+        return {name: cls(gate, user_id=user_id) for name, cls in self._all_classes(mode).items()}
 
     def get_openai_schemas(self, mode: Mode) -> list[dict]:
         """Return OpenAI-format tool schemas for the given mode (for LLM function calling)."""

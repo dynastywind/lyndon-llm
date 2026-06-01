@@ -112,6 +112,7 @@ class ChatEngine:
         self, session: Session, db: AsyncSession | None = None, user_id: str | None = None
     ) -> None:
         self.session = session
+        self.user_id = user_id
         self.memory = MemoryManager(session.session_id, user_id=user_id)
         self._retriever = HybridRetriever()
         self._db = db
@@ -173,7 +174,7 @@ class ChatEngine:
 
         # 1. Route: direct | rag | tools | rag_and_tools
         if settings.orchestrator_enabled:
-            has_kb = await kb_has_sources()
+            has_kb = await kb_has_sources(user_id=self.user_id)
             decision = await get_orchestrator().route(
                 user_message,
                 has_kb_sources=has_kb,
@@ -353,7 +354,7 @@ class ChatEngine:
         )
         messages: list[dict] = list(original_messages)
         tool_schemas = tool_registry.get_openai_schemas(Mode.CHAT)
-        tools = tool_registry.get_tools(Mode.CHAT, self._gate)
+        tools = tool_registry.get_tools(Mode.CHAT, self._gate, user_id=self.user_id)
 
         if allowed_tools is not None:
             tool_schemas = [s for s in tool_schemas if s["function"]["name"] in allowed_tools]
@@ -501,7 +502,7 @@ class ChatEngine:
         Flow: run web_search directly → emit tool events → inject results into
         the message list → stream the final answer in one pass.
         """
-        tools = tool_registry.get_tools(Mode.CHAT, self._gate)
+        tools = tool_registry.get_tools(Mode.CHAT, self._gate, user_id=self.user_id)
         tool = tools.get("web_search")
 
         if tool is None:
@@ -540,7 +541,7 @@ class ChatEngine:
 
     async def _retrieve(self, query: str) -> list[RetrievedChunk]:
         try:
-            chunks = await self._retriever.retrieve(query)
+            chunks = await self._retriever.retrieve(query, user_id=self.user_id)
             kept, total = [], 0
             for chunk in chunks:
                 if total + len(chunk.content) > MAX_CONTEXT_CHARS:

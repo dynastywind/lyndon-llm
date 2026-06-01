@@ -21,7 +21,7 @@ class RAGQueryTool(BaseTool):
         try:
             from chat.rag.retriever import retriever
 
-            chunks = await retriever.retrieve(query, top_k=top_k)
+            chunks = await retriever.retrieve(query, top_k=top_k, user_id=self.user_id)
 
             if not chunks:
                 return ToolResult(

@@ -31,18 +31,24 @@ class HybridRetriever:
             self._vector_store = await get_vector_store(self.COLLECTION_NAME)
         return self._vector_store
 
-    async def retrieve(self, query: str, top_k: int | None = None) -> list[RetrievedChunk]:
+    async def retrieve(
+        self, query: str, top_k: int | None = None, user_id: str | None = None
+    ) -> list[RetrievedChunk]:
         k = top_k or settings.rag_top_k
-        dense = await self._dense_search(query, k=k * 2)
+        dense = await self._dense_search(query, k=k * 2, user_id=user_id)
         sparse = self._bm25_search(query, candidates=dense, k=k * 2)
         return self._reciprocal_rank_fusion(dense, sparse)[:k]
 
-    async def _dense_search(self, query: str, k: int) -> list[RetrievedChunk]:
+    async def _dense_search(
+        self, query: str, k: int, user_id: str | None = None
+    ) -> list[RetrievedChunk]:
         embeddings = await llm_gateway.embed([query])
         vs = await self._get_vector_store()
+        where = {"user_id": user_id} if user_id else None
         results = await vs.query(
             query_embeddings=[embeddings[0]],
             n_results=k,
+            where=where,
         )
         chunks = []
         for doc, meta, dist in zip(
