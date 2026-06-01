@@ -59,11 +59,22 @@ export interface AuthResponse {
   id: string
 }
 
+/** Persistent device ID — generated once and stored in localStorage. */
+function getDeviceId(): string {
+  const KEY = 'lyndon-device-id'
+  let id = localStorage.getItem(KEY)
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem(KEY, id)
+  }
+  return id
+}
+
 export async function login(username: string, password: string): Promise<AuthResponse> {
   const res = await fetch(`${BASE}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, device_id: getDeviceId() }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
@@ -76,7 +87,7 @@ export async function register(username: string, password: string): Promise<Auth
   const res = await fetch(`${BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, device_id: getDeviceId() }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))

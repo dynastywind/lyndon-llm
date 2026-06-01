@@ -49,6 +49,9 @@ async def _migrate(conn) -> None:
         # v3 — per-user scoping for MCP servers and chat sessions
         "ALTER TABLE mcp_servers ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE",
         "ALTER TABLE chat_sessions ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE SET NULL",
+        # v4 — login audit records (table created by create_all; index is idempotent via IF NOT EXISTS)
+        "CREATE INDEX IF NOT EXISTS ix_login_records_user_id ON login_records (user_id)",
+        "CREATE INDEX IF NOT EXISTS ix_login_records_created_at ON login_records (created_at)",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore

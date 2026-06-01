@@ -31,7 +31,41 @@ if settings.langfuse_secret_key and settings.langfuse_public_key:
 else:
     from openai import AsyncOpenAI
 
+from dataclasses import dataclass, field  # noqa: E402
 from openai.types.chat import ChatCompletion, ChatCompletionMessage  # noqa: E402
+
+
+@dataclass
+class LLMUsage:
+    """Token consumption for one or more LLM calls."""
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+    @property
+    def total_tokens(self) -> int:
+        return self.prompt_tokens + self.completion_tokens
+
+    def __iadd__(self, other: "LLMUsage") -> "LLMUsage":
+        self.prompt_tokens += other.prompt_tokens
+        self.completion_tokens += other.completion_tokens
+        return self
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "total_tokens": self.total_tokens,
+        }
+
+
+def _usage_from_response(response: ChatCompletion) -> LLMUsage:
+    if response.usage is None:
+        return LLMUsage()
+    return LLMUsage(
+        prompt_tokens=response.usage.prompt_tokens or 0,
+        completion_tokens=response.usage.completion_tokens or 0,
+    )
 
 
 class LLMMessage:
@@ -72,8 +106,8 @@ class LLMGateway:
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict | None = None,
-    ) -> str:
-        """Non-streaming completion — returns the assistant text content."""
+    ) -> tuple[str, LLMUsage]:
+        """Non-streaming completion — returns (text, usage)."""
         t0 = time.monotonic()
         response: ChatCompletion = await self._client.chat.completions.create(
             model=model or settings.llm_model,
@@ -85,7 +119,7 @@ class LLMGateway:
             stream=False,
         )
         logger.info("llm.complete  %.0f ms", (time.monotonic() - t0) * 1000)
-        return response.choices[0].message.content or ""
+        return response.choices[0].message.content or "", _usage_from_response(response)
 
     async def complete_full(
         self,
@@ -96,8 +130,8 @@ class LLMGateway:
         max_tokens: int | None = None,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict | None = None,
-    ) -> ChatCompletionMessage:
-        """Non-streaming completion — returns the full message object (content + tool_calls)."""
+    ) -> tuple[ChatCompletionMessage, LLMUsage]:
+        """Non-streaming completion — returns (full message, usage)."""
         t0 = time.monotonic()
         response: ChatCompletion = await self._client.chat.completions.create(
             model=model or settings.llm_model,
@@ -109,7 +143,7 @@ class LLMGateway:
             stream=False,
         )
         logger.info("llm.complete_full  %.0f ms", (time.monotonic() - t0) * 1000)
-        return response.choices[0].message
+        return response.choices[0].message, _usage_from_response(response)
 
     async def stream(
         self,
@@ -118,8 +152,8 @@ class LLMGateway:
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-    ) -> AsyncGenerator[str, None]:
-        """Streaming completion — yields text chunks as they arrive."""
+    ) -> AsyncGenerator[str | LLMUsage, None]:
+        """Streaming completion — yields text chunks then a final LLMUsage sentinel."""
         t0 = time.monotonic()
         response = await self._client.chat.completions.create(
             model=model or settings.llm_model,
@@ -127,10 +161,19 @@ class LLMGateway:
             temperature=temperature if temperature is not None else settings.llm_temperature,
             max_tokens=max_tokens or settings.llm_max_tokens,
             stream=True,
+            stream_options={"include_usage": True},
         )
         ttfb = (time.monotonic() - t0) * 1000
         token_count = 0
+        usage = LLMUsage()
         async for chunk in response:
+            if chunk.usage:
+                usage = LLMUsage(
+                    prompt_tokens=chunk.usage.prompt_tokens or 0,
+                    completion_tokens=chunk.usage.completion_tokens or 0,
+                )
+            if not chunk.choices:
+                continue
             delta = chunk.choices[0].delta
             if delta.content:
                 if token_count == 0:
@@ -140,6 +183,7 @@ class LLMGateway:
         logger.info(
             "llm.stream  total %.0f ms  tokens %d", (time.monotonic() - t0) * 1000, token_count
         )
+        yield usage
 
     async def complete_with_tools_raw(
         self,
@@ -149,11 +193,11 @@ class LLMGateway:
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-    ) -> ChatCompletionMessage:
+    ) -> tuple[ChatCompletionMessage, LLMUsage]:
         """
         Non-streaming call that accepts already-serialised message dicts and
-        tool schemas (OpenAI function-calling format).  Returns the full
-        ChatCompletionMessage so callers can inspect tool_calls.
+        tool schemas (OpenAI function-calling format).
+        Returns (full message, usage).
         """
         t0 = time.monotonic()
         response: ChatCompletion = await self._client.chat.completions.create(
@@ -166,7 +210,7 @@ class LLMGateway:
             stream=False,
         )
         logger.info("llm.complete_with_tools_raw  %.0f ms", (time.monotonic() - t0) * 1000)
-        return response.choices[0].message
+        return response.choices[0].message, _usage_from_response(response)
 
     async def stream_from_raw(
         self,
@@ -175,10 +219,10 @@ class LLMGateway:
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str | LLMUsage, None]:
         """
         Streaming completion that accepts already-serialised message dicts.
-        Use this for the final answer after tool calls have been resolved.
+        Yields text chunks then a final LLMUsage sentinel.
         """
         t0 = time.monotonic()
         response = await self._client.chat.completions.create(
@@ -187,10 +231,19 @@ class LLMGateway:
             temperature=temperature if temperature is not None else settings.llm_temperature,
             max_tokens=max_tokens or settings.llm_max_tokens,
             stream=True,
+            stream_options={"include_usage": True},
         )
         ttfb = (time.monotonic() - t0) * 1000
         token_count = 0
+        usage = LLMUsage()
         async for chunk in response:
+            if chunk.usage:
+                usage = LLMUsage(
+                    prompt_tokens=chunk.usage.prompt_tokens or 0,
+                    completion_tokens=chunk.usage.completion_tokens or 0,
+                )
+            if not chunk.choices:
+                continue
             delta = chunk.choices[0].delta
             if delta.content:
                 if token_count == 0:
@@ -202,6 +255,7 @@ class LLMGateway:
             (time.monotonic() - t0) * 1000,
             token_count,
         )
+        yield usage
 
     # ------------------------------------------------------------------ #
     #  Embeddings                                                          #
