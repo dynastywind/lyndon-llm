@@ -5,8 +5,21 @@
 /* ── Lyndon Vision design tokens ──────────────────────────────────────────── */
 @layer base {
   :root {
-    /* Shared layout */
+    /* Shared layout (theme-invariant) */
     --header-h: 72px;  /* height of both the sidebar wordmark bar and chat title bar */
+
+    /* Type families (theme-invariant) */
+    --font-sans:    'Inter', system-ui, -apple-system, sans-serif;
+    --font-display: 'Playfair Display', Georgia, serif;
+    --font-mono:    ui-monospace, 'SF Mono', Menlo, monospace;
+
+    /* Motion (theme-invariant) */
+    --ease-snap:    cubic-bezier(0.2, 0.8, 0.2, 1);
+
+    /* Tailwind radius (theme-invariant) */
+    --radius: 0px;  /* hard edges everywhere */
+
+    /* ── Dark theme — default / fallback ─────────────────────────── */
 
     /* Surfaces */
     --lv-bg:          #0a0a0a;
@@ -27,39 +40,87 @@
     --lv-gold:        #c8a86a;
     --lv-gold-soft:   #b89656;
 
-    /* Type families */
-    --font-sans:    'Inter', system-ui, -apple-system, sans-serif;
-    --font-display: 'Playfair Display', Georgia, serif;
-    --font-mono:    ui-monospace, 'SF Mono', Menlo, monospace;
+    /* Wash (user message bubble tint) */
+    --lv-wash:        rgba(255, 255, 255, 0.04);
+    --lv-wash-soft:   rgba(255, 255, 255, 0.02);
+    /* RGB channels for composing wash at arbitrary opacities */
+    --lv-wash-rgb:    255, 255, 255;
 
-    /* Motion */
-    --ease-snap:    cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* Aliases used by auth dialogs */
+    --lv-surface:     var(--lv-elev);
+    --lv-border:      var(--lv-rule);
+    --lv-ink-muted:   var(--lv-mute);
 
     /* ── Tailwind token bridge ─────────────────────────────────────── */
     /* All Tailwind color utilities stay working via these mappings.    */
-    --background:          0 0% 4%;         /* #0a0a0a */
-    --foreground:          40 15% 94%;      /* #f4f1ea */
-    --card:                0 0% 9%;         /* #181818 */
-    --card-foreground:     40 15% 94%;
-    --primary:             38 45% 60%;      /* #c8a86a gold */
-    --primary-foreground:  0 0% 4%;
-    --secondary:           0 0% 7%;         /* #131313 elev */
+    --background:           0 0% 4%;          /* #0a0a0a */
+    --foreground:           40 15% 94%;       /* #f4f1ea */
+    --card:                 0 0% 9%;          /* #181818 */
+    --card-foreground:      40 15% 94%;
+    --primary:              38 45% 60%;       /* #c8a86a gold */
+    --primary-foreground:   0 0% 4%;
+    --secondary:            0 0% 7%;          /* #131313 elev */
     --secondary-foreground: 40 15% 94%;
-    --muted:               0 0% 7%;
-    --muted-foreground:    30 8% 44%;       /* #6e695f */
-    --accent:              0 0% 12%;        /* #1f1f1f */
-    --accent-foreground:   40 9% 70%;       /* #b8b3a8 */
-    --border:              0 0% 14%;        /* #232323 */
-    --input:               0 0% 7%;
-    --ring:                38 45% 60%;
-    --radius:              0px;             /* hard edges everywhere */
+    --muted:                0 0% 7%;
+    --muted-foreground:     30 8% 44%;        /* #6e695f */
+    --accent:               0 0% 12%;         /* #1f1f1f */
+    --accent-foreground:    40 9% 70%;        /* #b8b3a8 */
+    --border:               0 0% 14%;         /* #232323 */
+    --input:                0 0% 7%;
+    --ring:                 38 45% 60%;
 
     /* destructive kept for delete confirmations */
-    --destructive:         0 62% 55%;
+    --destructive:          0 62% 55%;
     --destructive-foreground: 0 0% 98%;
-    --popover:             0 0% 9%;
-    --popover-foreground:  40 15% 94%;
+    --popover:              0 0% 9%;
+    --popover-foreground:   40 15% 94%;
   }
+}
+
+/* ── Light theme overrides ────────────────────────────────────────────────── */
+html.light {
+  /* Surfaces */
+  --lv-bg:          #f4f1ea;
+  --lv-elev:        #eae4d9;
+  --lv-card:        #e3ddd0;
+  --lv-card-elev:   #d9d2c3;
+
+  /* Ink */
+  --lv-ink:         #1b1a16;
+  --lv-soft:        #56524a;
+  --lv-mute:        #928b7d;
+
+  /* Rules */
+  --lv-rule:        #ddd6c7;
+  --lv-rule-strong: #c0b8a5;
+
+  /* Accent — darker gold for contrast on light bg */
+  --lv-gold:        #9a7a30;
+  --lv-gold-soft:   #856626;
+
+  /* Wash — dark tint over paper (white-on-paper is invisible) */
+  --lv-wash:        rgba(40, 34, 18, 0.045);
+  --lv-wash-soft:   rgba(40, 34, 18, 0.022);
+  --lv-wash-rgb:    40, 34, 18;
+
+  /* ── Tailwind token bridge (light) ──────────────────────────── */
+  --background:           42 35% 93%;       /* #f4f1ea */
+  --foreground:           45  8%  9%;       /* #1b1a16 */
+  --card:                 38 24% 85%;       /* #e3ddd0 */
+  --card-foreground:      45  8%  9%;
+  --primary:              38 53% 39%;       /* #9a7a30 */
+  --primary-foreground:   42 35% 93%;
+  --secondary:            40 27% 88%;       /* #eae4d9 */
+  --secondary-foreground: 45  8%  9%;
+  --muted:                40 27% 88%;
+  --muted-foreground:     38 11% 52%;       /* #928b7d */
+  --accent:               38 22% 80%;       /* #d9d2c3 */
+  --accent-foreground:    38  8% 31%;       /* #56524a */
+  --border:               38 22% 83%;       /* #ddd6c7 */
+  --input:                40 27% 88%;
+  --ring:                 38 53% 39%;
+  --popover:              38 24% 85%;
+  --popover-foreground:   45  8%  9%;
 }
 
 @layer base {
@@ -146,9 +207,9 @@
 }
 .prose code {
   font-family: var(--font-mono);
-  background: rgba(255,255,255,0.06);
+  background: var(--lv-wash);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 0.84em;
 }
-.prose pre { background: #0d0d0d; border: 1px solid var(--lv-rule); border-radius: 0; }
+.prose pre { background: var(--lv-bg); border: 1px solid var(--lv-rule); border-radius: 0; }

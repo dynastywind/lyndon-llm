@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { ChatWindow } from '@/components/chat/ChatWindow'
@@ -6,7 +7,19 @@ import { CodeWindow } from '@/components/code/CodeWindow'
 import { SandboxWindow } from '@/components/sandbox/SandboxWindow'
 
 export default function App() {
-  const { mode, sessionId } = useAppStore()
+  const { mode, sessionId, uiTheme } = useAppStore()
+
+  // Apply theme class to <html> whenever uiTheme changes
+  useEffect(() => {
+    const root = document.documentElement
+    if (uiTheme === 'light') {
+      root.classList.add('light')
+      root.classList.remove('dark')
+    } else {
+      root.classList.remove('light')
+      root.classList.add('dark')
+    }
+  }, [uiTheme])
 
   return (
     <div

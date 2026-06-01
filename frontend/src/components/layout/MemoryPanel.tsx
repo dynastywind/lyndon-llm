@@ -55,7 +55,7 @@ function MemoryRow({ record, onDelete }: { record: MemoryRecord; onDelete: (id: 
       style={{
         padding: '10px 12px',
         border: `1px solid ${hov ? 'var(--lv-rule-strong)' : 'var(--lv-rule)'}`,
-        background: hov ? 'rgba(255,255,255,0.02)' : 'transparent',
+        background: hov ? 'rgba(var(--lv-wash-rgb),0.02)' : 'transparent',
         transition: 'border-color 0.15s, background 0.15s',
         display: 'flex',
         flexDirection: 'column',

@@ -95,6 +95,8 @@ interface AppState {
   // Appearance
   codeTheme: CodeThemeName
   setCodeTheme: (theme: CodeThemeName) => void
+  uiTheme: 'dark' | 'light'
+  setUiTheme: (theme: 'dark' | 'light') => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -234,6 +236,11 @@ export const useAppStore = create<AppState>()(
       // ── Appearance ────────────────────────────────────────────────────
       codeTheme: CODE_THEME_DEFAULT,
       setCodeTheme: (codeTheme) => set({ codeTheme }),
+      uiTheme: (localStorage.getItem('lv-theme') as 'dark' | 'light') ?? 'dark',
+      setUiTheme: (uiTheme) => {
+        localStorage.setItem('lv-theme', uiTheme)
+        set({ uiTheme })
+      },
     }),
     {
       name: 'lyndon-llm-store',
@@ -242,6 +249,7 @@ export const useAppStore = create<AppState>()(
         sessionId: s.sessionId,
         repoPath: s.repoPath,
         codeTheme: s.codeTheme,
+        uiTheme: s.uiTheme,
         systemPrompt: s.systemPrompt,
         appliedSessionPrompts: s.appliedSessionPrompts,
         selectedModel: s.selectedModel,

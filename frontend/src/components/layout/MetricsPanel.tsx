@@ -16,14 +16,14 @@ import { getMetrics } from '@/api/client'
 import type { MetricRecord, MetricsSummary } from '@/types'
 
 const TOOLTIP_STYLE = {
-  backgroundColor: '#181818',
-  border: '1px solid #232323',
+  backgroundColor: 'var(--lv-card)',
+  border: '1px solid var(--lv-rule)',
   borderRadius: 0,
-  color: '#f4f1ea',
+  color: 'var(--lv-ink)',
   fontSize: 11,
   fontFamily: 'ui-monospace, SF Mono, Menlo, monospace',
 }
-const AXIS_STYLE = { fill: '#6e695f', fontSize: 10 }
+const AXIS_STYLE = { fill: 'var(--lv-mute)', fontSize: 10 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -228,7 +228,7 @@ export function MetricsPanel({ active = true }: { active?: boolean }) {
                   <stop offset="95%" stopColor="#c8a86a" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#232323" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--lv-rule)" />
               <XAxis dataKey="time" tick={AXIS_STYLE} interval="preserveStartEnd" />
               <YAxis
                 tick={AXIS_STYLE}
@@ -259,7 +259,7 @@ export function MetricsPanel({ active = true }: { active?: boolean }) {
         <div style={{ height: 180 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#232323" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--lv-rule)" />
               <XAxis dataKey="time" tick={AXIS_STYLE} interval="preserveStartEnd" />
               <YAxis
                 tick={AXIS_STYLE}

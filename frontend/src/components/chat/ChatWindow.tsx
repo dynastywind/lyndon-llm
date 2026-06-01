@@ -251,7 +251,7 @@ function CodeBlock({ language, code }: { language: string | undefined; code: str
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '5px 12px',
-          background: 'rgba(255,255,255,0.03)',
+          background: 'rgba(var(--lv-wash-rgb),0.03)',
           borderBottom: '1px solid var(--lv-rule)',
         }}
       >
@@ -308,13 +308,13 @@ function CodeBlock({ language, code }: { language: string | undefined; code: str
 
 const CHART_COLORS = ['#c8a86a', '#b8b3a8', '#6e695f', '#f4f1ea', '#8a7a5a', '#d4c090', '#a09070']
 
-const AXIS_STYLE = { fill: '#6e695f', fontSize: 11 }
-const LEGEND_STYLE = { fontSize: 11, color: '#6e695f' }
+const AXIS_STYLE = { fill: 'var(--lv-mute)', fontSize: 11 }
+const LEGEND_STYLE = { fontSize: 11, color: 'var(--lv-mute)' }
 const TOOLTIP_STYLE = {
-  backgroundColor: '#181818',
-  border: '1px solid #232323',
+  backgroundColor: 'var(--lv-card)',
+  border: '1px solid var(--lv-rule)',
   borderRadius: 0,
-  color: '#f4f1ea',
+  color: 'var(--lv-ink)',
   fontSize: 12,
   fontFamily: 'ui-monospace, SF Mono, Menlo, monospace',
 }
@@ -363,7 +363,7 @@ class ChartErrorBoundary extends Component<
         <div
           style={{
             marginTop: 12,
-            background: 'rgba(255,255,255,0.015)',
+            background: 'rgba(var(--lv-wash-rgb),0.015)',
             border: '1px solid var(--lv-rule)',
             padding: 14,
             fontFamily: 'var(--font-mono)',
@@ -408,7 +408,7 @@ function ChartInner({ spec }: { spec: ChartSpec }) {
       </PieChart>
     ) : spec.type === 'line' ? (
       <LineChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--lv-rule-strong)" />
         <XAxis dataKey={spec.x_key} tick={AXIS_STYLE} />
         <YAxis tick={AXIS_STYLE} width={36} />
         <Tooltip contentStyle={TOOLTIP_STYLE} />
@@ -435,7 +435,7 @@ function ChartInner({ spec }: { spec: ChartSpec }) {
             </linearGradient>
           ))}
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--lv-rule-strong)" />
         <XAxis dataKey={spec.x_key} tick={AXIS_STYLE} />
         <YAxis tick={AXIS_STYLE} width={36} />
         <Tooltip contentStyle={TOOLTIP_STYLE} />
@@ -454,7 +454,7 @@ function ChartInner({ spec }: { spec: ChartSpec }) {
       </AreaChart>
     ) : (
       <BarChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--lv-rule-strong)" />
         <XAxis dataKey={spec.x_key} tick={AXIS_STYLE} />
         <YAxis tick={AXIS_STYLE} width={36} />
         <Tooltip contentStyle={TOOLTIP_STYLE} />
@@ -475,7 +475,7 @@ function ChartInner({ spec }: { spec: ChartSpec }) {
     <div
       style={{
         marginTop: 12,
-        background: 'rgba(255,255,255,0.015)',
+        background: 'rgba(var(--lv-wash-rgb),0.015)',
         border: '1px solid var(--lv-rule)',
         padding: 12,
       }}
@@ -651,7 +651,7 @@ function renderLineContent(line: string, keyPrefix: string): React.ReactNode {
         style={{
           fontFamily: 'var(--font-mono)',
           fontSize: '0.88em',
-          background: 'rgba(255,255,255,0.07)',
+          background: 'rgba(var(--lv-wash-rgb),0.07)',
           padding: '1px 4px',
           borderRadius: 2,
           color: 'var(--lv-ink)',
@@ -726,7 +726,7 @@ const MD_COMPONENTS: Components = {
           <div
             style={{
               marginTop: 12,
-              background: 'rgba(255,255,255,0.015)',
+              background: 'rgba(var(--lv-wash-rgb),0.015)',
               border: '1px solid var(--lv-rule)',
               padding: 14,
               fontFamily: 'var(--font-mono)',
@@ -747,7 +747,7 @@ const MD_COMPONENTS: Components = {
           style={{
             fontFamily: 'var(--font-mono)',
             fontSize: '0.84em',
-            background: 'rgba(255,255,255,0.06)',
+            background: 'rgba(var(--lv-wash-rgb),0.06)',
             padding: '1px 5px',
             color: 'var(--lv-ink)',
           }}
@@ -795,7 +795,7 @@ function AttachmentChip({
         alignItems: 'center',
         gap: 6,
         border: '1px solid var(--lv-rule-strong)',
-        background: 'rgba(255,255,255,0.04)',
+        background: 'rgba(var(--lv-wash-rgb),0.04)',
         padding: '3px 8px 3px 4px',
         maxWidth: 180,
       }}
@@ -1071,10 +1071,10 @@ function MessageAttachments({ attachments }: { attachments: MessageAttachment[] 
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                background: 'rgba(255,255,255,0.08)',
+                background: 'rgba(var(--lv-wash-rgb),0.08)',
                 padding: '4px 8px',
                 cursor: 'pointer',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid rgba(var(--lv-wash-rgb),0.1)',
                 fontFamily: 'var(--font-mono)',
                 fontSize: 10.5,
                 color: 'var(--lv-soft)',
@@ -1133,7 +1133,7 @@ function ContextItem({
         textAlign: 'left',
         cursor: 'pointer',
         border: `1px solid ${hov ? 'var(--lv-rule-strong)' : 'var(--lv-rule)'}`,
-        background: hov ? 'rgba(255,255,255,0.04)' : 'transparent',
+        background: hov ? 'rgba(var(--lv-wash-rgb),0.04)' : 'transparent',
         transition: 'border-color 0.15s, background 0.15s',
         overflow: 'hidden',
       }}
@@ -1167,7 +1167,7 @@ function ContextItem({
               flexShrink: 0,
               width: 28,
               height: 28,
-              background: 'rgba(255,255,255,0.04)',
+              background: 'rgba(var(--lv-wash-rgb),0.04)',
               border: '1px solid var(--lv-rule)',
               display: 'flex',
               alignItems: 'center',
@@ -1512,7 +1512,7 @@ function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean
               lineHeight: 1.6,
               color: 'var(--lv-ink)',
               fontWeight: 400,
-              background: 'rgba(255,255,255,0.04)',
+              background: 'rgba(var(--lv-wash-rgb),0.04)',
               border: '1px solid var(--lv-rule)',
               padding: '12px 16px',
               borderRadius: 4,

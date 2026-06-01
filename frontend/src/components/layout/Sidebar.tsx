@@ -18,6 +18,7 @@ import { deleteChatSession, renameChatSession } from '@/api/client'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { LoginDialog } from '@/components/auth/LoginDialog'
 import { DeleteAccountDialog } from '@/components/auth/DeleteAccountDialog'
+import { ThemeToggle } from './ThemeToggle'
 import type { Mode, ChatSession } from '@/types'
 
 // ── Lyndon Vision palette (local constants matching CSS vars) ─────────────────
@@ -682,8 +683,9 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Footer: Login (logged-out) or Settings (logged-in) */}
-      <div style={{ borderTop: `1px solid ${LV.rule}`, padding: '8px 16px 12px', flexShrink: 0 }}>
+      {/* Footer: Login (logged-out) or Settings (logged-in) + theme toggle */}
+      <div style={{ borderTop: `1px solid ${LV.rule}`, padding: '8px 16px 12px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
         {user ? (
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
@@ -872,7 +874,7 @@ export function Sidebar() {
                 flexShrink: 0,
               }}
             >
-              <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke={LV.mute} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+              <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--lv-mute)' }}>
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                 <circle cx="12" cy="7" r="4" />
               </svg>
@@ -880,6 +882,8 @@ export function Sidebar() {
             <span style={{ color: LV.ink, fontWeight: 500 }}>Login</span>
           </button>
         )}
+        </div>
+        <ThemeToggle />
       </div>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} initialTab={settingsTab} />
