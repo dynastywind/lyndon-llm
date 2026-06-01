@@ -95,7 +95,17 @@
       "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM diff --stat)",
       "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM diff --stat HEAD)",
       "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM add .claude/settings.local.json)",
-      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM commit -m ' *)"
+      "Bash(git -C /Users/lyndon/Documents/projects/lyndonLLM commit -m ' *)",
+      "Bash(python -m pytest tests/ -v --ignore=tests/test_chat/test_rag.py)",
+      "Bash(pip show *)",
+      "Bash(uv run *)",
+      "Bash(uv sync *)",
+      "Bash(uv pip *)",
+      "Bash(.venv/bin/python -c \"from api.routes import auth; print\\('OK'\\)\")",
+      "Bash(.venv/bin/pytest --tb=short -q)",
+      "Bash(.venv/bin/pytest tests/test_llm_gateway.py tests/test_chat/test_engine_helpers.py -v --tb=short)",
+      "Bash(.venv/bin/pytest -q --tb=short)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('productName',''\\), d.get\\('version',''\\), d.get\\('bundle',{}\\).get\\('identifier',''\\)\\)\")"
     ]
   }
 }
