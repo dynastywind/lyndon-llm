@@ -241,7 +241,7 @@ export function Sidebar() {
     if (pendingOAuthToken) setLoginOpen(true)
   }, [pendingOAuthToken])
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<SettingsTab>('knowledge')
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('profile')
 
   // Session prompt modal
   const [promptOpen, setPromptOpen] = useState(false)
@@ -789,7 +789,7 @@ export function Sidebar() {
                   [
                     { tab: 'knowledge' as SettingsTab, icon: BookOpen, label: 'Knowledge' },
                     { tab: 'tools' as SettingsTab, icon: Server, label: 'MCP' },
-                    { tab: 'prompts' as SettingsTab, icon: MessageSquare, label: 'Prompts' },
+                    { tab: 'ai' as SettingsTab, icon: MessageSquare, label: 'AI & Chat' },
                   ] as const
                 ).map(({ tab, icon: Icon, label }) => (
                   <DropdownMenu.Item

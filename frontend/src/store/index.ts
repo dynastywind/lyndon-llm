@@ -100,6 +100,10 @@ interface AppState {
   setCodeTheme: (theme: CodeThemeName) => void
   uiTheme: 'dark' | 'light'
   setUiTheme: (theme: 'dark' | 'light') => void
+
+  // Profile
+  profession: string
+  setProfession: (text: string) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -247,6 +251,10 @@ export const useAppStore = create<AppState>()(
         localStorage.setItem('lv-theme', uiTheme)
         set({ uiTheme })
       },
+
+      // ── Profile ───────────────────────────────────────────────────────
+      profession: '',
+      setProfession: (profession) => set({ profession }),
     }),
     {
       name: 'lyndon-llm-store',
@@ -259,6 +267,7 @@ export const useAppStore = create<AppState>()(
         systemPrompt: s.systemPrompt,
         appliedSessionPrompts: s.appliedSessionPrompts,
         selectedModel: s.selectedModel,
+        profession: s.profession,
       }),
     },
   ),
