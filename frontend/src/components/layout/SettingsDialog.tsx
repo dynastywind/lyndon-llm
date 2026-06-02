@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
 import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import {
   checkRagSourceName,
@@ -188,14 +189,6 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
     }, 40)
   }, [open, initialTab])
 
-  // ── ESC to close ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onOpenChange(false) }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [open, onOpenChange])
-
   // ── scroll spy ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (!open) return
@@ -316,27 +309,52 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
     sectionRefs.current[id] = el
   }
 
-  if (!open) return null
-
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 100,
-        display: 'grid',
-        gridTemplateColumns: '290px 1fr',
-        background: 'var(--lv-bg)',
-        color: 'var(--lv-ink)',
-        fontFamily: 'var(--font-sans)',
-        overflow: 'hidden',
-      }}
-    >
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        {/* Backdrop */}
+        <Dialog.Overlay style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.65)',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
+          zIndex: 100,
+        }} />
+
+        {/* Dialog box */}
+        <Dialog.Content
+          style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 101,
+            width: 'min(1060px, 95vw)',
+            height: 'min(82vh, 800px)',
+            background: 'var(--lv-bg)',
+            border: '1px solid var(--lv-rule-strong)',
+            boxShadow: '0 32px 100px rgba(0,0,0,0.75)',
+            color: 'var(--lv-ink)',
+            fontFamily: 'var(--font-sans)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+          // prevent Radix from closing on outside click while save bar is dirty
+          onInteractOutside={(e) => { if (dirty) e.preventDefault() }}
+        >
+          {/* Visually-hidden title for screen-readers */}
+          <Dialog.Title style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap' }}>
+            Settings
+          </Dialog.Title>
+
+          {/* ── Content area (rail + scrollable main) ── */}
+          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '256px 1fr', overflow: 'hidden' }}>
+
       {/* ══════════════════════════ RAIL ══════════════════════════ */}
       <aside style={{
-        position: 'sticky',
-        top: 0,
-        height: '100vh',
+        height: '100%',
         borderRight: '1px solid var(--lv-rule)',
         background: 'var(--lv-bg)',
         display: 'flex',
@@ -494,25 +512,25 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
         id="settings-scroller"
         style={{
           overflowY: 'auto',
-          padding: '64px clamp(28px, 6vw, 88px) 0',
+          padding: '40px 40px 0',
         }}
       >
         {/* Page header */}
-        <header style={{ marginBottom: 60 }}>
+        <header style={{ marginBottom: 40 }}>
           <span style={S.eyebrow}>Account — Settings</span>
           <h1 style={{
             fontFamily: 'var(--font-display)',
             fontWeight: 400,
-            fontSize: 56,
-            lineHeight: 1.04,
+            fontSize: 42,
+            lineHeight: 1.06,
             letterSpacing: '-0.02em',
             margin: '0 0 0.4em',
             color: 'var(--lv-ink)',
           }}>
             Your <em style={{ fontStyle: 'italic', fontWeight: 500 }}>Profile.</em>
           </h1>
-          <p style={{ fontWeight: 300, fontSize: 17, lineHeight: 1.6, color: 'var(--lv-soft)', maxWidth: '52ch', margin: 0 }}>
-            Manage how you appear and how LyndonLLM behaves for you. Changes apply only to your account.
+          <p style={{ fontWeight: 300, fontSize: 15, lineHeight: 1.6, color: 'var(--lv-soft)', maxWidth: '52ch', margin: 0 }}>
+            Manage how you appear and how LyndonLLM behaves for you.
           </p>
         </header>
 
@@ -924,68 +942,74 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
         </section>
 
         {/* Bottom spacer */}
-        <div style={{ height: 140 }} />
+        <div style={{ height: 100 }} />
       </main>
 
-      {/* ══════════════════════════ SAVE BAR ══════════════════════════ */}
-      <div style={{
-        position: 'fixed',
-        left: 290, right: 0, bottom: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 20,
-        padding: '16px clamp(28px, 6vw, 88px)',
-        background: uiTheme === 'light' ? 'rgba(244,241,234,0.88)' : 'rgba(10,10,10,0.82)',
-        backdropFilter: 'blur(18px) saturate(140%)',
-        WebkitBackdropFilter: 'blur(18px) saturate(140%)',
-        borderTop: '1px solid var(--lv-rule)',
-        transform: dirty ? 'translateY(0)' : 'translateY(110%)',
-        transition: 'transform 0.25s cubic-bezier(.2,.8,.2,1)',
-        zIndex: 40,
-      }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: saveFlash ? '#4ade80' : 'var(--lv-gold)', transition: 'background 0.3s' }} />
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--lv-soft)' }}>
-            Unsaved changes
-          </span>
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-          <button
-            type="button"
-            onClick={handleDiscard}
-            style={{
-              background: 'none', border: 'none',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10.5, letterSpacing: '0.2em', textTransform: 'uppercase',
-              color: 'var(--lv-mute)', cursor: 'pointer', padding: '0.5rem 0.2rem',
-              transition: 'color 0.15s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--lv-ink)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--lv-mute)' }}
-          >
-            Discard
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              fontSize: 14, fontWeight: 500, letterSpacing: '0.03em',
-              padding: '0.7rem 1.5rem',
-              borderRadius: 999,
-              border: '1px solid var(--lv-ink)',
-              background: 'var(--lv-ink)',
-              color: 'var(--lv-bg)',
-              cursor: 'pointer',
-              transition: 'background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--lv-gold)'; e.currentTarget.style.borderColor = 'var(--lv-gold)'; e.currentTarget.style.color = '#0a0a0a'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--lv-ink)'; e.currentTarget.style.borderColor = 'var(--lv-ink)'; e.currentTarget.style.color = 'var(--lv-bg)'; e.currentTarget.style.transform = 'none' }}
-          >
-            Save changes →
-          </button>
-        </div>
-      </div>
-    </div>
+          </div>{/* end content grid */}
+
+          {/* ══════════════════════════ SAVE BAR ══════════════════════════ */}
+          <div style={{
+            maxHeight: dirty ? 64 : 0,
+            opacity: dirty ? 1 : 0,
+            overflow: 'hidden',
+            transition: 'max-height 0.25s cubic-bezier(.2,.8,.2,1), opacity 0.2s ease',
+            borderTop: '1px solid var(--lv-rule)',
+            background: 'var(--lv-bg)',
+            flexShrink: 0,
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 20,
+              padding: '14px 28px',
+            }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: saveFlash ? '#4ade80' : 'var(--lv-gold)', transition: 'background 0.3s' }} />
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--lv-soft)' }}>
+                  Unsaved changes
+                </span>
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                <button
+                  type="button"
+                  onClick={handleDiscard}
+                  style={{
+                    background: 'none', border: 'none',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10.5, letterSpacing: '0.2em', textTransform: 'uppercase',
+                    color: 'var(--lv-mute)', cursor: 'pointer', padding: '0.5rem 0.2rem',
+                    transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--lv-ink)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--lv-mute)' }}
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    fontSize: 13, fontWeight: 500, letterSpacing: '0.03em',
+                    padding: '0.6rem 1.2rem',
+                    borderRadius: 999,
+                    border: '1px solid var(--lv-ink)',
+                    background: 'var(--lv-ink)',
+                    color: 'var(--lv-bg)',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--lv-gold)'; e.currentTarget.style.borderColor = 'var(--lv-gold)'; e.currentTarget.style.color = '#0a0a0a'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--lv-ink)'; e.currentTarget.style.borderColor = 'var(--lv-ink)'; e.currentTarget.style.color = 'var(--lv-bg)'; e.currentTarget.style.transform = 'none' }}
+                >
+                  Save changes →
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 
