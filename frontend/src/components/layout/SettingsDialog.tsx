@@ -133,11 +133,11 @@ const S = {
 export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: Props) {
   const {
     user,
-    logout,
     systemPrompt, setSystemPrompt,
     uiTheme, setUiTheme,
     codeTheme, setCodeTheme,
     profession, setProfession,
+    avatarDataUrl, setAvatarDataUrl,
   } = useAppStore()
 
   // ── active section scroll-spy ─────────────────────────────────────────────
@@ -151,6 +151,17 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
   const [profDraft, setProfDraft] = useState(profession)
   const dirty = promptDraft !== systemPrompt || profDraft !== profession
   const [saveFlash, setSaveFlash] = useState(false)
+
+  // ── avatar state ─────────────────────────────────────────────────────────
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const [avatarDragging, setAvatarDragging] = useState(false)
+  const [avatarHovered, setAvatarHovered] = useState(false)
+
+  const handleAvatarFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) return
+    const dataUrl = await resizeImage(file)
+    setAvatarDataUrl(dataUrl)
+  }
 
   // ── knowledge state ──────────────────────────────────────────────────────
   const [queue, setQueue] = useState<UploadItem[]>([])
@@ -436,74 +447,6 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
           })}
         </nav>
 
-        {/* Rail footer */}
-        <div style={{ paddingTop: 22, borderTop: '1px solid var(--lv-rule)' }}>
-          {user ? (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                {/* Avatar initial */}
-                <div style={{
-                  width: 38, height: 38,
-                  borderRadius: 5,
-                  background: 'var(--lv-card)',
-                  border: '1px solid var(--lv-rule-strong)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'var(--font-display)',
-                  fontStyle: 'italic', fontWeight: 500,
-                  fontSize: 18, color: 'var(--lv-gold)',
-                  flexShrink: 0,
-                }}>
-                  {user.username[0].toUpperCase()}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.04em', color: 'var(--lv-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {user.username}
-                  </span>
-                  <span style={{ fontSize: 11, color: 'var(--lv-mute)' }}>
-                    {profDraft || 'No profession set'}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => { logout(); onOpenChange(false) }}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-                  color: 'var(--lv-mute)',
-                  background: 'none', border: 'none',
-                  cursor: 'pointer', padding: '4px 0',
-                  transition: 'color 0.15s',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--lv-gold)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--lv-mute)' }}
-              >
-                Sign out →
-              </button>
-            </div>
-          ) : (
-            <div style={{ fontSize: 12, color: 'var(--lv-mute)' }}>Not signed in</div>
-          )}
-          {/* Close button */}
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 10, letterSpacing: '0.22em', textTransform: 'uppercase',
-              color: 'var(--lv-mute)',
-              background: 'none', border: 'none',
-              cursor: 'pointer', padding: '4px 0',
-              transition: 'color 0.15s',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--lv-ink)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--lv-mute)' }}
-          >
-            ← Back to app
-          </button>
-        </div>
       </aside>
 
       {/* ══════════════════════════ MAIN ══════════════════════════ */}
@@ -546,20 +489,105 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
           </div>
 
           {/* Avatar */}
-          <SettingsRow label="Avatar" hint="Displays your initial — full avatar upload coming soon">
+          <SettingsRow label="Avatar" hint="PNG or JPG · square works best · up to 4 MB">
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); e.target.value = '' }}
+            />
             <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-              <div style={{
-                width: 104, height: 104,
-                borderRadius: 5,
-                background: 'var(--lv-card)',
-                border: '1px solid var(--lv-rule-strong)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'var(--font-display)',
-                fontStyle: 'italic', fontWeight: 500,
-                fontSize: 40, color: 'var(--lv-gold)',
-                flexShrink: 0,
-              }}>
-                {user ? user.username[0].toUpperCase() : '?'}
+              {/* Tile */}
+              <div
+                style={{
+                  position: 'relative',
+                  width: 104, height: 104,
+                  borderRadius: 5,
+                  background: 'var(--lv-card)',
+                  border: `1px solid ${avatarDragging ? 'var(--lv-gold)' : 'var(--lv-rule-strong)'}`,
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s',
+                }}
+                onClick={() => avatarInputRef.current?.click()}
+                onMouseEnter={() => setAvatarHovered(true)}
+                onMouseLeave={() => setAvatarHovered(false)}
+                onDragOver={(e) => { e.preventDefault(); setAvatarDragging(true) }}
+                onDragLeave={() => setAvatarDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault(); setAvatarDragging(false)
+                  const f = e.dataTransfer.files?.[0]
+                  if (f) handleAvatarFile(f)
+                }}
+              >
+                {/* Image or monogram */}
+                {avatarDataUrl ? (
+                  <img src={avatarDataUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                ) : (
+                  <div style={{
+                    width: '100%', height: '100%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'var(--font-display)', fontStyle: 'italic', fontWeight: 500,
+                    fontSize: 40, color: 'var(--lv-gold)',
+                  }}>
+                    {user ? user.username[0].toUpperCase() : '?'}
+                  </div>
+                )}
+                {/* Hover / drag overlay */}
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  background: 'rgba(10,10,10,0.62)',
+                  opacity: avatarHovered || avatarDragging ? 1 : 0,
+                  transition: 'opacity 0.2s',
+                }}>
+                  <span style={{ fontSize: 20, color: 'var(--lv-ink)' }}>↑</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--lv-soft)' }}>
+                    {avatarDragging ? 'Drop here' : 'Upload'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center',
+                    fontSize: 13, fontWeight: 400,
+                    padding: '7px 16px',
+                    border: '1px solid var(--lv-rule-strong)',
+                    borderRadius: 999,
+                    background: 'transparent',
+                    color: 'var(--lv-ink)',
+                    cursor: 'pointer',
+                    transition: 'border-color 0.15s, color 0.15s',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--lv-gold)'; e.currentTarget.style.color = 'var(--lv-gold)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--lv-rule-strong)'; e.currentTarget.style.color = 'var(--lv-ink)' }}
+                >
+                  Change photo
+                </button>
+                {avatarDataUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setAvatarDataUrl(null)}
+                    style={{
+                      background: 'none', border: 'none', padding: '4px 0',
+                      fontFamily: 'var(--font-mono)', fontSize: 10,
+                      letterSpacing: '0.2em', textTransform: 'uppercase',
+                      color: 'var(--lv-mute)', cursor: 'pointer',
+                      transition: 'color 0.15s',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--lv-ink)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--lv-mute)' }}
+                  >
+                    Remove
+                  </button>
+                )}
               </div>
             </div>
           </SettingsRow>
@@ -1175,6 +1203,27 @@ function PagBtn({ disabled, onClick, children }: { disabled: boolean; onClick: (
       {children}
     </button>
   )
+}
+
+function resizeImage(file: File, size = 256): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const canvas = document.createElement('canvas')
+      canvas.width = size
+      canvas.height = size
+      const ctx = canvas.getContext('2d')!
+      const side = Math.min(img.width, img.height)
+      const sx = (img.width - side) / 2
+      const sy = (img.height - side) / 2
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size)
+      resolve(canvas.toDataURL('image/jpeg', 0.85))
+    }
+    img.onerror = reject
+    img.src = url
+  })
 }
 
 function smallBtn(variant: 'gold' | 'mute'): React.CSSProperties {

@@ -231,6 +231,7 @@ export function Sidebar() {
     logout,
     pendingOAuthToken,
     setPendingOAuthToken,
+    avatarDataUrl,
   } = useAppStore()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -725,9 +726,13 @@ export function Sidebar() {
                     fontWeight: 600,
                     color: LV.ink,
                     flexShrink: 0,
+                    overflow: 'hidden',
                   }}
                 >
-                  {user.username[0].toUpperCase()}
+                  {avatarDataUrl
+                    ? <img src={avatarDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    : user.username[0].toUpperCase()
+                  }
                 </div>
                 <div style={{ flex: 1, textAlign: 'left', lineHeight: 1.2 }}>
                   <div
