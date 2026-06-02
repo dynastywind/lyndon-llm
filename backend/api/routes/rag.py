@@ -37,6 +37,27 @@ ALLOWED_EXTENSIONS = {
 UPLOADS_DIR = Path("data/rag_uploads")
 
 
+def _assert_upload_access(p: Path, user_id: str) -> None:
+    """Raise 403 if *p* is not within the uploads area owned by *user_id*.
+
+    Two layouts are accepted:
+    - ``data/rag_uploads/<user_id>/<file>``  — current layout
+    - ``data/rag_uploads/<file>``            — legacy layout (pre-user-subdirectory)
+
+    A path that resolves under a *different* user's subdirectory is always blocked.
+    """
+    uploads_dir = UPLOADS_DIR.resolve()
+    resolved = p.resolve()
+    try:
+        rel = resolved.relative_to(uploads_dir)
+    except ValueError as exc:
+        raise HTTPException(403, "Access denied") from exc
+
+    # rel.parts[0] is either the user_id subdirectory or the bare filename
+    if len(rel.parts) > 1 and rel.parts[0] != user_id:
+        raise HTTPException(403, "Access denied")
+
+
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
@@ -134,12 +155,7 @@ async def reindex_source(
 ):
     """Re-ingest an already-uploaded file from disk (replaces existing chunks)."""
     p = Path(source)
-    # Security: ensure path is inside this user's upload directory
-    user_dir = (UPLOADS_DIR / user.id).resolve()
-    try:
-        p.resolve().relative_to(user_dir)
-    except ValueError as exc:
-        raise HTTPException(403, "Access denied") from exc
+    _assert_upload_access(p, user.id)
 
     if not p.exists():
         raise HTTPException(404, "File not found on disk")
@@ -165,12 +181,11 @@ async def delete_source(
 
     if delete_file:
         p = Path(source)
-        user_dir = (UPLOADS_DIR / user.id).resolve()
         try:
-            p.resolve().relative_to(user_dir)
+            _assert_upload_access(p, user.id)
             if p.exists():
                 p.unlink()
-        except ValueError:
-            pass  # silently ignore paths outside user dir
+        except HTTPException:
+            pass  # silently ignore paths outside allowed dirs
 
     return {"status": "ok", "deleted": source}
