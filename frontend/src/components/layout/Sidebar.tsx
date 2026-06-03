@@ -731,7 +731,7 @@ export function Sidebar() {
                   }}
                 >
                   {avatarVersion > 0
-                    ? <img src={getAvatarUrl(user.id, avatarVersion)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    ? <img src={getAvatarUrl(user.id, avatarVersion)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={() => useAppStore.setState({ avatarVersion: 0 })} />
                     : user.username[0].toUpperCase()
                   }
                 </div>

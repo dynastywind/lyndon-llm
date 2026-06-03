@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
+import { checkAvatarExists } from '@/api/client'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { ChatWindow } from '@/components/chat/ChatWindow'
 import { CoworkWindow } from '@/components/cowork/CoworkWindow'
@@ -7,7 +8,7 @@ import { CodeWindow } from '@/components/code/CodeWindow'
 import { SandboxWindow } from '@/components/sandbox/SandboxWindow'
 
 export default function App() {
-  const { mode, sessionId, uiTheme, setUser, setPendingOAuthToken, bumpSessionVersion } = useAppStore()
+  const { mode, sessionId, uiTheme, setUser, setPendingOAuthToken, bumpSessionVersion, user, avatarVersion, setAvatarVersion } = useAppStore()
 
   // Apply theme class to <html> whenever uiTheme changes
   useEffect(() => {
@@ -20,6 +21,18 @@ export default function App() {
       root.classList.add('dark')
     }
   }, [uiTheme])
+
+  // Sync avatarVersion with the server whenever a user logs in on this device.
+  // avatarVersion is device-local (localStorage), so a different device won't
+  // know an avatar was uploaded elsewhere. This effect checks the server and
+  // sets avatarVersion = 1 if a file exists and we don't already know about it.
+  useEffect(() => {
+    if (!user) return
+    if (avatarVersion > 0) return // already know we have one
+    checkAvatarExists(user.id).then((exists) => {
+      if (exists) setAvatarVersion(1)
+    })
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle OAuth redirects on mount
   useEffect(() => {

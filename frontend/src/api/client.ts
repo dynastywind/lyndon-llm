@@ -133,6 +133,16 @@ export function getAvatarUrl(userId: string, version: number): string {
   return `${BASE}/auth/avatar/${userId}?v=${version}`
 }
 
+/** Returns true if the server has an avatar file for the given user. */
+export async function checkAvatarExists(userId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/auth/avatar/${userId}`, { method: 'HEAD' })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export async function uploadAvatar(dataUrl: string): Promise<void> {
   // Convert the base64 data URL produced by the canvas into a Blob for multipart upload
   const fetchRes = await fetch(dataUrl)

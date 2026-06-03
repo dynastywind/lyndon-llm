@@ -567,6 +567,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     src={getAvatarUrl(user.id, avatarVersion)}
                     alt="Avatar"
                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    onError={() => setAvatarVersion(0)}
                   />
                 ) : (
                   <div style={{
