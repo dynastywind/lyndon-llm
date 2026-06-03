@@ -53,6 +53,9 @@ frontend/.eslintcache
 # ── Codegraph index ───────────────────────────────────────────────────────────
 .codegraph/
 
+# ── Claude local settings (session-specific allowlists, not for sharing) ──────
+.claude/settings.local.json
+
 # ── IDE ───────────────────────────────────────────────────────────────────────
 .idea/
 .vscode/
