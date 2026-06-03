@@ -8,10 +8,13 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import {
   checkRagSourceName,
+  deleteAvatar,
   deleteRagSource,
+  getAvatarUrl,
   listRagSources,
   reindexRagSource,
   updateProfile,
+  uploadAvatar,
   uploadRagFile,
   type RagSource,
 } from '@/api/client'
@@ -138,7 +141,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
     uiTheme, setUiTheme,
     codeTheme, setCodeTheme,
     profession, setProfession,
-    avatarDataUrl, setAvatarDataUrl,
+    avatarVersion, setAvatarVersion,
   } = useAppStore()
 
   // ── active section scroll-spy ─────────────────────────────────────────────
@@ -159,11 +162,29 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
   const avatarInputRef = useRef<HTMLInputElement>(null)
   const [avatarDragging, setAvatarDragging] = useState(false)
   const [avatarHovered, setAvatarHovered] = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const [avatarError, setAvatarError] = useState('')
 
   const handleAvatarFile = async (file: File) => {
     if (!file.type.startsWith('image/')) return
-    const dataUrl = await resizeImage(file)
-    setAvatarDataUrl(dataUrl)
+    setAvatarUploading(true)
+    setAvatarError('')
+    try {
+      const dataUrl = await resizeImage(file)
+      await uploadAvatar(dataUrl)
+      setAvatarVersion(Date.now())   // cache-bust the img src
+    } catch (e) {
+      setAvatarError(e instanceof Error ? e.message : 'Upload failed')
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
+  const handleAvatarRemove = async () => {
+    try {
+      await deleteAvatar()
+      setAvatarVersion(0)
+    } catch { /* ignore */ }
   }
 
   // ── knowledge state ──────────────────────────────────────────────────────
@@ -541,8 +562,12 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                 }}
               >
                 {/* Image or monogram */}
-                {avatarDataUrl ? (
-                  <img src={avatarDataUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                {avatarVersion > 0 && user ? (
+                  <img
+                    src={getAvatarUrl(user.id, avatarVersion)}
+                    alt="Avatar"
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  />
                 ) : (
                   <div style={{
                     width: '100%', height: '100%',
@@ -550,22 +575,27 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     fontFamily: 'var(--font-display)', fontStyle: 'italic', fontWeight: 500,
                     fontSize: 40, color: 'var(--lv-gold)',
                   }}>
-                    {user ? user.username[0].toUpperCase() : '?'}
+                    {avatarUploading
+                      ? <Loader2 size={28} className="animate-spin" style={{ color: 'var(--lv-gold)' }} />
+                      : (user ? user.username[0].toUpperCase() : '?')
+                    }
                   </div>
                 )}
                 {/* Hover / drag overlay */}
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  background: 'rgba(10,10,10,0.62)',
-                  opacity: avatarHovered || avatarDragging ? 1 : 0,
-                  transition: 'opacity 0.2s',
-                }}>
-                  <span style={{ fontSize: 20, color: 'var(--lv-ink)' }}>↑</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--lv-soft)' }}>
-                    {avatarDragging ? 'Drop here' : 'Upload'}
-                  </span>
-                </div>
+                {!avatarUploading && (
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    background: 'rgba(10,10,10,0.62)',
+                    opacity: avatarHovered || avatarDragging ? 1 : 0,
+                    transition: 'opacity 0.2s',
+                  }}>
+                    <span style={{ fontSize: 20, color: 'var(--lv-ink)' }}>↑</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--lv-soft)' }}>
+                      {avatarDragging ? 'Drop here' : 'Upload'}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Actions */}
@@ -573,6 +603,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                 <button
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
+                  disabled={avatarUploading}
                   style={{
                     display: 'inline-flex', alignItems: 'center',
                     fontSize: 13, fontWeight: 400,
@@ -580,19 +611,19 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     border: '1px solid var(--lv-rule-strong)',
                     borderRadius: 999,
                     background: 'transparent',
-                    color: 'var(--lv-ink)',
-                    cursor: 'pointer',
+                    color: avatarUploading ? 'var(--lv-mute)' : 'var(--lv-ink)',
+                    cursor: avatarUploading ? 'wait' : 'pointer',
                     transition: 'border-color 0.15s, color 0.15s',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--lv-gold)'; e.currentTarget.style.color = 'var(--lv-gold)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--lv-rule-strong)'; e.currentTarget.style.color = 'var(--lv-ink)' }}
+                  onMouseEnter={(e) => { if (!avatarUploading) { e.currentTarget.style.borderColor = 'var(--lv-gold)'; e.currentTarget.style.color = 'var(--lv-gold)' } }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--lv-rule-strong)'; e.currentTarget.style.color = avatarUploading ? 'var(--lv-mute)' : 'var(--lv-ink)' }}
                 >
-                  Change photo
+                  {avatarUploading ? 'Uploading…' : 'Change photo'}
                 </button>
-                {avatarDataUrl && (
+                {avatarVersion > 0 && (
                   <button
                     type="button"
-                    onClick={() => setAvatarDataUrl(null)}
+                    onClick={handleAvatarRemove}
                     style={{
                       background: 'none', border: 'none', padding: '4px 0',
                       fontFamily: 'var(--font-mono)', fontSize: 10,
@@ -605,6 +636,9 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                   >
                     Remove
                   </button>
+                )}
+                {avatarError && (
+                  <span style={{ fontSize: 11, color: '#dc2626' }}>{avatarError}</span>
                 )}
               </div>
             </div>

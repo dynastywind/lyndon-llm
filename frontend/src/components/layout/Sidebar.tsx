@@ -15,7 +15,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
-import { deleteChatSession, renameChatSession } from '@/api/client'
+import { deleteChatSession, getAvatarUrl, renameChatSession } from '@/api/client'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { LoginDialog } from '@/components/auth/LoginDialog'
 import { DeleteAccountDialog } from '@/components/auth/DeleteAccountDialog'
@@ -232,7 +232,7 @@ export function Sidebar() {
     logout,
     pendingOAuthToken,
     setPendingOAuthToken,
-    avatarDataUrl,
+    avatarVersion,
   } = useAppStore()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -730,8 +730,8 @@ export function Sidebar() {
                     overflow: 'hidden',
                   }}
                 >
-                  {avatarDataUrl
-                    ? <img src={avatarDataUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  {avatarVersion > 0
+                    ? <img src={getAvatarUrl(user.id, avatarVersion)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     : user.username[0].toUpperCase()
                   }
                 </div>

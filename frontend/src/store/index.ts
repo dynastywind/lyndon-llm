@@ -106,8 +106,9 @@ interface AppState {
   // Profile
   profession: string
   setProfession: (text: string) => void
-  avatarDataUrl: string | null
-  setAvatarDataUrl: (url: string | null) => void
+  /** Incremented after each successful avatar upload — used as a cache-buster in the img URL. 0 = no avatar. */
+  avatarVersion: number
+  setAvatarVersion: (v: number) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -259,8 +260,8 @@ export const useAppStore = create<AppState>()(
       // ── Profile ───────────────────────────────────────────────────────
       profession: '',
       setProfession: (profession) => set({ profession }),
-      avatarDataUrl: null,
-      setAvatarDataUrl: (avatarDataUrl) => set({ avatarDataUrl }),
+      avatarVersion: 0,
+      setAvatarVersion: (avatarVersion) => set({ avatarVersion }),
     }),
     {
       name: 'lyndon-llm-store',
@@ -274,7 +275,7 @@ export const useAppStore = create<AppState>()(
         appliedSessionPrompts: s.appliedSessionPrompts,
         selectedModel: s.selectedModel,
         profession: s.profession,
-        avatarDataUrl: s.avatarDataUrl,
+        avatarVersion: s.avatarVersion,
       }),
     },
   ),

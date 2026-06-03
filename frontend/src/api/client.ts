@@ -128,6 +128,36 @@ export async function completeOAuthLogin(
   return res.json()
 }
 
+/** Returns the URL to display a user's avatar, with a cache-buster version param. */
+export function getAvatarUrl(userId: string, version: number): string {
+  return `${BASE}/auth/avatar/${userId}?v=${version}`
+}
+
+export async function uploadAvatar(dataUrl: string): Promise<void> {
+  // Convert the base64 data URL produced by the canvas into a Blob for multipart upload
+  const fetchRes = await fetch(dataUrl)
+  const blob = await fetchRes.blob()
+  const form = new FormData()
+  form.append('file', blob, 'avatar.jpg')
+  const res = await fetch(`${BASE}/auth/avatar`, {
+    method: 'POST',
+    headers: authHeader(),   // no Content-Type — browser sets multipart boundary
+    body: form,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+}
+
+export async function deleteAvatar(): Promise<void> {
+  const res = await fetch(`${BASE}/auth/avatar`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  })
+  if (!res.ok) throw new Error('Failed to delete avatar')
+}
+
 export async function updateProfile(fields: { email?: string | null }): Promise<void> {
   const res = await fetch(`${BASE}/auth/me`, {
     method: 'PATCH',
