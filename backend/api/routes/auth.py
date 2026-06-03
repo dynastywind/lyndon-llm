@@ -369,12 +369,22 @@ async def google_callback(
         # Existing user — refresh email if it changed, then issue full JWT
         if email and user.email != email:
             await repo.update_email(user.id, email)
-            await repo.get_by_id(user.id)  # refresh object
             user.email = email
         full_token = _create_token(user)
         return RedirectResponse(f"{settings.frontend_url}/#token={full_token}")
 
-    # New Google user — issue short-lived pending token and ask frontend to pick a username
+    # No account linked to this Google sub yet — check if the email matches an existing account
+    if email:
+        existing = await repo.get_by_email(email)
+        if existing:
+            # Link the Google identity to the existing account and log straight in
+            await repo.link_oauth(existing.id, "google", google_sub)
+            existing.oauth_provider = "google"
+            existing.oauth_sub = google_sub
+            full_token = _create_token(existing)
+            return RedirectResponse(f"{settings.frontend_url}/#token={full_token}")
+
+    # Truly new Google user — issue short-lived pending token and ask frontend to pick a username
     expire = datetime.now(UTC) + timedelta(minutes=settings.oauth_pending_expire_minutes)
     pending_payload = {
         "pending": True,

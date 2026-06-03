@@ -54,6 +54,18 @@ class UserRepo:
             row.hashed_password = hashed_password
             await self._db.commit()
 
+    async def get_by_email(self, email: str) -> User | None:
+        result = await self._db.execute(select(User).where(User.email == email))
+        return result.scalar_one_or_none()
+
+    async def link_oauth(self, user_id: str, provider: str, sub: str) -> None:
+        """Attach an OAuth identity to an existing account (e.g. password user signs in via Google)."""
+        row = await self.get_by_id(user_id)
+        if row:
+            row.oauth_provider = provider
+            row.oauth_sub = sub
+            await self._db.commit()
+
     async def update_email(self, user_id: str, email: str | None) -> None:
         row = await self.get_by_id(user_id)
         if row:
