@@ -921,7 +921,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
             <h2 style={S.kbTitle}>MCP &amp; Tools</h2>
           </div>
           {/* Wrap existing ToolsRegistryPanel */}
-          <ToolsRegistryPanel active={open && activeSection === 'tools'} />
+          <ToolsRegistryPanel active={open} />
         </section>
 
         {/* ── 05 · Appearance ── */}
