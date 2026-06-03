@@ -642,21 +642,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
 
           {/* Profession */}
           <SettingsRow label="Profession" hint="Helps tailor responses to your field">
-            <input
-              type="text"
-              list="settings-prof-list"
-              value={profDraft}
-              onChange={(e) => setProfDraft(e.target.value)}
-              placeholder="e.g. Software engineer"
-              style={fieldStyle()}
-              onFocus={(e) => { e.currentTarget.style.borderBottomColor = 'var(--lv-gold)' }}
-              onBlur={(e) => { e.currentTarget.style.borderBottomColor = 'var(--lv-rule-strong)' }}
-            />
-            <datalist id="settings-prof-list">
-              {['Photographer','Software engineer','Designer','Writer','Researcher','Product manager','Student'].map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
+            <ProfessionPicker value={profDraft} onChange={setProfDraft} />
           </SettingsRow>
         </section>
 
@@ -1091,6 +1077,91 @@ function SettingsRow({ label, hint, children }: { label: string; hint: string; c
         <span style={{ display: 'block', fontSize: 12.5, lineHeight: 1.5, color: 'var(--lv-mute)' }}>{hint}</span>
       </div>
       <div style={{ minWidth: 0 }}>{children}</div>
+    </div>
+  )
+}
+
+// ─── ProfessionPicker ─────────────────────────────────────────────────────────
+
+const PROFESSIONS = [
+  'Photographer', 'Software engineer', 'Designer', 'Writer',
+  'Researcher', 'Product manager', 'Student',
+]
+
+function ProfessionPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const filtered = PROFESSIONS.filter(
+    (p) => !value.trim() || p.toLowerCase().includes(value.toLowerCase()),
+  )
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true) }}
+        onFocus={(e) => { e.currentTarget.style.borderBottomColor = 'var(--lv-gold)'; setOpen(true) }}
+        onBlur={(e) => { e.currentTarget.style.borderBottomColor = 'var(--lv-rule-strong)' }}
+        placeholder="e.g. Software engineer"
+        style={fieldStyle()}
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 4px)',
+          left: 0, right: 0,
+          background: 'var(--lv-card)',
+          border: '1px solid var(--lv-rule-strong)',
+          borderRadius: 8,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          zIndex: 200,
+          overflow: 'hidden',
+        }}>
+          {filtered.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault() // prevent input blur
+                onChange(p)
+                setOpen(false)
+              }}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '12px 16px',
+                textAlign: 'left',
+                background: 'none',
+                border: 'none',
+                fontFamily: 'var(--font-sans)',
+                fontSize: 15,
+                color: p === value ? 'var(--lv-gold)' : 'var(--lv-ink)',
+                cursor: 'pointer',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--lv-elev)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'none' }}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
