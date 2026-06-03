@@ -43,6 +43,11 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     username: str
     id: str
+    email: str | None = None
+
+
+class UpdateProfileRequest(BaseModel):
+    email: str | None = None
 
 
 class ResetPasswordRequest(BaseModel):
@@ -130,7 +135,7 @@ def _verify_password(password: str, hashed: str) -> bool:
 
 def _create_token(user: User) -> str:
     expire = datetime.now(UTC) + timedelta(days=settings.jwt_expire_days)
-    payload = {"sub": user.id, "username": user.username, "exp": expire}
+    payload = {"sub": user.id, "username": user.username, "email": user.email, "oauth_provider": user.oauth_provider, "exp": expire}
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 
@@ -219,6 +224,7 @@ async def register(
         access_token=_create_token(user),
         username=user.username,
         id=user.id,
+        email=user.email,
     )
 
 
@@ -243,6 +249,7 @@ async def login(
         access_token=_create_token(user),
         username=user.username,
         id=user.id,
+        email=user.email,
     )
 
 
@@ -359,7 +366,11 @@ async def google_callback(
     user = await repo.get_by_oauth("google", google_sub)
 
     if user:
-        # Existing user — issue full JWT and redirect with token in hash
+        # Existing user — refresh email if it changed, then issue full JWT
+        if email and user.email != email:
+            await repo.update_email(user.id, email)
+            await repo.get_by_id(user.id)  # refresh object
+            user.email = email
         full_token = _create_token(user)
         return RedirectResponse(f"{settings.frontend_url}/#token={full_token}")
 
@@ -398,14 +409,33 @@ async def oauth_complete(
     if await repo.get_by_username(body.username):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
 
+    oauth_email = payload.get("email") or None
     is_first_user = (await repo.count()) == 0
-    user = await repo.create_oauth(body.username, provider, sub)
+    user = await repo.create_oauth(body.username, provider, sub, email=oauth_email)
 
     if is_first_user:
         await _migrate_orphan_data(user.id, db)
 
     await _record_login(user, request, None, db)
-    return TokenResponse(access_token=_create_token(user), username=user.username, id=user.id)
+    return TokenResponse(
+        access_token=_create_token(user),
+        username=user.username,
+        id=user.id,
+        email=user.email,
+    )
+
+
+@router.patch("/me")
+async def update_profile(
+    body: UpdateProfileRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update mutable profile fields (email)."""
+    repo = UserRepo(db)
+    if "email" in body.model_fields_set:
+        await repo.update_email(user.id, body.email)
+    return {"ok": True}
 
 
 @router.delete("/me", status_code=204)

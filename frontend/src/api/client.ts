@@ -57,6 +57,7 @@ export interface AuthResponse {
   token_type: string
   username: string
   id: string
+  email: string | null
 }
 
 /** Persistent device ID — generated once and stored in localStorage. */
@@ -125,6 +126,18 @@ export async function completeOAuthLogin(
     throw new Error(err.detail ?? res.statusText)
   }
   return res.json()
+}
+
+export async function updateProfile(fields: { email?: string | null }): Promise<void> {
+  const res = await fetch(`${BASE}/auth/me`, {
+    method: 'PATCH',
+    headers: jsonHeaders(),
+    body: JSON.stringify(fields),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
 }
 
 export async function resetPassword(username: string, newPassword: string): Promise<void> {

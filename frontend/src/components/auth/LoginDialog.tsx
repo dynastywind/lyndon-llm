@@ -68,7 +68,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
     try {
       if (mode === 'oauth-username') {
         const res = await completeOAuthLogin(pendingOAuthToken!, username.trim())
-        setUser({ id: res.id, username: res.username, token: res.access_token })
+        setUser({ id: res.id, username: res.username, email: res.email ?? null, token: res.access_token })
         bumpSessionVersion()
         onOpenChange(false)
         return
@@ -84,7 +84,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
       }
       const fn = mode === 'login' ? login : register
       const res = await fn(username.trim(), password)
-      setUser({ id: res.id, username: res.username, token: res.access_token })
+      setUser({ id: res.id, username: res.username, email: res.email ?? null, token: res.access_token })
       bumpSessionVersion()
       onOpenChange(false)
     } catch (err) {

@@ -39,8 +39,10 @@ class UserRepo:
         )
         return result.scalar_one_or_none()
 
-    async def create_oauth(self, username: str, provider: str, sub: str) -> User:
-        row = User(username=username, oauth_provider=provider, oauth_sub=sub)
+    async def create_oauth(
+        self, username: str, provider: str, sub: str, email: str | None = None
+    ) -> User:
+        row = User(username=username, oauth_provider=provider, oauth_sub=sub, email=email)
         self._db.add(row)
         await self._db.commit()
         await self._db.refresh(row)
@@ -50,6 +52,12 @@ class UserRepo:
         row = await self.get_by_id(user_id)
         if row:
             row.hashed_password = hashed_password
+            await self._db.commit()
+
+    async def update_email(self, user_id: str, email: str | None) -> None:
+        row = await self.get_by_id(user_id)
+        if row:
+            row.email = email
             await self._db.commit()
 
     async def delete(self, user_id: str) -> None:

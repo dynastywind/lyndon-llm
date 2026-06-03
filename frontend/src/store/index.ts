@@ -8,6 +8,8 @@ import type { CodeThemeName } from '@/config/codeThemes'
 export interface AuthUser {
   id: string
   username: string
+  email: string | null
+  oauth_provider?: string | null
   token: string
 }
 

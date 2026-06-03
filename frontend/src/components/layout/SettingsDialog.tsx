@@ -11,6 +11,7 @@ import {
   deleteRagSource,
   listRagSources,
   reindexRagSource,
+  updateProfile,
   uploadRagFile,
   type RagSource,
 } from '@/api/client'
@@ -149,7 +150,9 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
   // ── save-bar dirty state ─────────────────────────────────────────────────
   const [promptDraft, setPromptDraft] = useState(systemPrompt)
   const [profDraft, setProfDraft] = useState(profession)
-  const dirty = promptDraft !== systemPrompt || profDraft !== profession
+  const [emailDraft, setEmailDraft] = useState(user?.email ?? '')
+  const storedEmail = user?.email ?? ''
+  const dirty = promptDraft !== systemPrompt || profDraft !== profession || emailDraft !== storedEmail
   const [saveFlash, setSaveFlash] = useState(false)
 
   // ── avatar state ─────────────────────────────────────────────────────────
@@ -188,6 +191,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
     if (open) {
       setPromptDraft(systemPrompt)
       setProfDraft(profession)
+      setEmailDraft(user?.email ?? '')
     }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -297,9 +301,18 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
   }
 
   // ── save / discard ────────────────────────────────────────────────────────
-  const handleSave = () => {
+  const handleSave = async () => {
     setSystemPrompt(promptDraft.trim())
     setProfession(profDraft)
+    if (emailDraft !== storedEmail && user) {
+      try {
+        await updateProfile({ email: emailDraft.trim() || null })
+        // Update local store so the email shown elsewhere is current
+        useAppStore.setState((s) => ({
+          user: s.user ? { ...s.user, email: emailDraft.trim() || null } : s.user,
+        }))
+      } catch { /* silently ignore — backend may not be running */ }
+    }
     setSaveFlash(true)
     setTimeout(() => setSaveFlash(false), 1600)
   }
@@ -307,6 +320,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
   const handleDiscard = () => {
     setPromptDraft(systemPrompt)
     setProfDraft(profession)
+    setEmailDraft(user?.email ?? '')
   }
 
   const scrollToSection = (id: SettingsTab) => {
@@ -608,6 +622,22 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
               </span>
               <span style={{ color: 'var(--lv-mute)', fontSize: 14 }} title="Locked">⦿</span>
             </div>
+          </SettingsRow>
+
+          {/* Email */}
+          <SettingsRow
+            label="Email address"
+            hint={user?.oauth_provider ? 'Bound from Google — updates automatically on sign-in' : 'Used for notifications and account recovery'}
+          >
+            <input
+              type="email"
+              value={emailDraft}
+              onChange={(e) => setEmailDraft(e.target.value)}
+              placeholder="e.g. you@example.com"
+              style={fieldStyle()}
+              onFocus={(e) => { e.currentTarget.style.borderBottomColor = 'var(--lv-gold)' }}
+              onBlur={(e) => { e.currentTarget.style.borderBottomColor = 'var(--lv-rule-strong)' }}
+            />
           </SettingsRow>
 
           {/* Profession */}

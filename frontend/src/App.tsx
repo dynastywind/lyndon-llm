@@ -41,7 +41,7 @@ export default function App() {
         // Decode payload without verification (we trust our own backend redirect)
         const payloadB64 = token.split('.')[1]
         const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')))
-        setUser({ id: payload.sub, username: payload.username, token })
+        setUser({ id: payload.sub, username: payload.username, email: payload.email ?? null, oauth_provider: payload.oauth_provider ?? null, token })
         bumpSessionVersion()
       } catch {
         // malformed token — ignore

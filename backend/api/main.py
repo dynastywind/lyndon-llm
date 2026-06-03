@@ -55,6 +55,8 @@ async def _migrate(conn) -> None:
         # v5 — OAuth provider fields on users
         "ALTER TABLE users ADD COLUMN oauth_provider TEXT",
         "ALTER TABLE users ADD COLUMN oauth_sub TEXT",
+        # v6 — email address (auto-populated from OAuth, optionally set by password users)
+        "ALTER TABLE users ADD COLUMN email TEXT",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore
