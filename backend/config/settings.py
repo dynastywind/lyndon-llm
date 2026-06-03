@@ -63,9 +63,13 @@ class Settings(BaseSettings):
     rag_top_k: int = 6
     rag_bm25_weight: float = 0.3  # hybrid retrieval weight
 
-    # Chat orchestrator (route: direct | rag | tools | rag_and_tools)
+    # Chat orchestrator (route: direct | rag | tools | rag_and_tools | plan)
     orchestrator_enabled: bool = True
     orchestrator_strategy: str = "heuristic"  # heuristic | llm (future)
+
+    # Chat planner
+    planner_enabled: bool = True
+    planner_complexity_threshold: int = 2
 
     # Web search
     web_search_provider: str = "duckduckgo"  # duckduckgo | google | tavily | serpapi

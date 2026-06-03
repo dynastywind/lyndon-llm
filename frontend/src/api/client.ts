@@ -270,6 +270,57 @@ export async function streamChat(
   }
 }
 
+// ── Chat planner ──────────────────────────────────────────────────────────────
+
+export async function confirmChatPlan(
+  planId: string,
+  sessionId: string,
+  onEvent: (type: string, data: Record<string, unknown>) => void,
+): Promise<void> {
+  const res = await fetch(`${BASE}/chat/plan/confirm`, {
+    method: 'POST',
+    headers: headers(sessionId, 'chat'),
+    body: JSON.stringify({ plan_id: planId }),
+  })
+  if (!res.ok) throw new Error(`Plan confirm error: ${res.statusText}`)
+
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() ?? ''
+    for (const part of parts) {
+      if (!part.trim()) continue
+      let eventType = 'message'
+      let dataStr = ''
+      for (const line of part.split('\n')) {
+        if (line.startsWith('event: ')) eventType = line.slice(7).trim()
+        else if (line.startsWith('data: ')) dataStr = line.slice(6)
+      }
+      if (dataStr) {
+        try {
+          onEvent(eventType, JSON.parse(dataStr))
+        } catch {
+          // malformed JSON — skip
+        }
+      }
+    }
+  }
+}
+
+export async function cancelChatPlan(planId: string, sessionId: string): Promise<void> {
+  await fetch(`${BASE}/chat/plan/cancel`, {
+    method: 'POST',
+    headers: headers(sessionId, 'chat'),
+    body: JSON.stringify({ plan_id: planId }),
+  })
+}
+
 // ── Chat sessions ─────────────────────────────────────────────────────────────
 
 export async function createChatSession(): Promise<ChatSession> {

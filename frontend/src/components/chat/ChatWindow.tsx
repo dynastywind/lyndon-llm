@@ -61,6 +61,7 @@ import type {
   ChatSessionMessage,
   MessageAttachment,
 } from '@/types'
+import { PlanPreviewCard } from '@/components/chat/PlanPreviewCard'
 
 // ─── Asterisk mark components ─────────────────────────────────────────────────
 
@@ -2056,6 +2057,9 @@ export function ChatWindow() {
 
             <div ref={bottomRef} />
           </div>
+
+          {/* ── Plan preview card ──────────────────────────────────────── */}
+          <PlanPreviewCard />
 
           {/* ── Input bar ──────────────────────────────────────────────── */}
           <div

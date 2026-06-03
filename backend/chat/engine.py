@@ -192,7 +192,13 @@ class ChatEngine:
             timer.phases["route_ms"],
         )
 
-        # 2. Retrieve RAG context when orchestrator requests it
+        # 2. Plan branch — generate plan, emit plan_preview, end Phase 1
+        if decision.needs_plan:
+            async for event in self._plan_response(user_message):
+                yield event
+            return
+
+        # 3. Retrieve RAG context when orchestrator requests it
         rag_chunks: list[RetrievedChunk] = []
         if decision.needs_rag:
             rag_chunks = await self._retrieve(user_message)
@@ -200,7 +206,7 @@ class ChatEngine:
         if decision.needs_rag:
             timer.mark("rag_ms")
 
-        # 3. Build system prompt (base + memories + optional RAG)
+        # 4. Build system prompt (base + memories + optional RAG)
         #    The user-defined system prompt and session prompt are NOT put here;
         #    they are injected into the first user turn (see step 4b) so the
         #    model always sees them as immutable conversation-opening context
@@ -322,6 +328,33 @@ class ChatEngine:
                 "rag_sources": [c.source for c in rag_chunks],
             },
         )
+
+    # ------------------------------------------------------------------ #
+    #  Plan response (Phase 1)                                            #
+    # ------------------------------------------------------------------ #
+
+    async def _plan_response(
+        self,
+        user_message: str,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Generate a plan and yield a plan_preview event to end Phase 1."""
+        from chat.planner import ChatPlanner
+
+        planner = ChatPlanner()
+        try:
+            plan = await planner.create_plan(user_message, session_id=self.session.session_id)
+        except ValueError as e:
+            yield {"type": "error", "message": f"Planner failed: {e}"}
+            return
+
+        self.session.metadata["pending_plan"] = plan
+
+        yield {
+            "type": "plan_preview",
+            "plan_id": plan.plan_id,
+            "goal": plan.goal,
+            "steps": [s.model_dump() for s in plan.steps],
+        }
 
     # ------------------------------------------------------------------ #
     #  Agentic loop                                                        #

@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { generateId } from '@/lib/utils'
-import type { Mode, Message, Plan, FileDiff } from '@/types'
+import type { Mode, Message, Plan, FileDiff, ChatPlan, ChatPlanStatus, ChatPlanStepStatus } from '@/types'
 import { CODE_THEME_DEFAULT } from '@/config/codeThemes'
 import type { CodeThemeName } from '@/config/codeThemes'
 
@@ -65,6 +65,15 @@ interface AppState {
   // Cowork
   currentPlan: Plan | null
   setPlan: (plan: Plan | null) => void
+
+  // Chat Planner
+  chatPendingPlan: ChatPlan | null
+  chatPlanStatus: ChatPlanStatus | null
+  chatPlanStepStatuses: Record<string, ChatPlanStepStatus>
+  setChatPendingPlan: (plan: ChatPlan | null) => void
+  setChatPlanStatus: (status: ChatPlanStatus | null) => void
+  updateChatPlanStepStatus: (stepId: string, status: ChatPlanStepStatus) => void
+  clearChatPlan: () => void
 
   // Code
   currentDiff: FileDiff | null
@@ -209,6 +218,19 @@ export const useAppStore = create<AppState>()(
       // ── Cowork ────────────────────────────────────────────────────────
       currentPlan: null,
       setPlan: (plan) => set({ currentPlan: plan }),
+
+      // ── Chat Planner ──────────────────────────────────────────────────
+      chatPendingPlan: null,
+      chatPlanStatus: null,
+      chatPlanStepStatuses: {},
+      setChatPendingPlan: (plan) => set({ chatPendingPlan: plan, chatPlanStepStatuses: {} }),
+      setChatPlanStatus: (status) => set({ chatPlanStatus: status }),
+      updateChatPlanStepStatus: (stepId, status) =>
+        set((s) => ({
+          chatPlanStepStatuses: { ...s.chatPlanStepStatuses, [stepId]: status },
+        })),
+      clearChatPlan: () =>
+        set({ chatPendingPlan: null, chatPlanStatus: null, chatPlanStepStatuses: {} }),
 
       // ── Code ──────────────────────────────────────────────────────────
       currentDiff: null,

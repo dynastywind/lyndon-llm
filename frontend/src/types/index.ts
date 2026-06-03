@@ -50,6 +50,29 @@ export interface Message {
   attachments?: MessageAttachment[]
 }
 
+// ── Chat Planner ──────────────────────────────────────────────────────────────
+
+export interface ChatPlanStep {
+  step_id: string
+  order: number
+  title: string
+  description: string
+  tool: string
+  tool_args: Record<string, unknown>
+  risk: 'low' | 'medium' | 'high'
+  depends_on: string[]
+}
+
+export interface ChatPlan {
+  plan_id: string
+  goal: string
+  steps: ChatPlanStep[]
+}
+
+export type ChatPlanStatus = 'pending_confirm' | 'running' | 'done' | 'failed' | 'cancelled'
+
+export type ChatPlanStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
+
 // ── Cowork ────────────────────────────────────────────────────────────────────
 export type RiskLevel = 'low' | 'medium' | 'high'
 export type StepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'

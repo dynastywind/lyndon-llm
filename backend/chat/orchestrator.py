@@ -13,7 +13,7 @@ from typing import Literal, Protocol
 
 from config.settings import settings
 
-RouteName = Literal["direct", "rag", "tools", "rag_and_tools"]
+RouteName = Literal["direct", "rag", "tools", "rag_and_tools", "plan"]
 
 ALL_CHAT_TOOLS = frozenset({"web_search", "rag_query", "render_chart", "run_code"})
 
@@ -64,6 +64,30 @@ _CHART_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Multi-step / sequential language
+_PLAN_SEQUENTIAL_RE = re.compile(
+    r"\b(first[,\s].+then|step[\s-]by[\s-]step|"
+    r"and\s+then|after\s+that|following\s+that|"
+    r"in\s+order|one\s+by\s+one)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# Explicit planning request
+_PLAN_EXPLICIT_RE = re.compile(
+    r"\b(plan|workflow|break\s+(it\s+)?down|"
+    r"create\s+a\s+plan|make\s+a\s+plan|"
+    r"outline|roadmap|steps?\s+to)\b",
+    re.IGNORECASE,
+)
+
+# Comparative / research / multi-source analysis
+_PLAN_RESEARCH_RE = re.compile(
+    r"\b(compare|comparison|analyze|analyse|analysis|"
+    r"research|investigate|deep\s+dive|comprehensive|"
+    r"pros?\s+and\s+cons?|evaluate|assessment)\b",
+    re.IGNORECASE,
+)
+
 # Code-execution signals — any request to run / execute / test a snippet
 _LANGS = (
     r"python|javascript|js|typescript|ts|ruby|go|golang|rust|java|"
@@ -103,6 +127,10 @@ class RouteDecision:
     def needs_tools(self) -> bool:
         return self.route in ("tools", "rag_and_tools")
 
+    @property
+    def needs_plan(self) -> bool:
+        return self.route == "plan"
+
 
 class Orchestrator(Protocol):
     async def route(self, message: str, *, has_kb_sources: bool) -> RouteDecision: ...
@@ -130,6 +158,15 @@ class HeuristicOrchestrator:
         if tool_set and has_kb_sources and not wants_rag:
             tool_set.add("rag_query")
 
+        # Planning — checked before routing to tool / rag paths.
+        # Include rag_query in the effective tool count when wants_rag is true,
+        # since it will be added to the tool set by the rag_and_tools branch.
+        effective_tools = tool_set | ({"rag_query"} if wants_rag else set())
+        if settings.planner_enabled and len(text) >= 30 and _is_complex(
+            text, effective_tools, settings.planner_complexity_threshold
+        ):
+            return RouteDecision("plan", frozenset(tool_set), "complexity signal: planning required")
+
         # Greeting-only short messages with no other signals
         if not wants_rag and not tool_set and len(text) < 20 and _GREETING_RE.match(text):
             return RouteDecision("direct", frozenset(), "greeting")
@@ -152,6 +189,24 @@ class HeuristicOrchestrator:
             )
 
         return RouteDecision("direct", frozenset(), "no signals")
+
+
+def _is_complex(text: str, tool_set: set[str], threshold: int = 2) -> bool:
+    """Return True when the message warrants a structured plan.
+
+    Uses a weighted signal count: explicit planning language scores +2 on its
+    own (strong signal); all other signals score +1 each.
+    """
+    score = 0
+    if _PLAN_SEQUENTIAL_RE.search(text):
+        score += 1
+    if _PLAN_EXPLICIT_RE.search(text):
+        score += 2
+    if _PLAN_RESEARCH_RE.search(text):
+        score += 1
+    if len(tool_set) >= 2:
+        score += 1
+    return score >= threshold
 
 
 def _wants_rag(text: str, has_kb_sources: bool) -> bool:

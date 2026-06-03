@@ -97,6 +97,74 @@ async def chat(
     )
 
 
+# ── Chat planner Phase 2 ─────────────────────────────────────────────────────
+
+
+class PlanConfirmRequest(BaseModel):
+    plan_id: str
+
+
+class PlanCancelRequest(BaseModel):
+    plan_id: str
+
+
+@router.post("/plan/confirm")
+async def confirm_chat_plan(
+    body: PlanConfirmRequest,
+    session: Session = Depends(get_session),
+    db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """Phase 2: execute the pending plan and stream progress as SSE."""
+    from cowork.planner import Plan
+
+    pending: Plan | None = session.metadata.get("pending_plan")
+    if not pending or pending.plan_id != body.plan_id:
+        raise HTTPException(status_code=404, detail="No pending plan found for this session")
+
+    pending.approved = True
+    del session.metadata["pending_plan"]
+
+    from chat.executor import ChatExecutor
+
+    executor = ChatExecutor(session)
+    full_response_parts: list[str] = []
+
+    async def _generate():
+        async for event in executor.run(pending):
+            evt_type = event["type"]
+            if evt_type == "token":
+                full_response_parts.append(event.get("text", ""))
+            payload = {k: v for k, v in event.items() if k != "type"}
+            yield _sse(evt_type, payload)
+        yield _sse("done", {})
+
+        # Persist the synthesized assistant response
+        if db and full_response_parts:
+            full_text = "".join(full_response_parts)
+            _repo = ChatRepo(db)
+            await _repo.add_message(session.session_id, "assistant", full_text)
+            await _repo.maybe_set_title(session.session_id, pending.goal)
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/plan/cancel")
+async def cancel_chat_plan(
+    body: PlanCancelRequest,
+    session: Session = Depends(get_session),
+):
+    """Discard the pending plan without executing it."""
+    pending = session.metadata.get("pending_plan")
+    if pending and pending.plan_id == body.plan_id:
+        del session.metadata["pending_plan"]
+    return {"status": "cancelled"}
+
+
 # ── Session management ────────────────────────────────────────────────────────
 
 

@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import { createChatSession, streamChat } from '@/api/client'
 import { useAppStore } from '@/store'
 import { generateId } from '@/lib/utils'
-import type { ToolCallRecord, ChartSpec, MessageAttachment } from '@/types'
+import type { ToolCallRecord, ChartSpec, MessageAttachment, ChatPlan } from '@/types'
 import type { AttachmentPayload } from '@/api/client'
 
 function chartSpecToMarkdown(spec: ChartSpec): string {
@@ -23,6 +23,8 @@ export function useStream() {
     clearSessionPrompt,
     setAppliedSessionPrompt,
     selectedModel,
+    setChatPendingPlan,
+    setChatPlanStatus,
   } = useAppStore()
 
   const send = useCallback(
@@ -162,6 +164,21 @@ export function useStream() {
                 break
               }
 
+              case 'plan_preview': {
+                // Phase 1 complete — store the plan, remove the empty assistant bubble
+                setChatPendingPlan(data as unknown as ChatPlan)
+                setChatPlanStatus('pending_confirm')
+                useAppStore.setState((s) => ({
+                  sessionMessages: {
+                    ...s.sessionMessages,
+                    [activeSessionId!]: (s.sessionMessages[activeSessionId!] ?? []).filter(
+                      (m) => m.id !== msgId,
+                    ),
+                  },
+                }))
+                break
+              }
+
               case 'error': {
                 console.warn('[stream] backend error event:', data.message)
                 break
@@ -195,6 +212,8 @@ export function useStream() {
       clearSessionPrompt,
       setAppliedSessionPrompt,
       selectedModel,
+      setChatPendingPlan,
+      setChatPlanStatus,
     ],
   )
 
