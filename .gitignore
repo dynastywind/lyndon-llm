@@ -44,6 +44,7 @@ qdrant_data/
 # ── Frontend ──────────────────────────────────────────────────────────────────
 node_modules/
 frontend/dist/
+frontend/coverage/
 frontend/.eslintcache
 *.tsbuildinfo
 
