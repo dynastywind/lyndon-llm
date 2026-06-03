@@ -105,7 +105,13 @@
       "Bash(.venv/bin/pytest --tb=short -q)",
       "Bash(.venv/bin/pytest tests/test_llm_gateway.py tests/test_chat/test_engine_helpers.py -v --tb=short)",
       "Bash(.venv/bin/pytest -q --tb=short)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('productName',''\\), d.get\\('version',''\\), d.get\\('bundle',{}\\).get\\('identifier',''\\)\\)\")"
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('productName',''\\), d.get\\('version',''\\), d.get\\('bundle',{}\\).get\\('identifier',''\\)\\)\")",
+      "Bash(grep -v \"^$\")",
+      "Bash(python3 -c \"from api.routes.auth import router; print\\('OK'\\)\")",
+      "Bash(PYTHONPATH=.venv/lib/python3.12/site-packages python3 -c \"from api.routes.auth import router; print\\('OK'\\)\")",
+      "Bash(python3 -m ast /Users/lyndon/Documents/projects/lyndonLLM/backend/api/routes/auth.py)",
+      "Bash(python3 -m ast /Users/lyndon/Documents/projects/lyndonLLM/backend/db/repos/user.py)",
+      "Bash(python3 -m py_compile /Users/lyndon/Documents/projects/lyndonLLM/backend/api/routes/auth.py /Users/lyndon/Documents/projects/lyndonLLM/backend/db/models/user.py /Users/lyndon/Documents/projects/lyndonLLM/backend/db/repos/user.py)"
     ]
   }
 }
