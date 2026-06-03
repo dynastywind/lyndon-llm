@@ -66,6 +66,12 @@ class UserRepo:
             row.oauth_sub = sub
             await self._db.commit()
 
+    async def update_avatar(self, user_id: str, data: bytes | None) -> None:
+        row = await self.get_by_id(user_id)
+        if row:
+            row.avatar = data
+            await self._db.commit()
+
     async def update_email(self, user_id: str, email: str | None) -> None:
         row = await self.get_by_id(user_id)
         if row:

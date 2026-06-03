@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import uuid
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -22,6 +22,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
     hashed_password: Mapped[str | None] = mapped_column(Text, nullable=True)
     email: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    avatar: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     # OAuth fields — set for users who signed in via a third-party provider
     oauth_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)  # e.g. "google"
     oauth_sub: Mapped[str | None] = mapped_column(String(256), nullable=True)  # provider user ID

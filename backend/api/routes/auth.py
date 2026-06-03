@@ -11,7 +11,7 @@ import secrets
 import bcrypt
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -27,7 +27,6 @@ from db.repos.user import UserRepo
 router = APIRouter()
 
 UPLOADS_DIR = Path("data/rag_uploads")
-AVATARS_DIR = Path("data/avatars")
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -453,35 +452,38 @@ async def update_profile(
 async def upload_avatar(
     file: UploadFile = File(...),
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Store the authenticated user's avatar (pre-resized JPEG from the browser)."""
+    """Store the authenticated user's avatar as a BLOB in the database."""
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image.")
-    contents = await file.read(2 * 1024 * 1024)  # 2 MB hard cap
+    contents = await file.read(2 * 1024 * 1024)
     if len(contents) >= 2 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Avatar must be smaller than 2 MB.")
-    AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-    (AVATARS_DIR / f"{user.id}.jpg").write_bytes(contents)
+    await UserRepo(db).update_avatar(user.id, contents)
     return {"ok": True}
 
 
 @router.get("/avatar/{user_id}")
-async def get_avatar(user_id: str):
-    """Serve a user's avatar image (public — no auth required)."""
-    path = AVATARS_DIR / f"{user_id}.jpg"
-    if not path.exists():
+async def get_avatar(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Serve a user's avatar directly from the database (public — no auth required)."""
+    row = await UserRepo(db).get_by_id(user_id)
+    if row is None or row.avatar is None:
         raise HTTPException(status_code=404, detail="No avatar.")
-    return FileResponse(str(path), media_type="image/jpeg", headers={
-        "Cache-Control": "public, max-age=3600",
-    })
+    return Response(
+        content=row.avatar,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @router.delete("/avatar", status_code=204)
-async def delete_avatar(user: User = Depends(get_current_user)):
-    """Remove the authenticated user's avatar."""
-    path = AVATARS_DIR / f"{user.id}.jpg"
-    if path.exists():
-        path.unlink()
+async def delete_avatar(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove the authenticated user's avatar from the database."""
+    await UserRepo(db).update_avatar(user.id, None)
 
 
 @router.delete("/me", status_code=204)

@@ -57,6 +57,8 @@ async def _migrate(conn) -> None:
         "ALTER TABLE users ADD COLUMN oauth_sub TEXT",
         # v6 — email address (auto-populated from OAuth, optionally set by password users)
         "ALTER TABLE users ADD COLUMN email TEXT",
+        # v7 — avatar stored as BLOB directly in the users table
+        "ALTER TABLE users ADD COLUMN avatar BLOB",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore
