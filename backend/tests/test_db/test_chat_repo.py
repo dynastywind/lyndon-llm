@@ -6,9 +6,9 @@ No external services required — all I/O is in-process via aiosqlite.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 import os
 import sys
-from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -24,8 +24,8 @@ async def db():
     """Yield a fresh in-memory AsyncSession for each test."""
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-    import db.models.chat  # noqa: F401 — registers tables with Base.metadata
     from db.base import Base
+    import db.models.chat  # noqa: F401 — registers tables with Base.metadata
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True)
     async with engine.begin() as conn:
@@ -185,7 +185,7 @@ async def test_attachment_round_trip(db):
     await repo.ensure_session(sid)
 
     attachments = [{"name": "photo.png", "type": "image/png", "data": "abc123=="}]
-    msg = await repo.add_message(sid, "user", "see attached", attachments=attachments)
+    await repo.add_message(sid, "user", "see attached", attachments=attachments)
 
     # Reload and decode
     messages = await repo.get_messages(sid)

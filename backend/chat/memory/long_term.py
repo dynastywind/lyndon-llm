@@ -128,7 +128,7 @@ class LongTermMemory:
         if user_id:
             filtered = [
                 (i, d, m)
-                for i, d, m in zip(all_ids, all_docs, all_metas)
+                for i, d, m in zip(all_ids, all_docs, all_metas, strict=False)
                 if m.get("user_id") == user_id
             ]
             ids = [x[0] for x in filtered]

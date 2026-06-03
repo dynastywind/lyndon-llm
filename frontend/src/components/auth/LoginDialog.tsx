@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Eye, EyeOff } from 'lucide-react'
-import { checkUsername, login, register, resetPassword, getGoogleAuthUrl, completeOAuthLogin } from '@/api/client'
+import {
+  checkUsername,
+  login,
+  register,
+  resetPassword,
+  getGoogleAuthUrl,
+  completeOAuthLogin,
+} from '@/api/client'
 import { useAppStore } from '@/store'
 
 interface Props {
@@ -68,7 +75,12 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
     try {
       if (mode === 'oauth-username') {
         const res = await completeOAuthLogin(pendingOAuthToken!, username.trim())
-        setUser({ id: res.id, username: res.username, email: res.email ?? null, token: res.access_token })
+        setUser({
+          id: res.id,
+          username: res.username,
+          email: res.email ?? null,
+          token: res.access_token,
+        })
         bumpSessionVersion()
         onOpenChange(false)
         return
@@ -84,7 +96,12 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
       }
       const fn = mode === 'login' ? login : register
       const res = await fn(username.trim(), password)
-      setUser({ id: res.id, username: res.username, email: res.email ?? null, token: res.access_token })
+      setUser({
+        id: res.id,
+        username: res.username,
+        email: res.email ?? null,
+        token: res.access_token,
+      })
       bumpSessionVersion()
       onOpenChange(false)
     } catch (err) {
@@ -194,7 +211,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
           {/* oauth-username subtitle */}
           {mode === 'oauth-username' && (
             <p style={{ margin: '-12px 0 16px', fontSize: 13, color: 'var(--lv-ink-muted)' }}>
-              Your Google account isn't linked to a user yet. Choose a username to continue.
+              Your Google account isn&apos;t linked to a user yet. Choose a username to continue.
             </p>
           )}
 
@@ -214,7 +231,10 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
             </p>
           )}
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <form
+            onSubmit={handleSubmit}
+            style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+          >
             {/* Username */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <label style={{ fontSize: 12, color: 'var(--lv-ink-muted)', fontWeight: 500 }}>
@@ -223,7 +243,10 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
               <input
                 type="text"
                 value={username}
-                onChange={(e) => { setUsername(e.target.value); setUsernameTaken(false) }}
+                onChange={(e) => {
+                  setUsername(e.target.value)
+                  setUsernameTaken(false)
+                }}
                 onBlur={handleUsernameBlur}
                 autoFocus
                 autoComplete="username"
@@ -242,7 +265,9 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
             {/* Password — hidden in oauth-username mode */}
             {mode !== 'oauth-username' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                >
                   <label style={{ fontSize: 12, color: 'var(--lv-ink-muted)', fontWeight: 500 }}>
                     {mode === 'reset' ? 'New password' : 'Password'}
                   </label>
@@ -301,7 +326,14 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
             )}
 
             {error && (
-              <p style={{ margin: 0, fontSize: 12, color: 'var(--lv-error, #e55)', padding: '6px 0' }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 12,
+                  color: 'var(--lv-error, #e55)',
+                  padding: '6px 0',
+                }}
+              >
                 {error}
               </p>
             )}
@@ -329,9 +361,13 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
             {(mode === 'login' || mode === 'register') && (
               <>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0' }}>
-                  <hr style={{ flex: 1, border: 'none', borderTop: '1px solid var(--lv-border)' }} />
+                  <hr
+                    style={{ flex: 1, border: 'none', borderTop: '1px solid var(--lv-border)' }}
+                  />
                   <span style={{ fontSize: 11, color: 'var(--lv-ink-muted)' }}>or</span>
-                  <hr style={{ flex: 1, border: 'none', borderTop: '1px solid var(--lv-border)' }} />
+                  <hr
+                    style={{ flex: 1, border: 'none', borderTop: '1px solid var(--lv-border)' }}
+                  />
                 </div>
                 <button
                   type="button"
@@ -353,11 +389,23 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
                 >
                   {/* Google "G" SVG */}
                   <svg width="16" height="16" viewBox="0 0 48 48" aria-hidden>
-                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                    <path fill="none" d="M0 0h48v48H0z"/>
+                    <path
+                      fill="#EA4335"
+                      d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
+                    />
+                    <path
+                      fill="#4285F4"
+                      d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
+                    />
+                    <path fill="none" d="M0 0h48v48H0z" />
                   </svg>
                   Continue with Google
                 </button>
@@ -366,7 +414,14 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
           </form>
 
           {/* Footer navigation */}
-          <div style={{ marginTop: 16, fontSize: 12, color: 'var(--lv-ink-muted)', textAlign: 'center' }}>
+          <div
+            style={{
+              marginTop: 16,
+              fontSize: 12,
+              color: 'var(--lv-ink-muted)',
+              textAlign: 'center',
+            }}
+          >
             {mode === 'login' && (
               <p style={{ margin: 0 }}>
                 {"Don't have an account? "}

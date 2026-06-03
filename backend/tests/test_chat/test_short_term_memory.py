@@ -81,7 +81,6 @@ async def test_compression_preserves_order_and_recency(mem):
 @pytest.mark.asyncio
 async def test_no_compression_when_few_turns(mem):
     """compress() is a no-op when turns ≤ ALWAYS_KEEP_RECENT."""
-    from chat.memory.short_term import ShortTermMemory
 
     mem.add("user", "hello")
     mem.add("assistant", "hi")

@@ -14,9 +14,10 @@ model has full context even after a server restart.
 
 from __future__ import annotations
 
+import contextlib
+from datetime import UTC, datetime
 import logging
 import os
-from datetime import datetime, timezone
 from pathlib import Path
 
 from config.settings import settings
@@ -84,7 +85,7 @@ class SessionFileMemory:
         path = self._path(session_id)
         tmp = path.with_suffix(".tmp")
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         full_content = (
             f"# Session Memory: {session_id}\n"
             f"Updated: {timestamp}\n\n"
@@ -96,10 +97,8 @@ class SessionFileMemory:
             os.replace(tmp, path)  # atomic on POSIX
         except Exception:
             logger.exception("Failed to save session memory file for %s", session_id)
-            try:
+            with contextlib.suppress(Exception):
                 tmp.unlink(missing_ok=True)
-            except Exception:
-                pass
 
     async def update(
         self,

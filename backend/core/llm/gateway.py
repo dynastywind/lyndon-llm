@@ -31,7 +31,8 @@ if settings.langfuse_secret_key and settings.langfuse_public_key:
 else:
     from openai import AsyncOpenAI
 
-from dataclasses import dataclass, field  # noqa: E402
+from dataclasses import dataclass  # noqa: E402
+
 from openai.types.chat import ChatCompletion, ChatCompletionMessage  # noqa: E402
 
 
@@ -46,7 +47,7 @@ class LLMUsage:
     def total_tokens(self) -> int:
         return self.prompt_tokens + self.completion_tokens
 
-    def __iadd__(self, other: "LLMUsage") -> "LLMUsage":
+    def __iadd__(self, other: LLMUsage) -> LLMUsage:
         self.prompt_tokens += other.prompt_tokens
         self.completion_tokens += other.completion_tokens
         return self

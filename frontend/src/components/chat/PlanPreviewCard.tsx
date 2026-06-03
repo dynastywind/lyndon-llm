@@ -106,11 +106,7 @@ export function PlanPreviewCard() {
           fontSize: 10,
           letterSpacing: '0.22em',
           textTransform: 'uppercase',
-          color: isDone
-            ? 'var(--lv-mute)'
-            : isFailed
-              ? '#e05c5c'
-              : 'var(--lv-gold)',
+          color: isDone ? 'var(--lv-mute)' : isFailed ? '#e05c5c' : 'var(--lv-gold)',
           marginBottom: 10,
         }}
       >

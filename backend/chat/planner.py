@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 
-from cowork.planner import Plan, PlanStep, RiskLevel  # noqa: F401 — re-exported
 from core.llm.gateway import LLMMessage, llm_gateway
+from cowork.planner import Plan, PlanStep, RiskLevel  # noqa: F401 — re-exported
 
 CHAT_PLANNER_SYSTEM = """\
 You are a planning agent for a chat assistant. Given a complex user request,

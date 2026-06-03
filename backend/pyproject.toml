@@ -58,6 +58,12 @@ where = ["."]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
+[tool.coverage.run]
+omit = ["tests/*", "alembic/*"]
+
+[tool.coverage.report]
+skip_empty = true
+
 # ── Ruff ──────────────────────────────────────────────────────────────────────
 [tool.ruff]
 target-version = "py311"

@@ -18,7 +18,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 
 def _make_engine(session_id: str = "test-session"):
-    from unittest.mock import MagicMock
 
     from chat.engine import ChatEngine
     from core.permissions.gate import Mode

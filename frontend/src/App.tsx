@@ -8,7 +8,17 @@ import { CodeWindow } from '@/components/code/CodeWindow'
 import { SandboxWindow } from '@/components/sandbox/SandboxWindow'
 
 export default function App() {
-  const { mode, sessionId, uiTheme, setUser, setPendingOAuthToken, bumpSessionVersion, user, avatarVersion, setAvatarVersion } = useAppStore()
+  const {
+    mode,
+    sessionId,
+    uiTheme,
+    setUser,
+    setPendingOAuthToken,
+    bumpSessionVersion,
+    user,
+    avatarVersion,
+    setAvatarVersion,
+  } = useAppStore()
 
   // Apply theme class to <html> whenever uiTheme changes
   useEffect(() => {
@@ -54,13 +64,19 @@ export default function App() {
         // Decode payload without verification (we trust our own backend redirect)
         const payloadB64 = token.split('.')[1]
         const payload = JSON.parse(atob(payloadB64.replace(/-/g, '+').replace(/_/g, '/')))
-        setUser({ id: payload.sub, username: payload.username, email: payload.email ?? null, oauth_provider: payload.oauth_provider ?? null, token })
+        setUser({
+          id: payload.sub,
+          username: payload.username,
+          email: payload.email ?? null,
+          oauth_provider: payload.oauth_provider ?? null,
+          token,
+        })
         bumpSessionVersion()
       } catch {
         // malformed token — ignore
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (

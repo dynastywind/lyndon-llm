@@ -26,11 +26,12 @@ Updated: {iso_timestamp}
 
 from __future__ import annotations
 
+import contextlib
+from datetime import UTC, datetime
 import logging
 import os
-import re
-from datetime import datetime, timezone
 from pathlib import Path
+import re
 
 from config.settings import settings
 
@@ -120,7 +121,7 @@ class CrossSessionFileMemory:
         self._dir.mkdir(parents=True, exist_ok=True)
         tmp = self._path.with_suffix(".tmp")
 
-        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         full_content = (
             f"# Cross-Session Memory\n"
             f"Updated: {timestamp}\n\n"
@@ -132,10 +133,8 @@ class CrossSessionFileMemory:
             os.replace(tmp, self._path)  # atomic on POSIX
         except Exception:
             logger.exception("Failed to save cross-session memory file")
-            try:
+            with contextlib.suppress(Exception):
                 tmp.unlink(missing_ok=True)
-            except Exception:
-                pass
 
     async def update(
         self,

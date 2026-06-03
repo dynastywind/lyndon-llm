@@ -15,11 +15,10 @@ Covers:
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -200,6 +199,7 @@ def test_chart_spec_to_markdown_unicode_preserved():
 def test_chart_spec_to_markdown_round_trip():
     """Serialize then re-parse must yield the identical dict."""
     import re
+
     from chat.engine import _chart_spec_to_markdown
 
     spec = {
@@ -218,8 +218,6 @@ def test_chart_spec_to_markdown_round_trip():
 
 # ── _inject_attachments ───────────────────────────────────────────────────────
 
-
-import base64
 
 
 def _b64(text: str) -> str:

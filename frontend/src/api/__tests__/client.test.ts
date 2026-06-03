@@ -94,10 +94,7 @@ describe('streamChat', () => {
   // ── unknown event type is ignored ────────────────────────────────────────
 
   it('ignores unknown event types without throwing', async () => {
-    const frames = [
-      sseFrame('unknown_event', { foo: 'bar' }),
-      sseFrame('token', { text: 'ok' }),
-    ]
+    const frames = [sseFrame('unknown_event', { foo: 'bar' }), sseFrame('token', { text: 'ok' })]
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
@@ -108,9 +105,7 @@ describe('streamChat', () => {
 
     const events: Array<{ type: string }> = []
     // Should not throw
-    await expect(
-      streamChat('hi', 'sid', (type) => events.push({ type })),
-    ).resolves.toBeUndefined()
+    await expect(streamChat('hi', 'sid', (type) => events.push({ type }))).resolves.toBeUndefined()
 
     expect(events.some((e) => e.type === 'token')).toBe(true)
   })
@@ -140,10 +135,7 @@ describe('streamChat', () => {
   it('handles a data-only SSE frame (no event: line) as type "message"', async () => {
     // SSE spec: frames without an event: line default to type "message"
     const frame = `data: ${JSON.stringify({ text: 'implicit' })}\n\n`
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, body: makeStream([frame]) }),
-    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeStream([frame]) }))
 
     const events: Array<{ type: string; data: object }> = []
     await streamChat('hi', 'sid', (type, data) => events.push({ type, data }))
@@ -154,13 +146,9 @@ describe('streamChat', () => {
 
   it('parses multiple SSE frames arriving in one chunk', async () => {
     // Two complete frames delivered in a single read() call
-    const chunk =
-      sseFrame('token', { text: 'first' }) + sseFrame('token', { text: 'second' })
+    const chunk = sseFrame('token', { text: 'first' }) + sseFrame('token', { text: 'second' })
 
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, body: makeStream([chunk]) }),
-    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, body: makeStream([chunk]) }))
 
     const events: Array<{ type: string; data: object }> = []
     await streamChat('hi', 'sid', (type, data) => events.push({ type, data }))
@@ -181,9 +169,7 @@ describe('streamChat', () => {
     )
 
     const events: Array<{ type: string }> = []
-    await expect(
-      streamChat('hi', 'sid', (type) => events.push({ type })),
-    ).resolves.toBeUndefined()
+    await expect(streamChat('hi', 'sid', (type) => events.push({ type }))).resolves.toBeUndefined()
 
     // The malformed frame is skipped; the valid one is delivered
     expect(events.some((e) => e.type === 'token')).toBe(true)
@@ -298,10 +284,7 @@ describe('deleteChatSession', () => {
   })
 
   it('throws on error response', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: false, statusText: 'Not Found' }),
-    )
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, statusText: 'Not Found' }))
     await expect(deleteChatSession('ghost')).rejects.toThrow()
   })
 })

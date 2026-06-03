@@ -151,7 +151,7 @@ export async function uploadAvatar(dataUrl: string): Promise<void> {
   form.append('file', blob, 'avatar.jpg')
   const res = await fetch(`${BASE}/auth/avatar`, {
     method: 'POST',
-    headers: authHeader(),   // no Content-Type — browser sets multipart boundary
+    headers: authHeader(), // no Content-Type — browser sets multipart boundary
     body: form,
   })
   if (!res.ok) {
@@ -288,6 +288,7 @@ export async function confirmChatPlan(
   const decoder = new TextDecoder()
   let buffer = ''
 
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     const { done, value } = await reader.read()
     if (done) break
@@ -406,7 +407,11 @@ export async function uploadRagFile(
 ): Promise<{ filename: string; path: string; chunks_stored: number }> {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`${BASE}/rag/upload`, { method: 'POST', body: form, headers: authHeader() })
+  const res = await fetch(`${BASE}/rag/upload`, {
+    method: 'POST',
+    body: form,
+    headers: authHeader(),
+  })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? res.statusText)
@@ -436,15 +441,16 @@ export async function listRagSources(
 export async function checkRagSourceName(
   name: string,
 ): Promise<{ exists: boolean; path: string | null }> {
-  const res = await fetch(
-    `${BASE}/rag/sources/check?name=${encodeURIComponent(name)}`,
-    { headers: authHeader() },
-  )
+  const res = await fetch(`${BASE}/rag/sources/check?name=${encodeURIComponent(name)}`, {
+    headers: authHeader(),
+  })
   if (!res.ok) throw new Error(`Failed to check source name: ${res.statusText}`)
   return res.json()
 }
 
-export async function reindexRagSource(source: string): Promise<{ path: string; chunks_stored: number }> {
+export async function reindexRagSource(
+  source: string,
+): Promise<{ path: string; chunks_stored: number }> {
   const res = await fetch(`${BASE}/rag/reindex?source=${encodeURIComponent(source)}`, {
     method: 'POST',
     headers: authHeader(),

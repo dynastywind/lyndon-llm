@@ -1,7 +1,15 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { generateId } from '@/lib/utils'
-import type { Mode, Message, Plan, FileDiff, ChatPlan, ChatPlanStatus, ChatPlanStepStatus } from '@/types'
+import type {
+  Mode,
+  Message,
+  Plan,
+  FileDiff,
+  ChatPlan,
+  ChatPlanStatus,
+  ChatPlanStepStatus,
+} from '@/types'
 import { CODE_THEME_DEFAULT } from '@/config/codeThemes'
 import type { CodeThemeName } from '@/config/codeThemes'
 

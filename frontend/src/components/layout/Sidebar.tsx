@@ -17,7 +17,12 @@ import {
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
-import { deleteChatSession, getAvatarUrl, renameChatSession, searchChatSessions } from '@/api/client'
+import {
+  deleteChatSession,
+  getAvatarUrl,
+  renameChatSession,
+  searchChatSessions,
+} from '@/api/client'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { LoginDialog } from '@/components/auth/LoginDialog'
 import { DeleteAccountDialog } from '@/components/auth/DeleteAccountDialog'
@@ -790,7 +795,7 @@ export function Sidebar() {
                     color: LV.mute,
                   }}
                 >
-                  No results for "{searchQuery}"
+                  No results for &quot;{searchQuery}&quot;
                 </p>
               )}
               {searchResults.map((s) => (
@@ -908,113 +913,156 @@ export function Sidebar() {
       </div>
 
       {/* Footer: Login (logged-out) or Settings (logged-in) + theme toggle */}
-      <div style={{ borderTop: `1px solid ${LV.rule}`, padding: '8px 16px 12px', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+      <div
+        style={{
+          borderTop: `1px solid ${LV.rule}`,
+          padding: '8px 16px 12px',
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+        }}
+      >
         <div style={{ flex: 1, minWidth: 0 }}>
-        {user ? (
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <button
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  width: '100%',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '8px 0',
-                  color: LV.mute,
-                }}
-              >
-                {/* Avatar */}
-                <div
+          {user ? (
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button
                   style={{
-                    width: 26,
-                    height: 26,
-                    background: 'var(--lv-card-elev)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    fontFamily: LV.font.mono,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: LV.ink,
-                    flexShrink: 0,
-                    overflow: 'hidden',
+                    gap: 10,
+                    width: '100%',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '8px 0',
+                    color: LV.mute,
                   }}
                 >
-                  {avatarVersion > 0
-                    ? <img src={getAvatarUrl(user.id, avatarVersion)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={() => useAppStore.setState({ avatarVersion: 0 })} />
-                    : user.username[0].toUpperCase()
-                  }
-                </div>
-                <div style={{ flex: 1, textAlign: 'left', lineHeight: 1.2 }}>
+                  {/* Avatar */}
                   <div
                     style={{
-                      fontFamily: LV.font.sans,
-                      fontSize: 12.5,
+                      width: 26,
+                      height: 26,
+                      background: 'var(--lv-card-elev)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontFamily: LV.font.mono,
+                      fontSize: 11,
+                      fontWeight: 600,
                       color: LV.ink,
-                      fontWeight: 500,
+                      flexShrink: 0,
+                      overflow: 'hidden',
                     }}
                   >
-                    {user.username}
+                    {avatarVersion > 0 ? (
+                      <img
+                        src={getAvatarUrl(user.id, avatarVersion)}
+                        alt=""
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          display: 'block',
+                        }}
+                        onError={() => useAppStore.setState({ avatarVersion: 0 })}
+                      />
+                    ) : (
+                      user.username[0].toUpperCase()
+                    )}
                   </div>
-                  <div style={{ fontFamily: LV.font.mono, fontSize: 9.5, color: LV.mute }}>
-                    Settings
+                  <div style={{ flex: 1, textAlign: 'left', lineHeight: 1.2 }}>
+                    <div
+                      style={{
+                        fontFamily: LV.font.sans,
+                        fontSize: 12.5,
+                        color: LV.ink,
+                        fontWeight: 500,
+                      }}
+                    >
+                      {user.username}
+                    </div>
+                    <div style={{ fontFamily: LV.font.mono, fontSize: 9.5, color: LV.mute }}>
+                      Settings
+                    </div>
                   </div>
-                </div>
-                {/* Sliders icon */}
-                <svg
-                  width={14}
-                  height={14}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                  strokeLinecap="round"
-                >
-                  <line x1="4" x2="4" y1="21" y2="14" />
-                  <line x1="4" x2="4" y1="10" y2="3" />
-                  <line x1="12" x2="12" y1="21" y2="12" />
-                  <line x1="12" x2="12" y1="8" y2="3" />
-                  <line x1="20" x2="20" y1="21" y2="16" />
-                  <line x1="20" x2="20" y1="12" y2="3" />
-                  <line x1="2" x2="6" y1="14" y2="14" />
-                  <line x1="10" x2="14" y1="8" y2="8" />
-                  <line x1="18" x2="22" y1="16" y2="16" />
-                </svg>
-              </button>
-            </DropdownMenu.Trigger>
+                  {/* Sliders icon */}
+                  <svg
+                    width={14}
+                    height={14}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                  >
+                    <line x1="4" x2="4" y1="21" y2="14" />
+                    <line x1="4" x2="4" y1="10" y2="3" />
+                    <line x1="12" x2="12" y1="21" y2="12" />
+                    <line x1="12" x2="12" y1="8" y2="3" />
+                    <line x1="20" x2="20" y1="21" y2="16" />
+                    <line x1="20" x2="20" y1="12" y2="3" />
+                    <line x1="2" x2="6" y1="14" y2="14" />
+                    <line x1="10" x2="14" y1="8" y2="8" />
+                    <line x1="18" x2="22" y1="16" y2="16" />
+                  </svg>
+                </button>
+              </DropdownMenu.Trigger>
 
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content
-                side="top"
-                align="start"
-                sideOffset={4}
-                style={{
-                  zIndex: 200,
-                  width: 240,
-                  background: 'var(--lv-card)',
-                  border: `1px solid var(--lv-rule-strong)`,
-                  padding: '4px',
-                  boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
-                }}
-                className={cn(
-                  'data-[state=open]:animate-in data-[state=closed]:animate-out',
-                  'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-                )}
-              >
-                {(
-                  [
-                    { tab: 'profile' as SettingsTab, icon: UserCircle, label: 'Profile' },
-                    { tab: 'knowledge' as SettingsTab, icon: BookOpen, label: 'Knowledge' },
-                    { tab: 'tools' as SettingsTab, icon: Server, label: 'MCP' },
-                    { tab: 'ai' as SettingsTab, icon: MessageSquare, label: 'AI & Chat' },
-                  ] as const
-                ).map(({ tab, icon: Icon, label }) => (
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  side="top"
+                  align="start"
+                  sideOffset={4}
+                  style={{
+                    zIndex: 200,
+                    width: 240,
+                    background: 'var(--lv-card)',
+                    border: `1px solid var(--lv-rule-strong)`,
+                    padding: '4px',
+                    boxShadow: '0 4px 24px rgba(0,0,0,0.6)',
+                  }}
+                  className={cn(
+                    'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                    'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+                  )}
+                >
+                  {(
+                    [
+                      { tab: 'profile' as SettingsTab, icon: UserCircle, label: 'Profile' },
+                      { tab: 'knowledge' as SettingsTab, icon: BookOpen, label: 'Knowledge' },
+                      { tab: 'tools' as SettingsTab, icon: Server, label: 'MCP' },
+                      { tab: 'ai' as SettingsTab, icon: MessageSquare, label: 'AI & Chat' },
+                    ] as const
+                  ).map(({ tab, icon: Icon, label }) => (
+                    <DropdownMenu.Item
+                      key={tab}
+                      onSelect={() => openSettings(tab)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        outline: 'none',
+                        fontFamily: LV.font.sans,
+                        fontSize: 12.5,
+                        color: LV.ink,
+                      }}
+                      className="hover:bg-accent focus:bg-accent transition-colors"
+                    >
+                      <Icon size={13} style={{ color: LV.mute }} />
+                      {label}
+                    </DropdownMenu.Item>
+                  ))}
+
+                  <DropdownMenu.Separator
+                    style={{ height: 1, background: 'var(--lv-rule)', margin: '4px 0' }}
+                  />
+
                   <DropdownMenu.Item
-                    key={tab}
-                    onSelect={() => openSettings(tab)}
+                    onSelect={logout}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1028,89 +1076,75 @@ export function Sidebar() {
                     }}
                     className="hover:bg-accent focus:bg-accent transition-colors"
                   >
-                    <Icon size={13} style={{ color: LV.mute }} />
-                    {label}
+                    Logout
                   </DropdownMenu.Item>
-                ))}
 
-                <DropdownMenu.Separator
-                  style={{ height: 1, background: 'var(--lv-rule)', margin: '4px 0' }}
-                />
-
-                <DropdownMenu.Item
-                  onSelect={logout}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '8px 12px',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    fontFamily: LV.font.sans,
-                    fontSize: 12.5,
-                    color: LV.ink,
-                  }}
-                  className="hover:bg-accent focus:bg-accent transition-colors"
-                >
-                  Logout
-                </DropdownMenu.Item>
-
-                <DropdownMenu.Item
-                  onSelect={() => setDeleteAccountOpen(true)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '8px 12px',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    fontFamily: LV.font.sans,
-                    fontSize: 12.5,
-                    color: '#dc2626',
-                  }}
-                  className="hover:bg-accent focus:bg-accent transition-colors"
-                >
-                  Delete account
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
-        ) : (
-          <button
-            onClick={() => setLoginOpen(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              width: '100%',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '8px 0',
-              color: LV.mute,
-              fontFamily: LV.font.sans,
-              fontSize: 12.5,
-            }}
-          >
-            <div
+                  <DropdownMenu.Item
+                    onSelect={() => setDeleteAccountOpen(true)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      outline: 'none',
+                      fontFamily: LV.font.sans,
+                      fontSize: 12.5,
+                      color: '#dc2626',
+                    }}
+                    className="hover:bg-accent focus:bg-accent transition-colors"
+                  >
+                    Delete account
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
+          ) : (
+            <button
+              onClick={() => setLoginOpen(true)}
               style={{
-                width: 26,
-                height: 26,
-                background: 'var(--lv-card-elev)',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
+                gap: 10,
+                width: '100%',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '8px 0',
+                color: LV.mute,
+                fontFamily: LV.font.sans,
+                fontSize: 12.5,
               }}
             >
-              <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--lv-mute)' }}>
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            </div>
-            <span style={{ color: LV.ink, fontWeight: 500 }}>Login</span>
-          </button>
-        )}
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  background: 'var(--lv-card-elev)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <svg
+                  width={13}
+                  height={13}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ color: 'var(--lv-mute)' }}
+                >
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </div>
+              <span style={{ color: LV.ink, fontWeight: 500 }}>Login</span>
+            </button>
+          )}
         </div>
         <ThemeToggle />
       </div>

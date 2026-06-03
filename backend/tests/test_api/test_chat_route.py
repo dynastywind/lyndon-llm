@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -29,12 +29,12 @@ async def app():
     Minimal FastAPI app containing only the chat router, wired to an
     in-memory SQLite DB.  No real LLM or vector-store connections.
     """
-    import db.models.chat  # noqa: F401 — register models before create_all
     from fastapi import FastAPI
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-    import db.base as db_base
     from api.routes.chat import router as chat_router
+    import db.base as db_base
+    import db.models.chat  # noqa: F401 — register models before create_all
 
     _app = FastAPI()
     _app.include_router(chat_router, prefix="/api/chat")

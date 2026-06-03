@@ -2113,7 +2113,10 @@ export function ChatWindow() {
                         border: `1px solid ${attachMenuOpen || attachments.length > 0 ? 'var(--lv-gold)' : 'var(--lv-rule-strong)'}`,
                         background: 'none',
                         cursor: 'pointer',
-                        color: attachMenuOpen || attachments.length > 0 ? 'var(--lv-gold)' : 'var(--lv-mute)',
+                        color:
+                          attachMenuOpen || attachments.length > 0
+                            ? 'var(--lv-gold)'
+                            : 'var(--lv-mute)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -2234,7 +2237,7 @@ export function ChatWindow() {
                       width: '100%',
                       background: 'transparent',
                       border: 'none',
-                      padding: 0,       // suppress browser-default textarea padding (Safari adds ~2px)
+                      padding: 0, // suppress browser-default textarea padding (Safari adds ~2px)
                       margin: 0,
                       resize: 'none',
                       outline: 'none',
@@ -2310,7 +2313,15 @@ export function ChatWindow() {
                         color: 'var(--lv-soft)',
                       }}
                     >
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--lv-gold)', flexShrink: 0 }} />
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: 'var(--lv-gold)',
+                          flexShrink: 0,
+                        }}
+                      />
                       {selectedModel ?? '—'}
                       <ChevronDown size={10} style={{ color: 'var(--lv-mute)' }} />
                     </button>
@@ -2336,7 +2347,14 @@ export function ChatWindow() {
                       )}
                     >
                       {availableModels.length === 0 ? (
-                        <div style={{ padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--lv-mute)' }}>
+                        <div
+                          style={{
+                            padding: '8px 14px',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            color: 'var(--lv-mute)',
+                          }}
+                        >
                           No models found
                         </div>
                       ) : (
@@ -2347,13 +2365,32 @@ export function ChatWindow() {
                             style={{ outline: 'none', cursor: 'pointer' }}
                             className="hover:bg-accent focus:bg-accent transition-colors"
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px' }}>
-                              <span style={{
-                                width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
-                                background: m === selectedModel ? 'var(--lv-gold)' : 'transparent',
-                                border: m === selectedModel ? 'none' : '1px solid var(--lv-mute)',
-                              }} />
-                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5, color: m === selectedModel ? 'var(--lv-ink)' : 'var(--lv-soft)' }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '7px 14px',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 5,
+                                  height: 5,
+                                  borderRadius: '50%',
+                                  flexShrink: 0,
+                                  background:
+                                    m === selectedModel ? 'var(--lv-gold)' : 'transparent',
+                                  border: m === selectedModel ? 'none' : '1px solid var(--lv-mute)',
+                                }}
+                              />
+                              <span
+                                style={{
+                                  fontFamily: 'var(--font-mono)',
+                                  fontSize: 10.5,
+                                  color: m === selectedModel ? 'var(--lv-ink)' : 'var(--lv-soft)',
+                                }}
+                              >
                                 {m}
                               </span>
                             </div>

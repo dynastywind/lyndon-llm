@@ -23,11 +23,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 @pytest.fixture
 def app():
     """A tiny FastAPI app that only exposes GET /api/models."""
-    from fastapi import FastAPI
-
     # Import the handler from api.main without triggering the router imports
     # by patching the problematic code route before main is imported.
     import types
+
+    from fastapi import FastAPI
 
     # Stub out the conflicting `code` package before api.main is imported
     stub = types.ModuleType("code")
@@ -45,6 +45,7 @@ def app():
     @_app.get("/api/models")
     async def list_models():
         import httpx
+
         from config.settings import settings
 
         base_url = settings.llm_base_url.rstrip("/").removesuffix("/v1")

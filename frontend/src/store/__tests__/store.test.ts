@@ -3,7 +3,7 @@
  * Each test creates a fresh store instance to avoid cross-test pollution.
  */
 import { describe, it, expect, beforeEach } from 'vitest'
-import type { Message } from '@/types'
+import type { Message as _Message } from '@/types'
 
 // Re-create minimal store logic matching src/store/index.ts for isolation.
 // (We import the real store but reset it between tests.)
@@ -124,12 +124,14 @@ describe('prependSessionMessages', () => {
   beforeEach(freshState)
 
   it('prepends older messages before existing ones', () => {
-    useAppStore.getState().setSessionMessages('s', [
-      { id: '2', role: 'user', content: 'newer', timestamp: new Date() },
-    ])
-    useAppStore.getState().prependSessionMessages('s', [
-      { id: '1', role: 'user', content: 'older', timestamp: new Date() },
-    ])
+    useAppStore
+      .getState()
+      .setSessionMessages('s', [{ id: '2', role: 'user', content: 'newer', timestamp: new Date() }])
+    useAppStore
+      .getState()
+      .prependSessionMessages('s', [
+        { id: '1', role: 'user', content: 'older', timestamp: new Date() },
+      ])
 
     const msgs = useAppStore.getState().sessionMessages['s'] ?? []
     expect(msgs[0].content).toBe('older')

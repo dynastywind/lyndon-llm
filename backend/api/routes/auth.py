@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-import re
 import secrets
+import shutil
 
 import bcrypt
-import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import RedirectResponse, Response
+import httpx
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy import select, text
@@ -177,8 +176,8 @@ async def _migrate_orphan_data(user_id: str, db: AsyncSession) -> None:
         if ids:
             from core.llm.gateway import llm_gateway
 
-            orphan_ids = [i for i, m in zip(ids, metas) if not m.get("user_id")]
-            orphan_docs = [d for d, m in zip(docs, metas) if not m.get("user_id")]
+            orphan_ids = [i for i, m in zip(ids, metas, strict=False) if not m.get("user_id")]
+            orphan_docs = [d for d, m in zip(docs, metas, strict=False) if not m.get("user_id")]
             orphan_metas = [m for m in metas if not m.get("user_id")]
             if orphan_ids:
                 embeddings = await llm_gateway.embed(orphan_docs)
@@ -404,8 +403,8 @@ async def oauth_complete(
     """Complete OAuth sign-up: validate pending token, pick username, create account."""
     try:
         payload = jwt.decode(body.pending_token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token.")
+    except JWTError as err:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired token.") from err
 
     if not payload.get("pending"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Not a pending OAuth token.")
@@ -504,7 +503,7 @@ async def delete_account(
         lt = LongTermMemory()
         vs = await lt._get_vector_store()
         ids, _docs, metas = await vs.list_all(limit=10000)
-        user_chunk_ids = [i for i, m in zip(ids, metas) if m.get("user_id") == user.id]
+        user_chunk_ids = [i for i, m in zip(ids, metas, strict=False) if m.get("user_id") == user.id]
         if user_chunk_ids:
             await vs.delete(ids=user_chunk_ids)
     except Exception:
