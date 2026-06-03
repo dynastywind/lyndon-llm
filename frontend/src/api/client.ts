@@ -133,10 +133,10 @@ export function getAvatarUrl(userId: string, version: number): string {
   return `${BASE}/auth/avatar/${userId}?v=${version}`
 }
 
-/** Returns true if the server has an avatar file for the given user. */
+/** Returns true if the server has an avatar for the given user. */
 export async function checkAvatarExists(userId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/auth/avatar/${userId}`, { method: 'HEAD' })
+    const res = await fetch(`${BASE}/auth/avatar/${userId}`)
     return res.ok
   } catch {
     return false
