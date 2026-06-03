@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from config.settings import settings
 from core.llm.gateway import LLMMessage, LLMUsage, llm_gateway
 from core.session.manager import Session
 from cowork.executor import StepResult, StepStatus
@@ -145,9 +146,21 @@ class ChatExecutor:
             "Write a concise, helpful answer synthesizing these results for the user."
         )
 
+        from chat.engine import _ThinkingStreamParser
+        cot_parser = _ThinkingStreamParser() if settings.cot_enabled else None
+
         async for chunk in llm_gateway.stream(
             [LLMMessage("user", synthesis_prompt)]
         ):
             if isinstance(chunk, LLMUsage):
+                if cot_parser:
+                    for evt_type, text in cot_parser.flush():
+                        if text:
+                            yield {"type": evt_type, "text": text}
                 continue
-            yield {"type": "token", "text": chunk}
+            if cot_parser:
+                for evt_type, text in cot_parser.feed(chunk):
+                    if text:
+                        yield {"type": evt_type, "text": text}
+            else:
+                yield {"type": "token", "text": chunk}

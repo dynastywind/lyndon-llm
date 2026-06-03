@@ -118,6 +118,12 @@ export function useStream() {
                 break
               }
 
+              case 'thinking_token': {
+                const text = data.text as string
+                updateMsg((m) => ({ ...m, thinking: (m.thinking ?? '') + text }))
+                break
+              }
+
               case 'tool_start': {
                 const newCall: ToolCallRecord = {
                   id: data.id as string,

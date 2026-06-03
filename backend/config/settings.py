@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     planner_enabled: bool = True
     planner_complexity_threshold: int = 2
 
+    # Chain-of-thought reasoning
+    cot_enabled: bool = True  # parse <think>...</think> blocks from LLM stream
+
     # Web search
     web_search_provider: str = "duckduckgo"  # duckduckgo | google | tavily | serpapi
     web_search_max_results: int = 5

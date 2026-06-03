@@ -48,6 +48,8 @@ export interface Message {
   charts?: ChartSpec[]
   /** Files / images the user attached to this message. */
   attachments?: MessageAttachment[]
+  /** Chain-of-thought reasoning text (ephemeral — not persisted to DB). */
+  thinking?: string
 }
 
 // ── Chat Planner ──────────────────────────────────────────────────────────────

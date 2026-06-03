@@ -1451,6 +1451,92 @@ function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
   )
 }
 
+// ─── ThinkingBlock ────────────────────────────────────────────────────────────
+
+function ThinkingBlock({ content, isLive }: { content: string; isLive: boolean }) {
+  // Expanded while the model is still thinking (no response yet); collapsed once done.
+  const [open, setOpen] = useState(isLive)
+
+  // Auto-collapse as soon as the model starts producing the final answer.
+  const prevLive = useRef(isLive)
+  useEffect(() => {
+    if (prevLive.current && !isLive) setOpen(false)
+    prevLive.current = isLive
+  }, [isLive])
+
+  return (
+    <div
+      style={{
+        marginBottom: 12,
+        border: '1px solid var(--lv-rule)',
+        background: 'rgba(var(--lv-wash-rgb),0.015)',
+      }}
+    >
+      {/* Header row */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          width: '100%',
+          background: 'none',
+          border: 'none',
+          padding: '6px 10px',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9.5,
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            color: 'var(--lv-mute)',
+            flex: 1,
+          }}
+        >
+          {isLive ? 'Reasoning…' : 'Reasoning'}
+        </span>
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            color: 'var(--lv-mute)',
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.15s',
+            lineHeight: 1,
+          }}
+        >
+          ∨
+        </span>
+      </button>
+
+      {/* Body */}
+      {open && (
+        <div
+          style={{
+            padding: '8px 10px 10px',
+            borderTop: '1px solid var(--lv-rule)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 12,
+            lineHeight: 1.65,
+            color: 'var(--lv-mute)',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            maxHeight: 320,
+            overflowY: 'auto',
+          }}
+        >
+          {content}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
 function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean }) {
@@ -1601,6 +1687,11 @@ function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean
             </span>
           )}
         </div>
+
+        {/* Reasoning / CoT block */}
+        {msg.thinking && (
+          <ThinkingBlock content={msg.thinking} isLive={isLive && !msg.content} />
+        )}
 
         {/* Tool calls */}
         {msg.toolCalls && msg.toolCalls.length > 0 && <ToolCallsSection calls={msg.toolCalls} />}

@@ -243,6 +243,8 @@ class ChatEngine:
         full_response = ""
         first_token = False
         total_usage = LLMUsage()
+        cot_parser = _ThinkingStreamParser() if settings.cot_enabled else None
+
         if decision.needs_tools:
             # Fast path: when web_search is the only tool needed, skip the
             # non-streaming "pick a tool" LLM round-trip.  Run the search
@@ -257,14 +259,29 @@ class ChatEngine:
                     if event["type"] == "tool_result":
                         timer.mark("search_ms")
                     if event["type"] == "token":
-                        if not first_token:
-                            first_token = True
-                            timer.mark("ttft_ms")
-                        full_response += event["text"]
+                        if cot_parser:
+                            for evt_type, text in cot_parser.feed(event["text"]):
+                                if not text:
+                                    continue
+                                if not first_token and evt_type == "token":
+                                    first_token = True
+                                    timer.mark("ttft_ms")
+                                if evt_type == "thinking_token":
+                                    yield {"type": "thinking_token", "text": text}
+                                else:
+                                    full_response += text
+                                    yield {"type": "token", "text": text}
+                        else:
+                            if not first_token:
+                                first_token = True
+                                timer.mark("ttft_ms")
+                            full_response += event["text"]
+                            yield event
                     elif event["type"] == "_usage":
                         total_usage += event["usage"]
                         continue  # internal event — do not forward to client
-                    yield event
+                    else:
+                        yield event
             else:
                 async for event in self._agentic_loop(
                     allowed_tools=decision.tools,
@@ -272,26 +289,63 @@ class ChatEngine:
                     model=model,
                 ):
                     if event["type"] == "token":
-                        if not first_token:
-                            first_token = True
-                            timer.mark("ttft_ms")
-                        full_response += event["text"]
+                        if cot_parser:
+                            for evt_type, text in cot_parser.feed(event["text"]):
+                                if not text:
+                                    continue
+                                if not first_token and evt_type == "token":
+                                    first_token = True
+                                    timer.mark("ttft_ms")
+                                if evt_type == "thinking_token":
+                                    yield {"type": "thinking_token", "text": text}
+                                else:
+                                    full_response += text
+                                    yield {"type": "token", "text": text}
+                        else:
+                            if not first_token:
+                                first_token = True
+                                timer.mark("ttft_ms")
+                            full_response += event["text"]
+                            yield event
                     elif event["type"] == "chart":
                         full_response += _chart_spec_to_markdown(event["spec"])
+                        yield event
                     elif event["type"] == "_usage":
                         total_usage += event["usage"]
                         continue  # internal event — do not forward to client
-                    yield event
+                    else:
+                        yield event
         else:
             async for item in llm_gateway.stream_from_raw(llm_messages, model=model):
                 if isinstance(item, LLMUsage):
                     total_usage += item
+                    if cot_parser:
+                        for evt_type, text in cot_parser.flush():
+                            if text:
+                                if evt_type == "thinking_token":
+                                    yield {"type": "thinking_token", "text": text}
+                                else:
+                                    full_response += text
+                                    yield {"type": "token", "text": text}
                 else:
-                    if not first_token:
-                        first_token = True
-                        timer.mark("ttft_ms")
-                    full_response += item
-                    yield {"type": "token", "text": item}
+                    if cot_parser:
+                        for evt_type, text in cot_parser.feed(item):
+                            if not text:
+                                continue
+                            if not first_token and evt_type == "token":
+                                first_token = True
+                                timer.mark("ttft_ms")
+                            if evt_type == "thinking_token":
+                                yield {"type": "thinking_token", "text": text}
+                            else:
+                                full_response += text
+                                yield {"type": "token", "text": text}
+                    else:
+                        if not first_token:
+                            first_token = True
+                            timer.mark("ttft_ms")
+                        full_response += item
+                        yield {"type": "token", "text": item}
 
         total_ms = timer.elapsed_ms()
         timer.mark("total_ms")
@@ -874,6 +928,82 @@ def _inject_tool_results(
             break
 
     return enriched
+
+
+class _ThinkingStreamParser:
+    """Parse ``<think>…</think>`` blocks out of an LLM token stream.
+
+    Call :meth:`feed` with each raw text chunk; it returns a list of
+    ``(event_type, text)`` pairs where *event_type* is either
+    ``"thinking_token"`` (inside a ``<think>`` block) or ``"token"``
+    (normal response text).  The literal tags are never forwarded.
+
+    Call :meth:`flush` after the stream ends to drain any buffered content.
+    """
+
+    _OPEN = "<think>"
+    _CLOSE = "</think>"
+
+    def __init__(self) -> None:
+        self._buf = ""
+        self._thinking = False
+
+    # ------------------------------------------------------------------
+    def feed(self, chunk: str) -> list[tuple[str, str]]:
+        self._buf += chunk
+        results: list[tuple[str, str]] = []
+        while self._buf:
+            if self._thinking:
+                idx = self._buf.find(self._CLOSE)
+                if idx == -1:
+                    partial = self._partial_match(self._buf, self._CLOSE)
+                    if partial:
+                        safe = self._buf[:-partial]
+                        if safe:
+                            results.append(("thinking_token", safe))
+                        self._buf = self._buf[-partial:]
+                    else:
+                        results.append(("thinking_token", self._buf))
+                        self._buf = ""
+                    break
+                if idx > 0:
+                    results.append(("thinking_token", self._buf[:idx]))
+                self._buf = self._buf[idx + len(self._CLOSE):]
+                self._thinking = False
+            else:
+                idx = self._buf.find(self._OPEN)
+                if idx == -1:
+                    partial = self._partial_match(self._buf, self._OPEN)
+                    if partial:
+                        safe = self._buf[:-partial]
+                        if safe:
+                            results.append(("token", safe))
+                        self._buf = self._buf[-partial:]
+                    else:
+                        results.append(("token", self._buf))
+                        self._buf = ""
+                    break
+                if idx > 0:
+                    results.append(("token", self._buf[:idx]))
+                self._buf = self._buf[idx + len(self._OPEN):]
+                self._thinking = True
+        return results
+
+    def flush(self) -> list[tuple[str, str]]:
+        if self._buf:
+            evt = "thinking_token" if self._thinking else "token"
+            result = [(evt, self._buf)]
+            self._buf = ""
+            return result
+        return []
+
+    @staticmethod
+    def _partial_match(text: str, tag: str) -> int:
+        """Return length of the longest suffix of *text* that is a prefix of *tag*."""
+        for n in range(min(len(tag) - 1, len(text)), 0, -1):
+            if text.endswith(tag[:n]):
+                return n
+        return 0
 
 
 def _build_tool_call_msg(content: str | None, tool_calls: list) -> dict:
