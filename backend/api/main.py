@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import auth, chat, code, cowork, rag, registry, sandbox
+from api.routes import auth, chat, code, cowork, rag, registry, sandbox, skills
 from api.ws.stream import router as ws_router
 from config.settings import settings
 
@@ -20,8 +20,10 @@ async def lifespan(app: FastAPI):
     await _init_db()
     _register_all_tools()
     from core.mcp.manager import mcp_tool_manager
+    from skills.manager import skill_manager
 
     await mcp_tool_manager.reload_all()
+    await skill_manager.reload_all()
     yield
     # Shutdown — nothing to clean up yet
 
@@ -117,6 +119,7 @@ app.include_router(code.router, prefix="/api/code", tags=["code"])
 app.include_router(rag.router, prefix="/api/rag", tags=["rag"])
 app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
 app.include_router(sandbox.router, prefix="/api/sandbox", tags=["sandbox"])
+app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
 app.include_router(ws_router, prefix="/ws", tags=["websocket"])
 
 

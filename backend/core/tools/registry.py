@@ -20,6 +20,11 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         # mode → {tool_name → tool_class}
+        self._skill_registry: dict[Mode, dict[str, type[BaseTool]]] = {
+            Mode.CHAT: {},
+            Mode.COWORK: {},
+            Mode.CODE: {},
+        }
         self._registry: dict[Mode, dict[str, type[BaseTool]]] = {
             Mode.CHAT: {},
             Mode.COWORK: {},
@@ -36,6 +41,17 @@ class ToolRegistry:
         assert tool_cls.name, f"{tool_cls.__name__} must set a `name` class attribute"
         self._registry[mode][tool_cls.name] = tool_cls
 
+    def register_skill(self, mode: Mode, tool_cls: type[BaseTool]) -> None:
+        """Register a skill-backed tool (highest priority)."""
+        assert tool_cls.name
+        self._skill_registry[mode][tool_cls.name] = tool_cls
+
+    def unregister_skill(self, mode: Mode, tool_name: str) -> None:
+        self._skill_registry[mode].pop(tool_name, None)
+
+    def clear_skills(self, mode: Mode) -> None:
+        self._skill_registry[mode].clear()
+
     def register_mcp(self, mode: Mode, tool_cls: type[BaseTool]) -> None:
         """Register a dynamic MCP-backed tool."""
         assert tool_cls.name
@@ -48,7 +64,9 @@ class ToolRegistry:
         self._mcp_registry[mode].clear()
 
     def _all_classes(self, mode: Mode) -> dict[str, type[BaseTool]]:
-        merged = dict(self._registry[mode])
+        # Skills first (highest priority), then built-ins, then MCP
+        merged = dict(self._skill_registry[mode])
+        merged.update(self._registry[mode])
         merged.update(self._mcp_registry[mode])
         return merged
 

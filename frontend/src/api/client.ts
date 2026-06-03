@@ -14,6 +14,7 @@ import type {
   McpServer,
   McpServerCreate,
   McpServerTool,
+  Skill,
 } from '@/types'
 import { useAppStore } from '@/store'
 
@@ -666,4 +667,43 @@ export async function getModels(): Promise<{ models: string[] }> {
   const res = await fetch(`${BASE.replace('/api', '')}/api/models`)
   if (!res.ok) throw new Error('Failed to fetch models')
   return res.json()
+}
+
+// ── Skills ────────────────────────────────────────────────────────────────────
+
+export async function getSkills(): Promise<Skill[]> {
+  const res = await fetch(`${BASE}/skills`, { headers: authHeader() })
+  if (!res.ok) throw new Error('Failed to fetch skills')
+  return res.json()
+}
+
+export async function uploadSkill(formData: FormData): Promise<Skill> {
+  const res = await fetch(`${BASE}/skills/upload`, {
+    method: 'POST',
+    headers: authHeader(),
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Upload failed' }))
+    throw new Error(err.detail ?? 'Upload failed')
+  }
+  return res.json()
+}
+
+export async function toggleSkill(id: string, enabled: boolean): Promise<Skill> {
+  const res = await fetch(`${BASE}/skills/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  })
+  if (!res.ok) throw new Error('Failed to toggle skill')
+  return res.json()
+}
+
+export async function deleteSkill(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/skills/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  })
+  if (!res.ok) throw new Error('Failed to delete skill')
 }

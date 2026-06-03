@@ -20,6 +20,8 @@ dependencies = [
     "langfuse>=2.0",
     # MCP (user-registered tool servers)
     "mcp>=1.0",
+    # Skill manifest parsing
+    "pyyaml>=6.0",
     # Vector stores
     "chromadb>=0.5",
     "qdrant-client>=1.9",

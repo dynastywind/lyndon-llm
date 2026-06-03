@@ -15,6 +15,7 @@ import {
 } from '@/api/client'
 import { useAppStore } from '@/store'
 import { CODE_THEME_OPTIONS } from '@/config/codeThemes'
+import { SkillsPanel } from './SkillsPanel'
 import { ToolsRegistryPanel } from './ToolsRegistryPanel'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -29,7 +30,7 @@ interface UploadItem {
   error?: string
 }
 
-export type SettingsTab = 'profile' | 'ai' | 'knowledge' | 'tools' | 'appearance'
+export type SettingsTab = 'profile' | 'ai' | 'knowledge' | 'tools' | 'skills' | 'appearance'
 
 interface Props {
   open: boolean
@@ -79,7 +80,8 @@ const NAV_SECTIONS: { id: SettingsTab; no: string; label: string }[] = [
   { id: 'ai', no: '02', label: 'AI & Chat' },
   { id: 'knowledge', no: '03', label: 'Knowledge' },
   { id: 'tools', no: '04', label: 'MCP & Tools' },
-  { id: 'appearance', no: '05', label: 'Appearance' },
+  { id: 'skills', no: '05', label: 'Skills' },
+  { id: 'appearance', no: '06', label: 'Appearance' },
 ]
 
 // CSS helpers (inline style objects keep us independent of Tailwind here)
@@ -1487,7 +1489,28 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                 <ToolsRegistryPanel active={open} />
               </section>
 
-              {/* ── 05 · Appearance ── */}
+              {/* ── 05 · Skills ── */}
+              <section
+                id="skills"
+                ref={setRef('skills')}
+                style={{ maxWidth: 880, paddingBottom: 18, marginTop: 22 }}
+              >
+                <div
+                  style={{
+                    borderTop: '1px solid var(--lv-rule)',
+                    paddingTop: 22,
+                    marginBottom: 26,
+                  }}
+                >
+                  <span style={{ ...S.eyebrow, marginBottom: 14 }}>
+                    No. 05 — Skill Bundles
+                  </span>
+                  <h2 style={S.kbTitle}>Skills</h2>
+                </div>
+                <SkillsPanel />
+              </section>
+
+              {/* ── 06 · Appearance ── */}
               <section
                 id="appearance"
                 ref={setRef('appearance')}
@@ -1500,7 +1523,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     marginBottom: 10,
                   }}
                 >
-                  <span style={S.eyebrowMute}>No. 05 — Surface</span>
+                  <span style={S.eyebrowMute}>No. 06 — Surface</span>
                   <h2 style={S.blockTitle}>Appearance</h2>
                 </div>
 

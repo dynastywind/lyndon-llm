@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   BookOpen,
+  Puzzle,
   Server,
   Trash2,
   Loader2,
@@ -1033,6 +1034,7 @@ export function Sidebar() {
                       { tab: 'profile' as SettingsTab, icon: UserCircle, label: 'Profile' },
                       { tab: 'knowledge' as SettingsTab, icon: BookOpen, label: 'Knowledge' },
                       { tab: 'tools' as SettingsTab, icon: Server, label: 'MCP' },
+                      { tab: 'skills' as SettingsTab, icon: Puzzle, label: 'Skills' },
                       { tab: 'ai' as SettingsTab, icon: MessageSquare, label: 'AI & Chat' },
                     ] as const
                   ).map(({ tab, icon: Icon, label }) => (

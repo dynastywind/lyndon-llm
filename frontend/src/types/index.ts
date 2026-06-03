@@ -274,3 +274,23 @@ export interface McpServerCreate {
   url?: string | null
   enabled?: boolean
 }
+
+// ── Skills ────────────────────────────────────────────────────────────────────
+
+export interface SkillToolDef {
+  id: string
+  tool_name: string
+  description: string
+  language: string
+  parameters_schema: Record<string, unknown>
+}
+
+export interface Skill {
+  id: string
+  name: string
+  description: string
+  version: string
+  enabled: boolean
+  created_at: string
+  tools: SkillToolDef[]
+}
