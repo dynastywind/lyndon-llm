@@ -69,7 +69,7 @@ Available tools: shell, file_write, file_read, http_request, scheduler
 
 class Planner:
     async def create_plan(self, goal: str, session_id: str = "") -> Plan:
-        response = await llm_gateway.complete(
+        text, _usage = await llm_gateway.complete(
             messages=[
                 LLMMessage("system", PLANNER_SYSTEM),
                 LLMMessage("user", f"Goal: {goal}"),
@@ -79,7 +79,7 @@ class Planner:
 
         # Strip markdown code fences if present
         cleaned = (
-            response.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+            text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         )
 
         try:
