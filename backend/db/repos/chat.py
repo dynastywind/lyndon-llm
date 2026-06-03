@@ -8,10 +8,25 @@ from datetime import UTC, datetime
 import json
 import uuid
 
-from sqlalchemy import func, select, update
+from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.chat import ChatMessage, ChatSession
+
+
+def _make_snippet(content: str, query: str, radius: int = 60) -> str:
+    """Return a ~120-char excerpt of *content* centred on the first match of *query*."""
+    idx = content.lower().find(query.lower())
+    if idx == -1:
+        return content[:120]
+    start = max(0, idx - radius)
+    end = min(len(content), idx + len(query) + radius)
+    snippet = content[start:end]
+    if start > 0:
+        snippet = "…" + snippet
+    if end < len(content):
+        snippet = snippet + "…"
+    return snippet
 
 
 class ChatRepo:
@@ -69,6 +84,80 @@ class ChatRepo:
             ).scalars()
         )
         return rows, total
+
+    async def search_sessions(
+        self,
+        query: str,
+        mode: str = "chat",
+        user_id: str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[ChatSession], int, dict[str, str]]:
+        """
+        Return sessions whose title OR message content matches *query* (LIKE).
+
+        Also returns a snippet map ``{session_id: excerpt}`` with a ~120-char
+        excerpt of the first matching message centred around the matched text.
+        Sessions that match only by title carry no snippet.
+        """
+        like_q = f"%{query}%"
+        base_filter = [ChatSession.mode == mode]
+        if user_id is not None:
+            base_filter.append(ChatSession.user_id == user_id)
+
+        match_cond = or_(
+            ChatSession.title.ilike(like_q),
+            exists().where(
+                ChatMessage.session_id == ChatSession.id,
+                ChatMessage.content.ilike(like_q),
+                ChatMessage.role != "tool",
+            ),
+        )
+
+        total: int = (
+            await self._db.execute(
+                select(func.count())
+                .select_from(ChatSession)
+                .where(*base_filter, match_cond)
+            )
+        ).scalar_one()
+
+        rows = list(
+            (
+                await self._db.execute(
+                    select(ChatSession)
+                    .where(*base_filter, match_cond)
+                    .order_by(ChatSession.updated_at.desc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            ).scalars()
+        )
+
+        # Build snippet map: one query to get first matching message per session
+        snippets: dict[str, str] = {}
+        if rows:
+            session_ids = [r.id for r in rows]
+            msg_rows = list(
+                (
+                    await self._db.execute(
+                        select(ChatMessage)
+                        .where(
+                            ChatMessage.session_id.in_(session_ids),
+                            ChatMessage.content.ilike(like_q),
+                            ChatMessage.role != "tool",
+                        )
+                        .order_by(ChatMessage.session_id, ChatMessage.created_at)
+                    )
+                ).scalars()
+            )
+            seen: set[str] = set()
+            for msg in msg_rows:
+                if msg.session_id not in seen:
+                    seen.add(msg.session_id)
+                    snippets[msg.session_id] = _make_snippet(msg.content, query)
+
+        return rows, total, snippets
 
     async def rename_session(self, session_id: str, title: str) -> bool:
         """Rename a session. Returns False if the session doesn't exist."""

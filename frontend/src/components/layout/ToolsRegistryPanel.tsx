@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
+
+const IS_TAURI =
+  typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== 'undefined'
 import {
   AlertCircle,
   ChevronDown,
@@ -37,7 +40,7 @@ function InternalToolsSection({ tools }: { tools: RegistryTool[] }) {
         Shipped with LyndonLLM. These cannot be edited or removed.
       </p>
       {Object.entries(byMode)
-        .filter(([mode]) => mode !== 'cowork')
+        .filter(([mode]) => mode !== 'cowork' && (IS_TAURI || mode !== 'code'))
         .map(([mode, modeTools]) => (
           <div key={mode} className="mb-4">
             <p className="text-xs font-medium text-muted-foreground mb-1.5 capitalize">{mode}</p>

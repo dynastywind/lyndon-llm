@@ -290,6 +290,20 @@ export async function listChatSessions(
   return res.json()
 }
 
+export async function searchChatSessions(
+  mode = 'chat',
+  q: string,
+  limit = 20,
+  offset = 0,
+): Promise<{ sessions: (ChatSession & { snippet?: string })[]; total: number }> {
+  const params = new URLSearchParams({ mode, q, limit: String(limit), offset: String(offset) })
+  const res = await fetch(`${BASE}/chat/sessions/search?${params}`, {
+    headers: authHeader(),
+  })
+  if (!res.ok) throw new Error(`Search failed: ${res.statusText}`)
+  return res.json()
+}
+
 export async function getChatMessages(
   sessionId: string,
   limit = 5,

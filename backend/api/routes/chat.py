@@ -128,6 +128,31 @@ async def list_chat_sessions(
     return {"sessions": [_session_dict(r) for r in rows], "total": total}
 
 
+@router.get("/sessions/search")
+async def search_chat_sessions(
+    q: str = Query(..., min_length=1, description="Search query"),
+    mode: str = "chat",
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    """Search sessions by title or message content (case-insensitive LIKE)."""
+    if user is None:
+        return {"sessions": [], "total": 0}
+    repo = ChatRepo(db)
+    rows, total, snippets = await repo.search_sessions(
+        query=q, mode=mode, user_id=user.id, limit=limit, offset=offset
+    )
+    return {
+        "sessions": [
+            {**_session_dict(r), "snippet": snippets.get(r.id)}
+            for r in rows
+        ],
+        "total": total,
+    }
+
+
 class RenameRequest(BaseModel):
     title: str
 

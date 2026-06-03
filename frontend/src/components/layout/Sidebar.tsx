@@ -11,11 +11,13 @@ import {
   MoreHorizontal,
   MessageSquarePlus,
   UserCircle,
+  Search,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
-import { deleteChatSession, getAvatarUrl, renameChatSession } from '@/api/client'
+import { deleteChatSession, getAvatarUrl, renameChatSession, searchChatSessions } from '@/api/client'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { LoginDialog } from '@/components/auth/LoginDialog'
 import { DeleteAccountDialog } from '@/components/auth/DeleteAccountDialog'
@@ -209,9 +211,14 @@ function SidebarAsteriskAnimated({ size = 12 }: { size?: number }) {
   )
 }
 
-// ── Modes ─────────────────────────────────────────────────────────────────────
-const MODES: { id: Mode; label: string }[] = [
+// ── Environment detection ─────────────────────────────────────────────────────
+const IS_TAURI =
+  typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== 'undefined'
+
+// ── Modes (desktop-only — web is chat-only with no tab group) ─────────────────
+const DESKTOP_MODES: { id: Mode; label: string }[] = [
   { id: 'chat', label: 'Chat' },
+  { id: 'cowork', label: 'Cowork' },
   { id: 'code', label: 'Code' },
 ]
 
@@ -250,6 +257,13 @@ export function Sidebar() {
   const [promptDraft, setPromptDraft] = useState('')
   const promptInputRef = useRef<HTMLTextAreaElement>(null)
 
+  // Search
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<(ChatSession & { snippet?: string })[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
   // The key for the current session prompt slot
   const promptKey = sessionId ?? '__new__'
   const currentSessionPrompt = sessionPrompts[promptKey] ?? ''
@@ -281,6 +295,41 @@ export function Sidebar() {
     const current = sessions.find((s) => s.session_id === sessionId)
     if (current) setSessionTitle(current.title)
   }, [sessions, sessionId, setSessionTitle])
+
+  // Web is chat-only — reset any persisted desktop mode value
+  useEffect(() => {
+    if (!IS_TAURI && mode !== 'chat') setMode('chat')
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Search: reset when closed; auto-focus when opened
+  useEffect(() => {
+    if (!searchOpen) {
+      setSearchQuery('')
+      setSearchResults([])
+    } else {
+      setTimeout(() => searchInputRef.current?.focus(), 50)
+    }
+  }, [searchOpen])
+
+  // Search: debounced query → backend
+  useEffect(() => {
+    if (!searchOpen || !searchQuery.trim()) {
+      setSearchResults([])
+      return
+    }
+    setSearchLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const data = await searchChatSessions(mode === 'chat' ? 'chat' : 'code', searchQuery.trim())
+        setSearchResults(data.sessions)
+      } catch {
+        // ignore network errors silently
+      } finally {
+        setSearchLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [searchQuery, searchOpen, mode])
 
   const handleNewChat = () => {
     if (!sessionId) return
@@ -330,48 +379,125 @@ export function Sidebar() {
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: LV.ink }}>
-          <Mark size={26} />
-          <span
+        <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: LV.ink }}>
+            <Mark size={26} />
+            <span
+              style={{
+                fontFamily: LV.font.display,
+                fontStyle: 'normal',
+                fontWeight: 600,
+                fontSize: 20,
+                letterSpacing: '0',
+                color: LV.ink,
+              }}
+            >
+              LyndonLLM
+            </span>
+          </div>
+          <button
+            onClick={() => setSearchOpen((o) => !o)}
+            title={searchOpen ? 'Close search' : 'Search messages'}
             style={{
-              fontFamily: LV.font.display,
-              fontStyle: 'normal',
-              fontWeight: 600,
-              fontSize: 20,
-              letterSpacing: '0',
-              color: LV.ink,
+              marginLeft: 'auto',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: searchOpen ? LV.gold : LV.mute,
+              padding: 4,
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'color 0.15s',
             }}
           >
-            LyndonLLM
-          </span>
+            <Search size={15} />
+          </button>
         </div>
       </div>
 
-      {/* Mode tabs */}
-      <div style={{ display: 'flex', borderBottom: `1px solid ${LV.rule}`, flexShrink: 0 }}>
-        {MODES.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setMode(id)}
+      {/* Search input bar (shown when search icon is active) */}
+      {searchOpen && (
+        <div
+          style={{
+            padding: '8px 12px',
+            borderBottom: `1px solid ${LV.rule}`,
+            flexShrink: 0,
+          }}
+        >
+          <div
             style={{
-              flex: 1,
-              padding: '11px 0 10px',
-              textAlign: 'center',
-              fontFamily: LV.font.sans,
-              fontSize: 12.5,
-              background: 'none',
-              border: 'none',
-              fontWeight: mode === id ? 500 : 400,
-              color: mode === id ? LV.ink : LV.mute,
-              cursor: 'pointer',
-              borderBottom: `1px solid ${mode === id ? LV.gold : 'transparent'}`,
-              marginBottom: -1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: LV.elev,
+              borderRadius: 6,
+              padding: '5px 10px',
+              border: `1px solid ${LV.rule}`,
             }}
           >
-            {label}
-          </button>
-        ))}
-      </div>
+            <Search size={13} color={LV.mute} />
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Escape' && setSearchOpen(false)}
+              placeholder="Search messages…"
+              style={{
+                flex: 1,
+                background: 'none',
+                border: 'none',
+                outline: 'none',
+                fontFamily: LV.font.sans,
+                fontSize: 13,
+                color: LV.ink,
+              }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: LV.mute,
+                  display: 'flex',
+                  padding: 0,
+                }}
+              >
+                <X size={13} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Mode tabs — desktop only; web is chat-only */}
+      {IS_TAURI && (
+        <div style={{ display: 'flex', borderBottom: `1px solid ${LV.rule}`, flexShrink: 0 }}>
+          {DESKTOP_MODES.map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setMode(id)}
+              style={{
+                flex: 1,
+                padding: '11px 0 10px',
+                textAlign: 'center',
+                fontFamily: LV.font.sans,
+                fontSize: 12.5,
+                background: 'none',
+                border: 'none',
+                fontWeight: mode === id ? 500 : 400,
+                color: mode === id ? LV.ink : LV.mute,
+                cursor: 'pointer',
+                borderBottom: `1px solid ${mode === id ? LV.gold : 'transparent'}`,
+                marginBottom: -1,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* New chat + more menu */}
       <div
@@ -631,63 +757,150 @@ export function Sidebar() {
               fontWeight: 500,
             }}
           >
-            Recent
+            {searchOpen && searchQuery.trim() ? 'Results' : 'Recent'}
           </span>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {loading ? (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 16px',
-                color: LV.mute,
-                fontFamily: LV.font.mono,
-                fontSize: 11,
-              }}
-            >
-              <Loader2 size={11} className="animate-spin" />
-              Loading…
-            </div>
-          ) : sessions.length === 0 ? (
-            <p
-              style={{
-                padding: '8px 16px',
-                fontFamily: LV.font.mono,
-                fontSize: 11,
-                color: LV.mute,
-              }}
-            >
-              No history yet.
-            </p>
-          ) : (
+          {searchOpen && searchQuery.trim() ? (
+            /* ── Search results ── */
             <>
-              {sessions.map((s) => (
-                <SessionRow
-                  key={s.session_id}
-                  session={s}
-                  active={sessionId === s.session_id}
-                  isStreaming={streamingSet[s.session_id] === true}
-                  onSelect={handleResumeSession}
-                  onDelete={handleDeleteSession}
-                  onRename={(newTitle) => {
-                    // optimistically update sidebar + active title
-                    if (sessionId === s.session_id) setSessionTitle(newTitle || null)
-                    bumpSessionVersion()
-                  }}
-                />
-              ))}
-              {hasMore && (
+              {searchLoading && (
                 <div
-                  ref={sentinelRef}
-                  style={{ padding: '8px 16px', display: 'flex', justifyContent: 'center' }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 16px',
+                    color: LV.mute,
+                    fontFamily: LV.font.mono,
+                    fontSize: 11,
+                  }}
                 >
-                  {loadingMore && (
-                    <Loader2 size={11} className="animate-spin" style={{ color: LV.mute }} />
-                  )}
+                  <Loader2 size={11} className="animate-spin" />
+                  Searching…
                 </div>
+              )}
+              {!searchLoading && searchResults.length === 0 && (
+                <p
+                  style={{
+                    padding: '8px 16px',
+                    fontFamily: LV.font.mono,
+                    fontSize: 11,
+                    color: LV.mute,
+                  }}
+                >
+                  No results for "{searchQuery}"
+                </p>
+              )}
+              {searchResults.map((s) => (
+                <button
+                  key={s.session_id}
+                  onClick={() => {
+                    setSessionId(s.session_id)
+                    setSessionTitle(s.title)
+                    setSearchOpen(false)
+                  }}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    background: 'none',
+                    border: 'none',
+                    padding: '8px 16px',
+                    cursor: 'pointer',
+                    borderLeft: `2px solid ${s.session_id === sessionId ? LV.gold : 'transparent'}`,
+                  }}
+                  className="hover:bg-[var(--lv-wash)]"
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: LV.ink,
+                      fontFamily: LV.font.sans,
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {s.title || 'Untitled'}
+                  </div>
+                  {s.snippet && (
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        color: LV.mute,
+                        fontFamily: LV.font.sans,
+                        marginTop: 2,
+                        overflow: 'hidden',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                      }}
+                    >
+                      {s.snippet}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </>
+          ) : (
+            /* ── Normal session list ── */
+            <>
+              {loading ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 16px',
+                    color: LV.mute,
+                    fontFamily: LV.font.mono,
+                    fontSize: 11,
+                  }}
+                >
+                  <Loader2 size={11} className="animate-spin" />
+                  Loading…
+                </div>
+              ) : sessions.length === 0 ? (
+                <p
+                  style={{
+                    padding: '8px 16px',
+                    fontFamily: LV.font.mono,
+                    fontSize: 11,
+                    color: LV.mute,
+                  }}
+                >
+                  No history yet.
+                </p>
+              ) : (
+                <>
+                  {sessions.map((s) => (
+                    <SessionRow
+                      key={s.session_id}
+                      session={s}
+                      active={sessionId === s.session_id}
+                      isStreaming={streamingSet[s.session_id] === true}
+                      onSelect={handleResumeSession}
+                      onDelete={handleDeleteSession}
+                      onRename={(newTitle) => {
+                        // optimistically update sidebar + active title
+                        if (sessionId === s.session_id) setSessionTitle(newTitle || null)
+                        bumpSessionVersion()
+                      }}
+                    />
+                  ))}
+                  {hasMore && (
+                    <div
+                      ref={sentinelRef}
+                      style={{ padding: '8px 16px', display: 'flex', justifyContent: 'center' }}
+                    >
+                      {loadingMore && (
+                        <Loader2 size={11} className="animate-spin" style={{ color: LV.mute }} />
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
