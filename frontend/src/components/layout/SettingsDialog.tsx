@@ -183,9 +183,13 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
   }, [searchQuery])
   useEffect(() => { setPage(0) }, [debouncedQuery])
 
-  // ── sync drafts when store changes externally ─────────────────────────────
-  useEffect(() => { setPromptDraft(systemPrompt) }, [systemPrompt])
-  useEffect(() => { setProfDraft(profession) }, [profession])
+  // ── sync drafts whenever the dialog opens (Radix keeps content mounted) ────
+  useEffect(() => {
+    if (open) {
+      setPromptDraft(systemPrompt)
+      setProfDraft(profession)
+    }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── jump to initial section when opening ──────────────────────────────────
   useEffect(() => {
@@ -470,7 +474,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
             margin: '0 0 0.4em',
             color: 'var(--lv-ink)',
           }}>
-            Your <em style={{ fontStyle: 'italic', fontWeight: 500 }}>Profile.</em>
+            Your <em style={{ fontStyle: 'italic', fontWeight: 500 }}>LLM.</em>
           </h1>
           <p style={{ fontWeight: 300, fontSize: 15, lineHeight: 1.6, color: 'var(--lv-soft)', maxWidth: '52ch', margin: 0 }}>
             Manage how you appear and how LyndonLLM behaves for you.

@@ -10,6 +10,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   MessageSquarePlus,
+  UserCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
@@ -792,6 +793,7 @@ export function Sidebar() {
               >
                 {(
                   [
+                    { tab: 'profile' as SettingsTab, icon: UserCircle, label: 'Profile' },
                     { tab: 'knowledge' as SettingsTab, icon: BookOpen, label: 'Knowledge' },
                     { tab: 'tools' as SettingsTab, icon: Server, label: 'MCP' },
                     { tab: 'ai' as SettingsTab, icon: MessageSquare, label: 'AI & Chat' },
