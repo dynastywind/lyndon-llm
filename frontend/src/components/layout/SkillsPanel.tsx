@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, ChevronDown, Code2, Copy, Loader2, PackagePlus, Puzzle, Trash2, UploadCloud, X } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Check, ChevronDown, Code2, Copy, Eye, EyeOff, Loader2, PackagePlus, Puzzle, Trash2, UploadCloud, X } from 'lucide-react'
 import { deleteSkill, getSkills, toggleSkill, uploadSkill } from '@/api/client'
 import type { Skill, SkillToolDef } from '@/types'
 
@@ -25,14 +27,34 @@ function LangBadge({ lang }: { lang: string }) {
   )
 }
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+/** Split raw SKILL.md into the YAML frontmatter block and the body text. */
+function splitSkillMd(raw: string): { front: string; body: string } {
+  const trimmed = raw.trim()
+  if (!trimmed.startsWith('---')) return { front: '', body: trimmed }
+  const end = trimmed.indexOf('\n---', 3)
+  if (end === -1) return { front: trimmed.slice(3).trim(), body: '' }
+  return {
+    front: trimmed.slice(3, end).trim(),
+    body: trimmed.slice(end + 4).trim(),
+  }
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
 // ── SKILL.md modal ────────────────────────────────────────────────────────────
 
 function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void }) {
+  const [rawView, setRawView] = useState(false)
   const [copied, setCopied] = useState(false)
-  const markdown = skill.skill_md || `# ${skill.name}\n\nNo SKILL.md content stored for this skill.`
+  const raw = skill.skill_md || ''
+  const { body } = splitSkillMd(raw)
 
   const copy = () => {
-    navigator.clipboard.writeText(markdown).then(() => {
+    navigator.clipboard.writeText(raw).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     })
@@ -43,62 +65,105 @@ function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void })
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/60" style={{ zIndex: 200 }} />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg rounded-xl border border-border bg-card shadow-2xl focus:outline-none"
-          style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column', zIndex: 201 }}
+          className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl rounded-2xl border border-border bg-card shadow-2xl focus:outline-none overflow-hidden"
+          style={{ maxHeight: '85vh', display: 'flex', flexDirection: 'column', zIndex: 201 }}
         >
-          <Dialog.Title className="sr-only">{skill.name} — SKILL.md</Dialog.Title>
-          {/* header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-            <div className="flex items-center gap-2">
-              <Puzzle size={14} className="text-muted-foreground" />
-              <span className="text-sm font-medium">{skill.name}</span>
-              <span className="text-[10px] font-mono text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">
-                v{skill.version}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={copy}
-                className="text-xs flex items-center gap-1.5 px-2 py-1 rounded border border-border hover:bg-muted transition-colors text-muted-foreground"
-              >
-                {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-                {copied ? 'Copied' : 'Copy'}
-              </button>
-              <Dialog.Close asChild>
-                <button className="text-muted-foreground hover:text-foreground transition-colors">
-                  <X size={16} />
-                </button>
-              </Dialog.Close>
-            </div>
-          </div>
+          <Dialog.Title className="sr-only">{skill.name}</Dialog.Title>
 
-          {/* code body */}
-          <div className="overflow-auto flex-1 p-4">
-            <pre className="text-[12px] font-mono text-foreground/90 whitespace-pre leading-relaxed">
-              {markdown}
-            </pre>
-          </div>
-
-          {/* tools summary */}
-          {skill.tools.length > 0 && (
-            <div className="border-t border-border px-4 py-3 shrink-0">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-                Tools
-              </p>
-              <div className="space-y-1.5">
-                {skill.tools.map((t) => (
-                  <div key={t.id} className="flex items-center gap-2">
-                    <Code2 size={12} className="text-muted-foreground shrink-0" />
-                    <span className="text-xs font-mono">{t.tool_name}</span>
-                    <LangBadge lang={t.language} />
-                    {t.description && (
-                      <span className="text-xs text-muted-foreground truncate">{t.description}</span>
-                    )}
-                  </div>
-                ))}
+          {/* ── Part 1: Frontmatter as structured header ── */}
+          <div className="px-5 pt-5 pb-4 shrink-0">
+            {/* title row */}
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <span className="text-base font-semibold leading-tight">{skill.name}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* enabled indicator */}
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${skill.enabled ? 'bg-green-500/15 text-green-400' : 'bg-muted text-muted-foreground'}`}>
+                  {skill.enabled ? 'Enabled' : 'Disabled'}
+                </span>
+                <Dialog.Close asChild>
+                  <button className="text-muted-foreground hover:text-foreground transition-colors">
+                    <X size={16} />
+                  </button>
+                </Dialog.Close>
               </div>
             </div>
-          )}
+
+            {/* metadata grid */}
+            <div className="grid grid-cols-3 gap-x-6 gap-y-1 mb-4 text-xs">
+              <div>
+                <p className="text-muted-foreground mb-0.5">Version</p>
+                <p className="font-mono">{skill.version}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground mb-0.5">Added</p>
+                <p>{formatDate(skill.created_at)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground mb-0.5">Tools</p>
+                <div className="flex flex-wrap gap-1">
+                  {skill.tools.length === 0
+                    ? <span>—</span>
+                    : skill.tools.map((t) => (
+                        <span key={t.id} className="flex items-center gap-1">
+                          <Code2 size={11} className="text-muted-foreground" />
+                          <span className="font-mono">{t.tool_name}</span>
+                          <LangBadge lang={t.language} />
+                        </span>
+                      ))
+                  }
+                </div>
+              </div>
+            </div>
+
+            {/* description */}
+            {skill.description && (
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">
+                  Description
+                </p>
+                <p className="text-sm text-foreground/80 leading-relaxed">{skill.description}</p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Divider ── */}
+          <div className="border-t border-border shrink-0" />
+
+          {/* ── Part 2: Body markdown ── */}
+          <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+            {/* toolbar */}
+            <div className="flex items-center justify-end gap-1.5 px-4 py-2 shrink-0">
+              <button
+                onClick={copy}
+                title="Copy raw SKILL.md"
+                className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
+              >
+                {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+              </button>
+              <button
+                onClick={() => setRawView((v) => !v)}
+                title={rawView ? 'Rendered view' : 'Raw view'}
+                className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
+              >
+                {rawView ? <Eye size={14} /> : <EyeOff size={14} />}
+              </button>
+            </div>
+
+            {/* content */}
+            <div className="overflow-auto flex-1 px-5 pb-5">
+              {rawView ? (
+                <pre className="text-[12px] font-mono text-foreground/80 whitespace-pre-wrap leading-relaxed">
+                  {raw}
+                </pre>
+              ) : body ? (
+                <div className="prose prose-sm prose-invert max-w-none skill-md-body">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">No body text in SKILL.md.</p>
+              )}
+            </div>
+          </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

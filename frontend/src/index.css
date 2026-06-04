@@ -267,3 +267,18 @@ html.light {
   border: 1px solid var(--lv-rule);
   border-radius: 0;
 }
+
+/* Skill SKILL.md body — tighter line-height and spacing for the modal */
+.skill-md-body h1, .skill-md-body h2, .skill-md-body h3 {
+  font-family: var(--font-display);
+  color: var(--lv-ink);
+  margin-top: 1.25em;
+  margin-bottom: 0.4em;
+}
+.skill-md-body h1 { font-size: 1.1rem; }
+.skill-md-body h2 { font-size: 1rem; }
+.skill-md-body h3 { font-size: 0.9rem; }
+.skill-md-body p  { margin-top: 0; margin-bottom: 0.6em; line-height: 1.65; }
+.skill-md-body ul, .skill-md-body ol { padding-left: 1.25em; margin-bottom: 0.6em; }
+.skill-md-body li { margin-bottom: 0.25em; }
+.skill-md-body strong { color: var(--lv-ink); font-weight: 600; }
