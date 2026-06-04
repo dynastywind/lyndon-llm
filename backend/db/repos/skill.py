@@ -45,9 +45,10 @@ class SkillRepo:
         name: str,
         description: str,
         version: str,
+        skill_md: str = "",
         tools: list[dict],
     ) -> Skill:
-        skill = Skill(user_id=user_id, name=name, description=description, version=version)
+        skill = Skill(user_id=user_id, name=name, description=description, version=version, skill_md=skill_md)
         self._db.add(skill)
         await self._db.flush()  # get skill.id
 

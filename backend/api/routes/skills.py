@@ -46,6 +46,7 @@ def _skill_out(skill) -> dict[str, Any]:
         "description": skill.description,
         "version": skill.version,
         "enabled": skill.enabled,
+        "skill_md": skill.skill_md,
         "created_at": skill.created_at.isoformat(),
         "tools": [_tool_out(t) for t in skill.tools],
     }
@@ -115,6 +116,7 @@ async def upload_skill(
             name=parsed.name,
             description=parsed.description,
             version=parsed.version,
+            skill_md=parsed.raw_skill_md,
             tools=tools_data,
         )
 

@@ -293,6 +293,7 @@ export interface Skill {
   description: string
   version: string
   enabled: boolean
+  skill_md: string
   created_at: string
   tools: SkillToolDef[]
 }

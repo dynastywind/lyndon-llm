@@ -26,6 +26,7 @@ class Skill(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     version: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    skill_md: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

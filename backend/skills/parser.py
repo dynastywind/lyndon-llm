@@ -23,6 +23,7 @@ class ParsedSkill:
     name: str
     description: str
     version: str
+    raw_skill_md: str = ""          # full original SKILL.md text
     tools: list[ParsedSkillTool] = field(default_factory=list)
 
 
@@ -133,7 +134,7 @@ def _parse_manifest(text: str, read_file) -> ParsedSkill:
             )
         )
 
-    return ParsedSkill(name=name, description=description, version=version, tools=tools)
+    return ParsedSkill(name=name, description=description, version=version, raw_skill_md=text, tools=tools)
 
 
 def _split_frontmatter(text: str) -> tuple[str | None, str]:

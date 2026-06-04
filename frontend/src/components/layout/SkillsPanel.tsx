@@ -25,58 +25,11 @@ function LangBadge({ lang }: { lang: string }) {
   )
 }
 
-// ── SKILL.md reconstruction ───────────────────────────────────────────────────
-
-function schemaToParams(schema: Record<string, unknown>): string {
-  const props = (schema.properties as Record<string, Record<string, unknown>>) ?? {}
-  const required = (schema.required as string[]) ?? []
-  if (Object.keys(props).length === 0) return ''
-  const lines: string[] = ['    parameters:']
-  for (const [pname, pdef] of Object.entries(props)) {
-    lines.push(`      - name: ${pname}`)
-    lines.push(`        type: ${pdef.type ?? 'string'}`)
-    if (pdef.description) lines.push(`        description: ${pdef.description}`)
-    lines.push(`        required: ${required.includes(pname)}`)
-    if (pdef.default !== undefined) lines.push(`        default: ${pdef.default}`)
-  }
-  return lines.join('\n')
-}
-
-function langExt(lang: string): string {
-  const map: Record<string, string> = {
-    python: 'py', javascript: 'js', typescript: 'ts',
-    bash: 'sh', ruby: 'rb', go: 'go', rust: 'rs',
-  }
-  return map[lang.toLowerCase()] ?? lang
-}
-
-function skillToMarkdown(skill: Skill): string {
-  const lines: string[] = [
-    '---',
-    `name: ${skill.name}`,
-    `description: ${skill.description}`,
-    `version: "${skill.version}"`,
-  ]
-  if (skill.tools.length > 0) {
-    lines.push('tools:')
-    for (const t of skill.tools) {
-      lines.push(`  - name: ${t.tool_name}`)
-      lines.push(`    description: ${t.description || ''}`)
-      lines.push(`    language: ${t.language}`)
-      lines.push(`    script: ${t.tool_name}.${langExt(t.language)}`)
-      const params = schemaToParams(t.parameters_schema as Record<string, unknown>)
-      if (params) lines.push(params)
-    }
-  }
-  lines.push('---')
-  return lines.join('\n')
-}
-
 // ── SKILL.md modal ────────────────────────────────────────────────────────────
 
 function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void }) {
   const [copied, setCopied] = useState(false)
-  const markdown = skillToMarkdown(skill)
+  const markdown = skill.skill_md || `# ${skill.name}\n\nNo SKILL.md content stored for this skill.`
 
   const copy = () => {
     navigator.clipboard.writeText(markdown).then(() => {

@@ -61,6 +61,8 @@ async def _migrate(conn) -> None:
         "ALTER TABLE users ADD COLUMN email TEXT",
         # v7 — avatar stored as BLOB directly in the users table
         "ALTER TABLE users ADD COLUMN avatar BLOB",
+        # v8 — store raw SKILL.md text so the viewer shows the full file
+        "ALTER TABLE skills ADD COLUMN skill_md TEXT NOT NULL DEFAULT ''",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore
