@@ -48,7 +48,9 @@ function SkillCard({
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   return (
-    <div className={`rounded-lg border border-border bg-card transition-opacity ${skill.enabled ? '' : 'opacity-60'}`}>
+    <div
+      className={`rounded-lg border border-border bg-card transition-opacity ${skill.enabled ? '' : 'opacity-60'}`}
+    >
       {/* header row */}
       <div className="flex items-center gap-3 px-3 py-2.5">
         <button
@@ -76,7 +78,10 @@ function SkillCard({
 
         <div className="flex items-center gap-2 shrink-0">
           {/* enabled toggle */}
-          <label className="relative inline-flex items-center cursor-pointer" title={skill.enabled ? 'Disable' : 'Enable'}>
+          <label
+            className="relative inline-flex items-center cursor-pointer"
+            title={skill.enabled ? 'Disable' : 'Enable'}
+          >
             <input
               type="checkbox"
               className="sr-only peer"
@@ -200,11 +205,16 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
   return (
     <div className="mb-6">
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragging(true)
+        }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         className={`border-2 border-dashed rounded-lg px-6 py-8 text-center transition-colors ${
-          dragging ? 'border-primary bg-primary/5' : 'border-border hover:border-muted-foreground/50'
+          dragging
+            ? 'border-primary bg-primary/5'
+            : 'border-border hover:border-muted-foreground/50'
         }`}
       >
         {uploading ? (
@@ -225,19 +235,28 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
               >
                 <UploadCloud size={13} />
                 Upload Skill
-                <ChevronDown size={11} className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown
+                  size={11}
+                  className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`}
+                />
               </button>
               {menuOpen && (
                 <div className="absolute top-full mt-1 z-10 w-36 rounded border border-border bg-card shadow-md overflow-hidden">
                   <button
-                    onClick={() => { setMenuOpen(false); zipRef.current?.click() }}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      zipRef.current?.click()
+                    }}
                     className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors"
                   >
                     <PackagePlus size={12} />
                     ZIP file
                   </button>
                   <button
-                    onClick={() => { setMenuOpen(false); folderRef.current?.click() }}
+                    onClick={() => {
+                      setMenuOpen(false)
+                      folderRef.current?.click()
+                    }}
                     className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors border-t border-border"
                   >
                     <UploadCloud size={12} />
@@ -250,9 +269,7 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
         )}
       </div>
 
-      {error && (
-        <p className="mt-2 text-xs text-destructive">{error}</p>
-      )}
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
 
       {/* hidden inputs */}
       <input
@@ -289,7 +306,10 @@ function EmptyState() {
     <div className="text-center py-8 text-muted-foreground">
       <Puzzle size={32} className="mx-auto mb-3 opacity-30" />
       <p className="text-sm font-medium mb-1">No skills installed</p>
-      <p className="text-xs mb-3">Upload a ZIP or folder containing a <code className="bg-muted px-1 rounded">SKILL.md</code> manifest.</p>
+      <p className="text-xs mb-3">
+        Upload a ZIP or folder containing a <code className="bg-muted px-1 rounded">SKILL.md</code>{' '}
+        manifest.
+      </p>
       <details className="text-left max-w-sm mx-auto">
         <summary className="text-xs cursor-pointer hover:text-foreground select-none">
           SKILL.md format
@@ -314,12 +334,52 @@ tools:
   )
 }
 
+// ── pagination ────────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 5
+
+function Pagination({
+  page,
+  total,
+  onChange,
+}: {
+  page: number
+  total: number
+  onChange: (p: number) => void
+}) {
+  const pages = Math.ceil(total / PAGE_SIZE)
+  if (pages <= 1) return null
+  return (
+    <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
+      <button
+        onClick={() => onChange(page - 1)}
+        disabled={page === 0}
+        className="px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        ← Prev
+      </button>
+      <span>
+        {page + 1} / {pages}
+        <span className="ml-2 opacity-60">({total} skills)</span>
+      </span>
+      <button
+        onClick={() => onChange(page + 1)}
+        disabled={page >= pages - 1}
+        className="px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        Next →
+      </button>
+    </div>
+  )
+}
+
 // ── main component ────────────────────────────────────────────────────────────
 
 export function SkillsPanel() {
   const [skills, setSkills] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -334,14 +394,18 @@ export function SkillsPanel() {
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+  }, [load])
 
   const handleUploaded = (skill: Skill) => {
     setSkills((prev) => {
       const exists = prev.findIndex((s) => s.id === skill.id)
-      return exists >= 0
-        ? prev.map((s) => (s.id === skill.id ? skill : s))
-        : [...prev, skill]
+      const next = exists >= 0 ? prev.map((s) => (s.id === skill.id ? skill : s)) : [...prev, skill]
+      // Jump to the page containing the new/updated skill
+      const idx = next.findIndex((s) => s.id === skill.id)
+      setPage(Math.floor(idx / PAGE_SIZE))
+      return next
     })
   }
 
@@ -357,11 +421,19 @@ export function SkillsPanel() {
   const handleDelete = async (id: string) => {
     try {
       await deleteSkill(id)
-      setSkills((prev) => prev.filter((s) => s.id !== id))
+      setSkills((prev) => {
+        const next = prev.filter((s) => s.id !== id)
+        // If the current page is now empty, step back
+        const maxPage = Math.max(0, Math.ceil(next.length / PAGE_SIZE) - 1)
+        setPage((p) => Math.min(p, maxPage))
+        return next
+      })
     } catch {
       // leave state unchanged on error
     }
   }
+
+  const pageSkills = skills.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   return (
     <div>
@@ -376,16 +448,19 @@ export function SkillsPanel() {
       ) : skills.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="space-y-2">
-          {skills.map((skill) => (
-            <SkillCard
-              key={skill.id}
-              skill={skill}
-              onToggle={handleToggle}
-              onDelete={handleDelete}
-            />
-          ))}
-        </div>
+        <>
+          <div className="space-y-2">
+            {pageSkills.map((skill) => (
+              <SkillCard
+                key={skill.id}
+                skill={skill}
+                onToggle={handleToggle}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+          <Pagination page={page} total={skills.length} onChange={setPage} />
+        </>
       )}
     </div>
   )
