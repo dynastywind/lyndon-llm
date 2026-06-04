@@ -143,6 +143,7 @@ function SkillCard({
 function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const zipRef = useRef<HTMLInputElement>(null)
   const folderRef = useRef<HTMLInputElement>(null)
@@ -180,6 +181,7 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
+    setMenuOpen(false)
     const items = e.dataTransfer.items
     if (!items) return
     // If multiple files dropped (folder), use files
@@ -190,7 +192,7 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
       if (f.name.endsWith('.zip')) {
         handleZipFile(f)
       } else {
-        setError('Drop a .zip file or use "Upload Folder"')
+        setError('Drop a .zip file or a folder')
       }
     }
   }
@@ -216,21 +218,33 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
             <p className="text-sm text-muted-foreground mb-3">
               Drop a <code className="bg-muted px-1 rounded">.zip</code> or drag a folder here
             </p>
-            <div className="flex items-center justify-center gap-3">
+            <div className="relative inline-flex flex-col items-center">
               <button
-                onClick={() => zipRef.current?.click()}
-                className="text-xs px-3 py-1.5 rounded border border-border bg-background hover:bg-muted transition-colors flex items-center gap-1.5"
-              >
-                <PackagePlus size={13} />
-                Upload ZIP
-              </button>
-              <button
-                onClick={() => folderRef.current?.click()}
-                className="text-xs px-3 py-1.5 rounded border border-border bg-background hover:bg-muted transition-colors flex items-center gap-1.5"
+                onClick={() => setMenuOpen((x) => !x)}
+                className="text-xs px-4 py-1.5 rounded border border-border bg-background hover:bg-muted transition-colors flex items-center gap-1.5"
               >
                 <UploadCloud size={13} />
-                Upload Folder
+                Upload Skill
+                <ChevronDown size={11} className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`} />
               </button>
+              {menuOpen && (
+                <div className="absolute top-full mt-1 z-10 w-36 rounded border border-border bg-card shadow-md overflow-hidden">
+                  <button
+                    onClick={() => { setMenuOpen(false); zipRef.current?.click() }}
+                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors"
+                  >
+                    <PackagePlus size={12} />
+                    ZIP file
+                  </button>
+                  <button
+                    onClick={() => { setMenuOpen(false); folderRef.current?.click() }}
+                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors border-t border-border"
+                  >
+                    <UploadCloud size={12} />
+                    Folder
+                  </button>
+                </div>
+              )}
             </div>
           </>
         )}
