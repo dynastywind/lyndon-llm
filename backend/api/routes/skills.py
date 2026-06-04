@@ -106,6 +106,10 @@ async def upload_skill(
 
     async with AsyncSessionLocal() as db:
         repo = SkillRepo(db)
+        # Replace any existing skill with the same name for this user
+        existing = await repo.get_skill_by_name(user.id, parsed.name)
+        if existing is not None:
+            await repo.delete_skill(existing.id)
         skill = await repo.create_skill(
             user_id=user.id,
             name=parsed.name,

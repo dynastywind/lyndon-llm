@@ -24,6 +24,14 @@ class SkillRepo:
         )
         return list(result.scalars().all())
 
+    async def get_skill_by_name(self, user_id: str, name: str) -> Skill | None:
+        result = await self._db.execute(
+            select(Skill)
+            .options(selectinload(Skill.tools))
+            .where(Skill.user_id == user_id, Skill.name == name)
+        )
+        return result.scalar_one_or_none()
+
     async def get_skill(self, skill_id: str) -> Skill | None:
         result = await self._db.execute(
             select(Skill).options(selectinload(Skill.tools)).where(Skill.id == skill_id)

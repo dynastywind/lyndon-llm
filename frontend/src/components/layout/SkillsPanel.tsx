@@ -1,16 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  ChevronDown,
-  ChevronRight,
-  Code2,
-  Loader2,
-  PackagePlus,
-  Puzzle,
-  Trash2,
-  UploadCloud,
-} from 'lucide-react'
+import * as Dialog from '@radix-ui/react-dialog'
+import { Check, Code2, Copy, Loader2, Puzzle, Trash2, UploadCloud, X } from 'lucide-react'
 import { deleteSkill, getSkills, toggleSkill, uploadSkill } from '@/api/client'
-import type { Skill } from '@/types'
+import type { Skill, SkillToolDef } from '@/types'
 
 // ── language badge colours ────────────────────────────────────────────────────
 
@@ -33,39 +25,164 @@ function LangBadge({ lang }: { lang: string }) {
   )
 }
 
+// ── SKILL.md reconstruction ───────────────────────────────────────────────────
+
+function schemaToParams(schema: Record<string, unknown>): string {
+  const props = (schema.properties as Record<string, Record<string, unknown>>) ?? {}
+  const required = (schema.required as string[]) ?? []
+  if (Object.keys(props).length === 0) return ''
+  const lines: string[] = ['    parameters:']
+  for (const [pname, pdef] of Object.entries(props)) {
+    lines.push(`      - name: ${pname}`)
+    lines.push(`        type: ${pdef.type ?? 'string'}`)
+    if (pdef.description) lines.push(`        description: ${pdef.description}`)
+    lines.push(`        required: ${required.includes(pname)}`)
+    if (pdef.default !== undefined) lines.push(`        default: ${pdef.default}`)
+  }
+  return lines.join('\n')
+}
+
+function langExt(lang: string): string {
+  const map: Record<string, string> = {
+    python: 'py', javascript: 'js', typescript: 'ts',
+    bash: 'sh', ruby: 'rb', go: 'go', rust: 'rs',
+  }
+  return map[lang.toLowerCase()] ?? lang
+}
+
+function skillToMarkdown(skill: Skill): string {
+  const lines: string[] = [
+    '---',
+    `name: ${skill.name}`,
+    `description: ${skill.description}`,
+    `version: "${skill.version}"`,
+  ]
+  if (skill.tools.length > 0) {
+    lines.push('tools:')
+    for (const t of skill.tools) {
+      lines.push(`  - name: ${t.tool_name}`)
+      lines.push(`    description: ${t.description || ''}`)
+      lines.push(`    language: ${t.language}`)
+      lines.push(`    script: ${t.tool_name}.${langExt(t.language)}`)
+      const params = schemaToParams(t.parameters_schema as Record<string, unknown>)
+      if (params) lines.push(params)
+    }
+  }
+  lines.push('---')
+  return lines.join('\n')
+}
+
+// ── SKILL.md modal ────────────────────────────────────────────────────────────
+
+function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+  const markdown = skillToMarkdown(skill)
+
+  const copy = () => {
+    navigator.clipboard.writeText(markdown).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    })
+  }
+
+  return (
+    <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/60" style={{ zIndex: 200 }} />
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg rounded-xl border border-border bg-card shadow-2xl focus:outline-none"
+          style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column', zIndex: 201 }}
+        >
+          <Dialog.Title className="sr-only">{skill.name} — SKILL.md</Dialog.Title>
+          {/* header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+            <div className="flex items-center gap-2">
+              <Puzzle size={14} className="text-muted-foreground" />
+              <span className="text-sm font-medium">{skill.name}</span>
+              <span className="text-[10px] font-mono text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">
+                v{skill.version}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={copy}
+                className="text-xs flex items-center gap-1.5 px-2 py-1 rounded border border-border hover:bg-muted transition-colors text-muted-foreground"
+              >
+                {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+              <Dialog.Close asChild>
+                <button className="text-muted-foreground hover:text-foreground transition-colors">
+                  <X size={16} />
+                </button>
+              </Dialog.Close>
+            </div>
+          </div>
+
+          {/* code body */}
+          <div className="overflow-auto flex-1 p-4">
+            <pre className="text-[12px] font-mono text-foreground/90 whitespace-pre leading-relaxed">
+              {markdown}
+            </pre>
+          </div>
+
+          {/* tools summary */}
+          {skill.tools.length > 0 && (
+            <div className="border-t border-border px-4 py-3 shrink-0">
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+                Tools
+              </p>
+              <div className="space-y-1.5">
+                {skill.tools.map((t) => (
+                  <div key={t.id} className="flex items-center gap-2">
+                    <Code2 size={12} className="text-muted-foreground shrink-0" />
+                    <span className="text-xs font-mono">{t.tool_name}</span>
+                    <LangBadge lang={t.language} />
+                    {t.description && (
+                      <span className="text-xs text-muted-foreground truncate">{t.description}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
 // ── skill card ────────────────────────────────────────────────────────────────
 
 function SkillCard({
   skill,
   onToggle,
   onDelete,
+  onViewMarkdown,
 }: {
   skill: Skill
   onToggle: (id: string, enabled: boolean) => void
   onDelete: (id: string) => void
+  onViewMarkdown: (skill: Skill) => void
 }) {
-  const [expanded, setExpanded] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   return (
     <div
       className={`rounded-lg border border-border bg-card transition-opacity ${skill.enabled ? '' : 'opacity-60'}`}
     >
-      {/* header row */}
       <div className="flex items-center gap-3 px-3 py-2.5">
-        <button
-          onClick={() => setExpanded((x) => !x)}
-          className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
-          aria-label={expanded ? 'Collapse' : 'Expand'}
-        >
-          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        </button>
-
         <Puzzle size={14} className="text-muted-foreground shrink-0" />
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium truncate">{skill.name}</span>
+            {/* Clicking name opens SKILL.md modal */}
+            <button
+              onClick={() => onViewMarkdown(skill)}
+              className="text-sm font-medium hover:underline underline-offset-2 text-left truncate"
+            >
+              {skill.name}
+            </button>
             <span className="text-[10px] font-mono text-muted-foreground/60 bg-muted px-1.5 py-0.5 rounded">
               v{skill.version}
             </span>
@@ -76,69 +193,59 @@ function SkillCard({
           <p className="text-xs text-muted-foreground truncate mt-0.5">{skill.description}</p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {/* enabled toggle */}
-          <label
-            className="relative inline-flex items-center cursor-pointer"
-            title={skill.enabled ? 'Disable' : 'Enable'}
-          >
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={skill.enabled}
-              onChange={(e) => onToggle(skill.id, e.target.checked)}
-            />
-            <div className="w-8 h-4 rounded-full bg-muted peer-checked:bg-green-500 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4" />
-          </label>
+        {/* tool language badges — always visible */}
+        {skill.tools.length > 0 && (
+          <div className="hidden sm:flex items-center gap-1 shrink-0">
+            {skill.tools.slice(0, 3).map((t: SkillToolDef) => (
+              <LangBadge key={t.id} lang={t.language} />
+            ))}
+            {skill.tools.length > 3 && (
+              <span className="text-[10px] text-muted-foreground">+{skill.tools.length - 3}</span>
+            )}
+          </div>
+        )}
 
-          {/* delete */}
-          {confirmDelete ? (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-destructive">Delete?</span>
-              <button
-                onClick={() => onDelete(skill.id)}
-                className="text-xs bg-destructive text-destructive-foreground px-2 py-0.5 rounded hover:opacity-80"
-              >
-                Yes
-              </button>
-              <button
-                onClick={() => setConfirmDelete(false)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                No
-              </button>
-            </div>
-          ) : (
+        {/* enabled toggle */}
+        <label
+          className="relative inline-flex items-center cursor-pointer shrink-0"
+          title={skill.enabled ? 'Disable' : 'Enable'}
+        >
+          <input
+            type="checkbox"
+            className="sr-only peer"
+            checked={skill.enabled}
+            onChange={(e) => onToggle(skill.id, e.target.checked)}
+          />
+          <div className="w-8 h-4 rounded-full bg-muted peer-checked:bg-green-500 transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4" />
+        </label>
+
+        {/* delete */}
+        {confirmDelete ? (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-xs text-destructive">Delete?</span>
             <button
-              onClick={() => setConfirmDelete(true)}
-              className="text-muted-foreground hover:text-destructive transition-colors"
-              aria-label="Delete skill"
+              onClick={() => onDelete(skill.id)}
+              className="text-xs bg-destructive text-destructive-foreground px-2 py-0.5 rounded hover:opacity-80"
             >
-              <Trash2 size={14} />
+              Yes
             </button>
-          )}
-        </div>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              No
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+            aria-label="Delete skill"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
-
-      {/* expanded tools list */}
-      {expanded && skill.tools.length > 0 && (
-        <div className="border-t border-border px-3 py-2 space-y-1.5">
-          {skill.tools.map((tool) => (
-            <div key={tool.id} className="flex items-start gap-2 py-1">
-              <Code2 size={13} className="text-muted-foreground shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-mono">{tool.tool_name}</span>
-                  <LangBadge lang={tool.language} />
-                </div>
-                {tool.description && (
-                  <p className="text-xs text-muted-foreground mt-0.5">{tool.description}</p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -148,7 +255,6 @@ function SkillCard({
 function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const zipRef = useRef<HTMLInputElement>(null)
   const folderRef = useRef<HTMLInputElement>(null)
@@ -186,10 +292,6 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
-    setMenuOpen(false)
-    const items = e.dataTransfer.items
-    if (!items) return
-    // If multiple files dropped (folder), use files
     if (e.dataTransfer.files.length > 1) {
       handleFolderFiles(e.dataTransfer.files)
     } else if (e.dataTransfer.files.length === 1) {
@@ -204,17 +306,18 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
 
   return (
     <div className="mb-6">
-      <div
-        onDragOver={(e) => {
-          e.preventDefault()
-          setDragging(true)
-        }}
+      {/* The entire zone is the button */}
+      <button
+        type="button"
+        disabled={uploading}
+        onClick={() => zipRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        className={`border-2 border-dashed rounded-lg px-6 py-8 text-center transition-colors ${
+        className={`w-full border-2 border-dashed rounded-lg px-6 py-8 text-center transition-colors cursor-pointer disabled:cursor-wait ${
           dragging
             ? 'border-primary bg-primary/5'
-            : 'border-border hover:border-muted-foreground/50'
+            : 'border-border hover:border-muted-foreground/50 hover:bg-muted/30'
         }`}
       >
         {uploading ? (
@@ -223,55 +326,19 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
             <span className="text-sm">Installing skill…</span>
           </div>
         ) : (
-          <>
-            <UploadCloud size={24} className="mx-auto text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground mb-3">
-              Drop a <code className="bg-muted px-1 rounded">.zip</code> or drag a folder here
+          <div className="flex flex-col items-center gap-2 pointer-events-none">
+            <UploadCloud size={24} className="text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              Click to upload a <code className="bg-muted px-1 rounded">.zip</code>
+              {' '}— or drag a folder here
             </p>
-            <div className="relative inline-flex flex-col items-center">
-              <button
-                onClick={() => setMenuOpen((x) => !x)}
-                className="text-xs px-4 py-1.5 rounded border border-border bg-background hover:bg-muted transition-colors flex items-center gap-1.5"
-              >
-                <UploadCloud size={13} />
-                Upload Skill
-                <ChevronDown
-                  size={11}
-                  className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`}
-                />
-              </button>
-              {menuOpen && (
-                <div className="absolute top-full mt-1 z-10 w-36 rounded border border-border bg-card shadow-md overflow-hidden">
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false)
-                      zipRef.current?.click()
-                    }}
-                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors"
-                  >
-                    <PackagePlus size={12} />
-                    ZIP file
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false)
-                      folderRef.current?.click()
-                    }}
-                    className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors border-t border-border"
-                  >
-                    <UploadCloud size={12} />
-                    Folder
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
+          </div>
         )}
-      </div>
+      </button>
 
+      {/* Folder upload via separate hidden input, triggered by drag-drop only */}
       {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
 
-      {/* hidden inputs */}
       <input
         ref={zipRef}
         type="file"
@@ -307,8 +374,8 @@ function EmptyState() {
       <Puzzle size={32} className="mx-auto mb-3 opacity-30" />
       <p className="text-sm font-medium mb-1">No skills installed</p>
       <p className="text-xs mb-3">
-        Upload a ZIP or folder containing a <code className="bg-muted px-1 rounded">SKILL.md</code>{' '}
-        manifest.
+        Upload a ZIP or folder containing a{' '}
+        <code className="bg-muted px-1 rounded">SKILL.md</code> manifest.
       </p>
       <details className="text-left max-w-sm mx-auto">
         <summary className="text-xs cursor-pointer hover:text-foreground select-none">
@@ -380,6 +447,7 @@ export function SkillsPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(0)
+  const [activeSkill, setActiveSkill] = useState<Skill | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -400,9 +468,10 @@ export function SkillsPanel() {
 
   const handleUploaded = (skill: Skill) => {
     setSkills((prev) => {
-      const exists = prev.findIndex((s) => s.id === skill.id)
-      const next = exists >= 0 ? prev.map((s) => (s.id === skill.id ? skill : s)) : [...prev, skill]
-      // Jump to the page containing the new/updated skill
+      // Match by name so a replaced skill lands on the same slot
+      const exists = prev.findIndex((s) => s.name === skill.name)
+      const next =
+        exists >= 0 ? prev.map((s) => (s.name === skill.name ? skill : s)) : [...prev, skill]
       const idx = next.findIndex((s) => s.id === skill.id)
       setPage(Math.floor(idx / PAGE_SIZE))
       return next
@@ -423,7 +492,6 @@ export function SkillsPanel() {
       await deleteSkill(id)
       setSkills((prev) => {
         const next = prev.filter((s) => s.id !== id)
-        // If the current page is now empty, step back
         const maxPage = Math.max(0, Math.ceil(next.length / PAGE_SIZE) - 1)
         setPage((p) => Math.min(p, maxPage))
         return next
@@ -456,12 +524,15 @@ export function SkillsPanel() {
                 skill={skill}
                 onToggle={handleToggle}
                 onDelete={handleDelete}
+                onViewMarkdown={setActiveSkill}
               />
             ))}
           </div>
           <Pagination page={page} total={skills.length} onChange={setPage} />
         </>
       )}
+
+      {activeSkill && <SkillMdModal skill={activeSkill} onClose={() => setActiveSkill(null)} />}
     </div>
   )
 }
