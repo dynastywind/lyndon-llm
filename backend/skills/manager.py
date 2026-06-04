@@ -61,6 +61,8 @@ def _inject_args(language: str, script: str, kwargs: dict) -> str:
 class SkillManager:
     def __init__(self) -> None:
         self._tool_meta: dict[str, dict[str, Any]] = {}
+        # skill_id → skill-level metadata (name, description, version, user_id, tools list)
+        self._skill_catalog: dict[str, dict[str, Any]] = {}
 
     async def reload_all(self) -> None:
         """Load all enabled skills for all users from DB and register their tools."""
@@ -89,6 +91,23 @@ class SkillManager:
                     self._register_skill(skill)
 
     def _register_skill(self, skill: Skill) -> None:
+        self._skill_catalog[skill.id] = {
+            "skill_id": skill.id,
+            "user_id": skill.user_id,
+            "name": skill.name,
+            "description": skill.description,
+            "version": skill.version,
+            "enabled": skill.enabled,
+            "installed_at": skill.created_at.isoformat(),
+            "tools": [
+                {
+                    "tool_name": t.tool_name,
+                    "description": t.description,
+                    "language": t.language,
+                }
+                for t in skill.tools
+            ],
+        }
         for tool in skill.tools:
             self._register_one_tool(skill, tool)
 
@@ -157,6 +176,7 @@ class SkillManager:
             self._tool_meta.pop(qname, None)
             for mode in _SKILL_MODES:
                 tool_registry.unregister_skill(mode, qname)
+        self._skill_catalog.pop(skill_id, None)
 
     def _clear_user_tools(self, user_id: str) -> None:
         to_remove = [qname for qname, meta in self._tool_meta.items() if meta.get("user_id") == user_id]
@@ -164,11 +184,18 @@ class SkillManager:
             self._tool_meta.pop(qname, None)
             for mode in _SKILL_MODES:
                 tool_registry.unregister_skill(mode, qname)
+        for skill_id in [sid for sid, meta in self._skill_catalog.items() if meta["user_id"] == user_id]:
+            self._skill_catalog.pop(skill_id, None)
 
     def _clear_all(self) -> None:
         for mode in _SKILL_MODES:
             tool_registry.clear_skills(mode)
         self._tool_meta.clear()
+        self._skill_catalog.clear()
+
+    def list_skills_for_user(self, user_id: str) -> list[dict[str, Any]]:
+        """Return cached skill metadata for a user (no DB call needed)."""
+        return [meta for meta in self._skill_catalog.values() if meta["user_id"] == user_id]
 
 
 skill_manager = SkillManager()

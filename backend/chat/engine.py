@@ -69,6 +69,8 @@ knowledge, historical facts, how-to explanations, coding help, or math.
 you need more detail than the retrieved context already provides.
 - **render_chart**: When the user asks for a chart, graph, or visualization. \
 Provide the complete dataset and series configuration.
+- **list_skills**: When the user asks what skills or custom tools they have \
+installed, wants to see their skills, or asks about available skill tools.
 
 ## Answering
 - When retrieved document context appears below, use it and cite sources \

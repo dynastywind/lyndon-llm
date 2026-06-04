@@ -15,7 +15,7 @@ from config.settings import settings
 
 RouteName = Literal["direct", "rag", "tools", "rag_and_tools", "plan"]
 
-ALL_CHAT_TOOLS = frozenset({"web_search", "rag_query", "render_chart", "run_code"})
+ALL_CHAT_TOOLS = frozenset({"web_search", "rag_query", "render_chart", "run_code", "list_skills"})
 
 # Greeting / short chit-chat with no other signals
 _GREETING_RE = re.compile(
@@ -88,6 +88,12 @@ _PLAN_RESEARCH_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Skills / installed capabilities query
+_SKILLS_RE = re.compile(
+    r"\b(skill|skills|installed\s+(tool|tools|plugin|plugins)|my\s+(tool|tools))\b",
+    re.IGNORECASE,
+)
+
 # Code-execution signals — any request to run / execute / test a snippet
 _LANGS = (
     r"python|javascript|js|typescript|ts|ruby|go|golang|rust|java|"
@@ -153,6 +159,8 @@ class HeuristicOrchestrator:
             tool_set.add("render_chart")
         if _CODE_EXEC_RE.search(text):
             tool_set.add("run_code")
+        if _SKILLS_RE.search(text):
+            tool_set.add("list_skills")
 
         # Allow on-demand KB search mid-turn when tools are active and KB exists
         if tool_set and has_kb_sources and not wants_rag:

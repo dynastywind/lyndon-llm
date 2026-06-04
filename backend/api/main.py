@@ -70,11 +70,11 @@ async def _migrate(conn) -> None:
 
 
 def _register_all_tools() -> None:
+    # Chat tools (read-only)
     from chat.tools.chart import RenderChartTool
+    from chat.tools.list_skills import ListSkillsTool
     from chat.tools.rag_query import RAGQueryTool
     from chat.tools.run_code import RunCodeTool
-
-    # Chat tools (read-only)
     from chat.tools.web_search import WebSearchTool
     from core.permissions.gate import Mode
     from core.tools.registry import tool_registry
@@ -83,6 +83,7 @@ def _register_all_tools() -> None:
     tool_registry.register(Mode.CHAT, RAGQueryTool)
     tool_registry.register(Mode.CHAT, RenderChartTool)
     tool_registry.register(Mode.CHAT, RunCodeTool)
+    tool_registry.register(Mode.CHAT, ListSkillsTool)
 
     # Cowork tools (read + write + exec)
     from cowork.tools.file_io import FileReadTool, FileWriteTool
@@ -93,6 +94,7 @@ def _register_all_tools() -> None:
     tool_registry.register(Mode.COWORK, FileWriteTool)
     tool_registry.register(Mode.COWORK, RAGQueryTool)
     tool_registry.register(Mode.COWORK, WebSearchTool)
+    tool_registry.register(Mode.COWORK, ListSkillsTool)
 
     # Code tools (same as cowork + git-aware)
     tool_registry.register(Mode.CODE, ShellTool)
