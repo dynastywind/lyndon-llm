@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, Code2, Copy, Loader2, Puzzle, Trash2, UploadCloud, X } from 'lucide-react'
+import { Check, ChevronDown, Code2, Copy, Loader2, PackagePlus, Puzzle, Trash2, UploadCloud, X } from 'lucide-react'
 import { deleteSkill, getSkills, toggleSkill, uploadSkill } from '@/api/client'
 import type { Skill, SkillToolDef } from '@/types'
 
@@ -255,6 +255,7 @@ function SkillCard({
 function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const zipRef = useRef<HTMLInputElement>(null)
   const folderRef = useRef<HTMLInputElement>(null)
@@ -305,38 +306,49 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
   }
 
   return (
-    <div className="mb-6">
-      {/* The entire zone is the button */}
-      <button
-        type="button"
-        disabled={uploading}
-        onClick={() => zipRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={onDrop}
-        className={`w-full border-2 border-dashed rounded-lg px-6 py-8 text-center transition-colors cursor-pointer disabled:cursor-wait ${
-          dragging
-            ? 'border-primary bg-primary/5'
-            : 'border-border hover:border-muted-foreground/50 hover:bg-muted/30'
-        }`}
-      >
-        {uploading ? (
-          <div className="flex flex-col items-center gap-2 text-muted-foreground">
-            <Loader2 size={24} className="animate-spin" />
-            <span className="text-sm">Installing skill…</span>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2 pointer-events-none">
-            <UploadCloud size={24} className="text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              Click to upload a <code className="bg-muted px-1 rounded">.zip</code>
-              {' '}— or drag a folder here
-            </p>
-          </div>
+    <div
+      className="mb-6"
+      onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={onDrop}
+    >
+      <div className="flex items-center gap-3">
+        {/* Compact dropdown button */}
+        <div className="relative">
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => !uploading && setMenuOpen((x) => !x)}
+            className="text-xs px-3 py-1.5 rounded border border-border bg-background hover:bg-muted transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-wait"
+          >
+            {uploading ? (
+              <><Loader2 size={13} className="animate-spin" /> Installing…</>
+            ) : (
+              <><UploadCloud size={13} /> Upload Skill <ChevronDown size={11} className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`} /></>
+            )}
+          </button>
+          {menuOpen && (
+            <div className="absolute top-full mt-1 z-10 w-36 rounded border border-border bg-card shadow-md overflow-hidden">
+              <button
+                onClick={() => { setMenuOpen(false); zipRef.current?.click() }}
+                className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors"
+              >
+                <PackagePlus size={12} /> ZIP file
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); folderRef.current?.click() }}
+                className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors border-t border-border"
+              >
+                <UploadCloud size={12} /> Folder
+              </button>
+            </div>
+          )}
+        </div>
+        {dragging && (
+          <span className="text-xs text-muted-foreground animate-pulse">Drop to install…</span>
         )}
-      </button>
+      </div>
 
-      {/* Folder upload via separate hidden input, triggered by drag-drop only */}
       {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
 
       <input
