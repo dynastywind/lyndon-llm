@@ -472,6 +472,22 @@ export async function deleteRagSource(source: string, deleteFile = true): Promis
   if (!res.ok) throw new Error(`Failed to delete source: ${res.statusText}`)
 }
 
+export async function fetchRagSourceContent(source: string, isPdf: boolean): Promise<string> {
+  const res = await fetch(`${BASE}/rag/sources/content?source=${encodeURIComponent(source)}`, {
+    headers: authHeader(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error((err as { detail?: string }).detail ?? res.statusText)
+  }
+  if (isPdf) {
+    const blob = await res.blob()
+    return URL.createObjectURL(blob)
+  }
+  const data = (await res.json()) as { content: string; ext: string }
+  return data.content
+}
+
 // ── Tool registry (MCP + internal) ───────────────────────────────────────────
 
 export async function getToolRegistry(): Promise<ToolRegistry> {

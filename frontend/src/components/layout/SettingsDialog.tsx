@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Eye, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import {
   checkRagSourceName,
   deleteAvatar,
@@ -15,6 +15,8 @@ import {
 } from '@/api/client'
 import { useAppStore } from '@/store'
 import { CODE_THEME_OPTIONS } from '@/config/codeThemes'
+import { FileViewerModal } from './FileViewerModal'
+import { PdfPageThumbnail } from './PdfPageThumbnail'
 import { SkillsPanel } from './SkillsPanel'
 import { ToolsRegistryPanel } from './ToolsRegistryPanel'
 
@@ -210,6 +212,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
   const [loadingSources, setLoadingSources] = useState(false)
   const [reindexing, setReindexing] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [viewingSrc, setViewingSrc] = useState<RagSource | null>(null)
   const [dragging, setDragging] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -301,6 +304,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
           ),
         )
         fetchSources(page, debouncedQuery)
+        setTimeout(() => setQueue((q) => q.filter((i) => i.id !== item.id)), 1500)
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'Upload failed'
         setQueue((q) =>
@@ -1422,6 +1426,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                             reindexing={reindexing === src.path}
                             deleting={deleting === src.path}
                             busy={reindexing !== null || deleting !== null}
+                            onView={() => setViewingSrc(src)}
                             onReindex={() => handleReindex(src)}
                             onDelete={() => handleDelete(src)}
                           />
@@ -1502,9 +1507,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     marginBottom: 26,
                   }}
                 >
-                  <span style={{ ...S.eyebrow, marginBottom: 14 }}>
-                    No. 05 — Skill Bundles
-                  </span>
+                  <span style={{ ...S.eyebrow, marginBottom: 14 }}>No. 05 — Skill Bundles</span>
                   <h2 style={S.kbTitle}>Skills</h2>
                 </div>
                 <SkillsPanel />
@@ -1814,6 +1817,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
           </div>
         </Dialog.Content>
       </Dialog.Portal>
+      <FileViewerModal src={viewingSrc} onClose={() => setViewingSrc(null)} />
     </Dialog.Root>
   )
 }
@@ -1974,6 +1978,7 @@ function KnowledgeRow({
   reindexing,
   deleting,
   busy,
+  onView,
   onReindex,
   onDelete,
 }: {
@@ -1981,6 +1986,7 @@ function KnowledgeRow({
   reindexing: boolean
   deleting: boolean
   busy: boolean
+  onView: () => void
   onReindex: () => void
   onDelete: () => void
 }) {
@@ -2020,19 +2026,24 @@ function KnowledgeRow({
           justifyContent: 'center',
           border: `1px solid ${hov ? 'var(--lv-rule-strong)' : 'var(--lv-rule)'}`,
           transition: 'border-color 0.15s',
+          overflow: 'hidden',
         }}
       >
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 10,
-            letterSpacing: '0.18em',
-            color: 'var(--lv-gold)',
-            textTransform: 'uppercase',
-          }}
-        >
-          {ext.slice(0, 4)}
-        </span>
+        {ext.toLowerCase() === 'pdf' ? (
+          <PdfPageThumbnail source={src.path} containerWidth={62} containerHeight={50} />
+        ) : (
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 10,
+              letterSpacing: '0.18em',
+              color: 'var(--lv-gold)',
+              textTransform: 'uppercase',
+            }}
+          >
+            {ext.slice(0, 4)}
+          </span>
+        )}
       </div>
 
       {/* Meta */}
@@ -2072,6 +2083,26 @@ function KnowledgeRow({
           flexShrink: 0,
         }}
       >
+        <button
+          onClick={onView}
+          title="View"
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: 'var(--lv-mute)',
+            padding: 4,
+            display: 'flex',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = 'var(--lv-gold)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'var(--lv-mute)'
+          }}
+        >
+          <Eye size={14} />
+        </button>
         <button
           onClick={onReindex}
           disabled={busy}

@@ -34,7 +34,8 @@ export default defineConfig({
       '/ws': { target: 'ws://localhost:8000', ws: true },
     },
     allowedHosts: [
-      "lyndon-llm.taild77c8f.ts.net"
+      "lyndon-llm.taild77c8f.ts.net",
+      "lyndons-mac-mini.taild77c8f.ts.net"
     ]
   },
 })

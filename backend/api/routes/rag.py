@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 
 from api.auth_deps import get_current_user
 from chat.rag.ingestion.pipeline import IngestPipeline, ingest_pipeline
@@ -98,6 +99,43 @@ async def check_source_name(
     dest = UPLOADS_DIR / user.id / name
     exists = dest.exists()
     return {"exists": exists, "path": str(dest) if exists else None}
+
+
+@router.get("/sources/content")
+async def get_source_content(
+    source: str = Query(..., description="Source path to read"),
+    user: User = Depends(get_current_user),
+):
+    """Return file content for the viewer.
+
+    PDFs are served as binary (FileResponse).
+    All other file types are returned as JSON ``{"content": str, "ext": str}``.
+
+    Ownership is verified via ChromaDB metadata rather than path inspection so
+    that files ingested from outside the uploads directory (e.g. via the chat
+    ingest tool) can still be viewed by the user who indexed them.
+    """
+    from db.vector.store import get_vector_store
+
+    vs = await get_vector_store(IngestPipeline.COLLECTION_NAME)
+    _ids, _docs, metas = await vs.list_all(limit=100_000)
+    user_sources = {meta.get("source", "") for meta in metas if meta.get("user_id") == user.id}
+    if source not in user_sources:
+        raise HTTPException(403, "Access denied")
+
+    p = Path(source)
+    if not p.exists():
+        raise HTTPException(404, "File not found on disk")
+
+    if p.suffix.lower() == ".pdf":
+        return FileResponse(path=str(p), media_type="application/pdf", filename=p.name)
+
+    try:
+        content = p.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(415, "File cannot be read as text") from exc
+
+    return {"content": content, "ext": p.suffix.lower()}
 
 
 @router.get("/sources")

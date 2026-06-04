@@ -6,126 +6,133 @@
 @layer base {
   :root {
     /* Shared layout (theme-invariant) */
-    --header-h: 72px;  /* height of both the sidebar wordmark bar and chat title bar */
+    --header-h: 72px; /* height of both the sidebar wordmark bar and chat title bar */
 
     /* Type families (theme-invariant) */
-    --font-sans:    'Inter', system-ui, -apple-system, sans-serif;
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
     --font-display: 'Playfair Display', Georgia, serif;
-    --font-mono:    ui-monospace, 'SF Mono', Menlo, monospace;
+    --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
 
     /* Motion (theme-invariant) */
-    --ease-snap:    cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-snap: cubic-bezier(0.2, 0.8, 0.2, 1);
 
     /* Tailwind radius (theme-invariant) */
-    --radius: 0px;  /* hard edges everywhere */
+    --radius: 0px; /* hard edges everywhere */
 
     /* ── Dark theme — default / fallback ─────────────────────────── */
 
     /* Surfaces */
-    --lv-bg:          #0a0a0a;
-    --lv-elev:        #131313;
-    --lv-card:        #181818;
-    --lv-card-elev:   #1f1f1f;
+    --lv-bg: #0a0a0a;
+    --lv-elev: #131313;
+    --lv-card: #181818;
+    --lv-card-elev: #1f1f1f;
 
     /* Ink */
-    --lv-ink:         #f4f1ea;
-    --lv-soft:        #b8b3a8;
-    --lv-mute:        #6e695f;
+    --lv-ink: #f4f1ea;
+    --lv-soft: #b8b3a8;
+    --lv-mute: #6e695f;
 
     /* Rules */
-    --lv-rule:        #232323;
+    --lv-rule: #232323;
     --lv-rule-strong: #3a3a3a;
 
     /* Accent */
-    --lv-gold:        #c8a86a;
-    --lv-gold-soft:   #b89656;
+    --lv-gold: #c8a86a;
+    --lv-gold-soft: #b89656;
 
     /* Wash (user message bubble tint) */
-    --lv-wash:        rgba(255, 255, 255, 0.04);
-    --lv-wash-soft:   rgba(255, 255, 255, 0.02);
+    --lv-wash: rgba(255, 255, 255, 0.04);
+    --lv-wash-soft: rgba(255, 255, 255, 0.02);
     /* RGB channels for composing wash at arbitrary opacities */
-    --lv-wash-rgb:    255, 255, 255;
+    --lv-wash-rgb: 255, 255, 255;
 
     /* Aliases used by auth dialogs */
-    --lv-surface:     var(--lv-elev);
-    --lv-border:      var(--lv-rule);
-    --lv-ink-muted:   var(--lv-mute);
+    --lv-surface: var(--lv-elev);
+    --lv-border: var(--lv-rule);
+    --lv-ink-muted: var(--lv-mute);
 
     /* ── Tailwind token bridge ─────────────────────────────────────── */
     /* All Tailwind color utilities stay working via these mappings.    */
-    --background:           0 0% 4%;          /* #0a0a0a */
-    --foreground:           40 15% 94%;       /* #f4f1ea */
-    --card:                 0 0% 9%;          /* #181818 */
-    --card-foreground:      40 15% 94%;
-    --primary:              38 45% 60%;       /* #c8a86a gold */
-    --primary-foreground:   0 0% 4%;
-    --secondary:            0 0% 7%;          /* #131313 elev */
+    --background: 0 0% 4%; /* #0a0a0a */
+    --foreground: 40 15% 94%; /* #f4f1ea */
+    --card: 0 0% 9%; /* #181818 */
+    --card-foreground: 40 15% 94%;
+    --primary: 38 45% 60%; /* #c8a86a gold */
+    --primary-foreground: 0 0% 4%;
+    --secondary: 0 0% 7%; /* #131313 elev */
     --secondary-foreground: 40 15% 94%;
-    --muted:                0 0% 7%;
-    --muted-foreground:     30 8% 44%;        /* #6e695f */
-    --accent:               0 0% 12%;         /* #1f1f1f */
-    --accent-foreground:    40 9% 70%;        /* #b8b3a8 */
-    --border:               0 0% 14%;         /* #232323 */
-    --input:                0 0% 7%;
-    --ring:                 38 45% 60%;
+    --muted: 0 0% 7%;
+    --muted-foreground: 30 8% 44%; /* #6e695f */
+    --accent: 0 0% 12%; /* #1f1f1f */
+    --accent-foreground: 40 9% 70%; /* #b8b3a8 */
+    --border: 0 0% 14%; /* #232323 */
+    --input: 0 0% 7%;
+    --ring: 38 45% 60%;
 
     /* destructive kept for delete confirmations */
-    --destructive:          0 62% 55%;
+    --destructive: 0 62% 55%;
     --destructive-foreground: 0 0% 98%;
-    --popover:              0 0% 9%;
-    --popover-foreground:   40 15% 94%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 40 15% 94%;
   }
 }
 
 /* ── Light theme overrides ────────────────────────────────────────────────── */
 html.light {
   /* Surfaces */
-  --lv-bg:          #f4f1ea;
-  --lv-elev:        #eae4d9;
-  --lv-card:        #e3ddd0;
-  --lv-card-elev:   #d9d2c3;
+  --lv-bg: #f4f1ea;
+  --lv-elev: #eae4d9;
+  --lv-card: #e3ddd0;
+  --lv-card-elev: #d9d2c3;
 
   /* Ink */
-  --lv-ink:         #1b1a16;
-  --lv-soft:        #56524a;
-  --lv-mute:        #928b7d;
+  --lv-ink: #1b1a16;
+  --lv-soft: #56524a;
+  --lv-mute: #928b7d;
 
   /* Rules */
-  --lv-rule:        #ddd6c7;
+  --lv-rule: #ddd6c7;
   --lv-rule-strong: #c0b8a5;
 
   /* Accent — darker gold for contrast on light bg */
-  --lv-gold:        #9a7a30;
-  --lv-gold-soft:   #856626;
+  --lv-gold: #9a7a30;
+  --lv-gold-soft: #856626;
 
   /* Wash — dark tint over paper (white-on-paper is invisible) */
-  --lv-wash:        rgba(40, 34, 18, 0.045);
-  --lv-wash-soft:   rgba(40, 34, 18, 0.022);
-  --lv-wash-rgb:    40, 34, 18;
+  --lv-wash: rgba(40, 34, 18, 0.045);
+  --lv-wash-soft: rgba(40, 34, 18, 0.022);
+  --lv-wash-rgb: 40, 34, 18;
 
   /* ── Tailwind token bridge (light) ──────────────────────────── */
-  --background:           42 35% 93%;       /* #f4f1ea */
-  --foreground:           45  8%  9%;       /* #1b1a16 */
-  --card:                 38 24% 85%;       /* #e3ddd0 */
-  --card-foreground:      45  8%  9%;
-  --primary:              38 53% 39%;       /* #9a7a30 */
-  --primary-foreground:   42 35% 93%;
-  --secondary:            40 27% 88%;       /* #eae4d9 */
-  --secondary-foreground: 45  8%  9%;
-  --muted:                40 27% 88%;
-  --muted-foreground:     38 11% 52%;       /* #928b7d */
-  --accent:               38 22% 80%;       /* #d9d2c3 */
-  --accent-foreground:    38  8% 31%;       /* #56524a */
-  --border:               38 22% 83%;       /* #ddd6c7 */
-  --input:                40 27% 88%;
-  --ring:                 38 53% 39%;
-  --popover:              38 24% 85%;
-  --popover-foreground:   45  8%  9%;
+  --background: 42 35% 93%; /* #f4f1ea */
+  --foreground: 45 8% 9%; /* #1b1a16 */
+  --card: 38 24% 85%; /* #e3ddd0 */
+  --card-foreground: 45 8% 9%;
+  --primary: 38 53% 39%; /* #9a7a30 */
+  --primary-foreground: 42 35% 93%;
+  --secondary: 40 27% 88%; /* #eae4d9 */
+  --secondary-foreground: 45 8% 9%;
+  --muted: 40 27% 88%;
+  --muted-foreground: 38 11% 52%; /* #928b7d */
+  --accent: 38 22% 80%; /* #d9d2c3 */
+  --accent-foreground: 38 8% 31%; /* #56524a */
+  --border: 38 22% 83%; /* #ddd6c7 */
+  --input: 40 27% 88%;
+  --ring: 38 53% 39%;
+  --popover: 38 24% 85%;
+  --popover-foreground: 45 8% 9%;
 }
 
 @layer base {
-  * { @apply border-border; box-sizing: border-box; }
-  html, body, #root { height: 100%; }
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
   body {
     background: var(--lv-bg);
     color: var(--lv-ink);
@@ -133,15 +140,26 @@ html.light {
     font-size: 14px;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
   }
-  ::selection { background: var(--lv-gold); color: var(--lv-bg); }
+  ::selection {
+    background: var(--lv-gold);
+    color: var(--lv-bg);
+  }
 
   /* Chat input overlay — textarea is transparent so the markdown layer shows through,
      but the native placeholder still needs a visible colour. */
-  .chat-input-transparent::placeholder { color: var(--lv-mute); opacity: 0.8; }
+  .chat-input-transparent::placeholder {
+    color: var(--lv-mute);
+    opacity: 0.8;
+  }
   /* Italic placeholder for the chat input */
-  .chat-input-placeholder::placeholder { font-style: italic; color: var(--lv-mute); }
+  .chat-input-placeholder::placeholder {
+    font-style: italic;
+    color: var(--lv-mute);
+  }
 }
 
 /* ── Typography helpers ─────────────────────────────────────────────────── */
@@ -153,7 +171,9 @@ html.light {
   color: var(--lv-mute);
   font-weight: 500;
 }
-.lv-eyebrow--gold { color: var(--lv-gold); }
+.lv-eyebrow--gold {
+  color: var(--lv-gold);
+}
 
 .lv-display {
   font-family: var(--font-display);
@@ -173,37 +193,67 @@ html.light {
 /* ── Animated asterisk keyframes (logo-asterisk-animated.svg) ───────────── */
 /* emit: spoke grows outward (stroke-dashoffset animates from full-len to 0) */
 @keyframes emit {
-  0%   { stroke-dashoffset: var(--len); opacity: var(--opmin); }
-  60%  { stroke-dashoffset: 0;          opacity: 1; }
-  100% { stroke-dashoffset: 0;          opacity: 1; }
+  0% {
+    stroke-dashoffset: var(--len);
+    opacity: var(--opmin);
+  }
+  60% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
 }
 /* flicker: subtle opacity pulse per-spoke */
 @keyframes flicker {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: var(--opmin); }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: var(--opmin);
+  }
 }
 /* core dot breathes */
 @keyframes core-breathe {
-  0%, 100% { r: 5.5; opacity: 1; }
-  50%       { r: 4;   opacity: 0.6; }
+  0%,
+  100% {
+    r: 5.5;
+    opacity: 1;
+  }
+  50% {
+    r: 4;
+    opacity: 0.6;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .lv-asterisk-animated .spoke,
-  .lv-asterisk-animated .core { animation: none !important; }
+  .lv-asterisk-animated .core {
+    animation: none !important;
+  }
 }
 
 /* ── Scrollbar ──────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--lv-rule-strong); }
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--lv-rule-strong);
+}
 
 /* ── Prose overrides ─────────────────────────────────────────────────────── */
 .prose {
-  --tw-prose-body:     var(--lv-soft);
+  --tw-prose-body: var(--lv-soft);
   --tw-prose-headings: var(--lv-ink);
-  --tw-prose-bold:     var(--lv-ink);
-  --tw-prose-links:    var(--lv-gold);
-  --tw-prose-code:     var(--lv-ink);
+  --tw-prose-bold: var(--lv-ink);
+  --tw-prose-links: var(--lv-gold);
+  --tw-prose-code: var(--lv-ink);
 }
 .prose code {
   font-family: var(--font-mono);
@@ -212,4 +262,8 @@ html.light {
   border-radius: 3px;
   font-size: 0.84em;
 }
-.prose pre { background: var(--lv-bg); border: 1px solid var(--lv-rule); border-radius: 0; }
+.prose pre {
+  background: var(--lv-bg);
+  border: 1px solid var(--lv-rule);
+  border-radius: 0;
+}

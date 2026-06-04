@@ -1689,9 +1689,7 @@ function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean
         </div>
 
         {/* Reasoning / CoT block */}
-        {msg.thinking && (
-          <ThinkingBlock content={msg.thinking} isLive={isLive && !msg.content} />
-        )}
+        {msg.thinking && <ThinkingBlock content={msg.thinking} isLive={isLive && !msg.content} />}
 
         {/* Tool calls */}
         {msg.toolCalls && msg.toolCalls.length > 0 && <ToolCallsSection calls={msg.toolCalls} />}
