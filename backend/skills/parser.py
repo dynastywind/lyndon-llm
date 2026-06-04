@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import io
 import zipfile
-from dataclasses import dataclass, field
 
 import yaml
 
@@ -34,7 +34,7 @@ def parse_skill_zip(zip_bytes: bytes) -> ParsedSkill:
         if skill_md_path is None:
             raise ValueError("No SKILL.md found in the zip archive")
 
-        skill_md_text = zf.read(skill_md_path).decode("utf-8")
+        skill_md_text = _decode(zf.read(skill_md_path))
         base_dir = skill_md_path.rsplit("/", 1)[0] + "/" if "/" in skill_md_path else ""
 
         def read_file(rel_path: str) -> bytes:
@@ -52,7 +52,7 @@ def parse_skill_folder(files: dict[str, bytes]) -> ParsedSkill:
     if skill_md_path is None:
         raise ValueError("No SKILL.md found in the uploaded files")
 
-    skill_md_text = files[skill_md_path].decode("utf-8")
+    skill_md_text = _decode(files[skill_md_path])
     base_dir = skill_md_path.rsplit("/", 1)[0] + "/" if "/" in skill_md_path else ""
 
     def read_file(rel_path: str) -> bytes:
@@ -120,8 +120,7 @@ def _parse_manifest(text: str, read_file) -> ParsedSkill:
         if not script_path:
             raise ValueError(f"SKILL.md: tools[{i}].script is required")
 
-        script_bytes = read_file(script_path)
-        script_content = script_bytes.decode("utf-8")
+        script_content = _decode(read_file(script_path))
 
         parameters_schema = _build_parameters_schema(params_raw)
         tools.append(
@@ -148,6 +147,14 @@ def _split_frontmatter(text: str) -> tuple[str | None, str]:
     yaml_block = text[3:end].strip()
     body = text[end + 4:].lstrip("\n")
     return yaml_block, body
+
+
+def _decode(data: bytes) -> str:
+    """Decode bytes to str, falling back to latin-1 if the content isn't valid UTF-8."""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("latin-1")
 
 
 def _build_parameters_schema(params_raw: list) -> dict:
