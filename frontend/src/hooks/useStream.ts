@@ -28,7 +28,13 @@ export function useStream() {
   } = useAppStore()
 
   const send = useCallback(
-    async (userMessage: string, attachments?: MessageAttachment[], skillId?: string) => {
+    async (
+      userMessage: string,
+      attachments?: MessageAttachment[],
+      skillId?: string,
+      displayContent?: string,
+      skillPrefix?: string,
+    ) => {
       // Lazily create a session on the very first message.
       let activeSessionId = sessionId
       if (!activeSessionId) {
@@ -59,7 +65,12 @@ export function useStream() {
       }
 
       // 1. Add user bubble with the original message only (prompt is invisible to the user)
-      addSessionMessage(activeSessionId, { role: 'user', content: userMessage, attachments })
+      addSessionMessage(activeSessionId, {
+        role: 'user',
+        content: displayContent ?? userMessage,
+        attachments,
+        skillPrefix,
+      })
       bumpScrollToBottom()
       startStreaming(activeSessionId)
 

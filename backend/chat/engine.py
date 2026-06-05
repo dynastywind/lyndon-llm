@@ -195,6 +195,7 @@ class ChatEngine:
         from core.permissions.gate import Mode
         from core.tools.registry import tool_registry
 
+        skill_pinned = False
         if skill_id:
             pinned = frozenset(
                 qname
@@ -204,6 +205,7 @@ class ChatEngine:
                 if qname.startswith(f"skill__{skill_id}__")
             )
             if pinned:
+                skill_pinned = True
                 decision = RouteDecision("tools", pinned, f"slash command skill={skill_id}")
 
         # Expand the generic skill sentinel emitted by the heuristic orchestrator.
@@ -323,6 +325,7 @@ class ChatEngine:
                     allowed_tools=decision.tools,
                     messages_override=llm_messages,
                     model=model,
+                    force_tool_call=skill_pinned,
                 ):
                     if event["type"] == "token":
                         if cot_parser:
@@ -455,6 +458,7 @@ class ChatEngine:
         allowed_tools: frozenset[str] | None = None,
         messages_override: list[dict] | None = None,
         model: str | None = None,
+        force_tool_call: bool = False,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Runs tool calls until the model produces a plain-text response or
@@ -485,10 +489,14 @@ class ChatEngine:
 
         try:
             for _round in range(MAX_TOOL_ROUNDS):
+                # On the first round of a forced slash-command skill invocation, require
+                # the model to call a tool so the skill script always executes.
+                tc = "required" if (force_tool_call and _round == 0) else "auto"
                 response_msg, call_usage = await llm_gateway.complete_with_tools_raw(
                     messages,
                     tool_schemas,
                     model=model,
+                    tool_choice=tc,
                 )
                 yield {"type": "_usage", "usage": call_usage}
 

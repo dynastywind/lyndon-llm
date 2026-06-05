@@ -50,6 +50,8 @@ export interface Message {
   attachments?: MessageAttachment[]
   /** Chain-of-thought reasoning text (ephemeral — not persisted to DB). */
   thinking?: string
+  /** Slash-skill prefix e.g. "/vocab-helper" — present on user messages sent via skill shortcut. */
+  skillPrefix?: string
 }
 
 // ── Chat Planner ──────────────────────────────────────────────────────────────

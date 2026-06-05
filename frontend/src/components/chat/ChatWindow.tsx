@@ -764,6 +764,7 @@ function renderInputOverlay(text: string, skillName?: string): React.ReactNode {
               color: 'rgb(167,139,250)',
               borderRadius: 3,
               padding: '0 2px',
+              margin: '0 -2px',
               fontWeight: 500,
             }}
           >
@@ -1696,17 +1697,48 @@ function MessageBubble({
             {msg.attachments && msg.attachments.length > 0 && (
               <MessageAttachments attachments={msg.attachments} />
             )}
-            {msg.content && (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  ...MD_COMPONENTS,
-                  p: ({ children }) => <p style={{ margin: 0, lineHeight: 1.6 }}>{children}</p>,
-                }}
-                className="prose prose-sm prose-invert"
-              >
-                {msg.content}
-              </ReactMarkdown>
+            {msg.content && msg.skillPrefix && msg.content.startsWith(msg.skillPrefix) ? (
+              <span style={{ display: 'inline' }}>
+                <span
+                  style={{
+                    background: 'rgba(139,92,246,0.15)',
+                    color: 'rgb(167,139,250)',
+                    borderRadius: 3,
+                    padding: '1px 4px',
+                    fontWeight: 500,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.9em',
+                    marginRight: 4,
+                  }}
+                >
+                  {msg.skillPrefix}
+                </span>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    ...MD_COMPONENTS,
+                    p: ({ children }) => (
+                      <p style={{ margin: 0, display: 'inline', lineHeight: 1.6 }}>{children}</p>
+                    ),
+                  }}
+                  className="prose prose-sm prose-invert"
+                >
+                  {msg.content.slice(msg.skillPrefix.length).trimStart()}
+                </ReactMarkdown>
+              </span>
+            ) : (
+              msg.content && (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    ...MD_COMPONENTS,
+                    p: ({ children }) => <p style={{ margin: 0, lineHeight: 1.6 }}>{children}</p>,
+                  }}
+                  className="prose prose-sm prose-invert"
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              )
             )}
           </div>
           {/* Hover action row */}
@@ -2142,10 +2174,14 @@ export function ChatWindow() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Strip the /skill-name prefix before sending; the skill_id drives routing
+    // Strip the /skill-name prefix before sending; the skill_id drives routing.
+    // Keep the full original input as displayContent so the bubble shows /skill-name highlighted.
     const rawMsg = activeSkill ? input.replace(/^\/\S+\s*/, '').trim() : input.trim()
     const msg = rawMsg
-    if ((!msg && attachments.length === 0) || isStreaming) return
+    const displayContent = activeSkill ? input.trim() : undefined
+    const skillPrefix = activeSkill ? `/${activeSkill.name}` : undefined
+    // Allow sending with no trailing content when a slash skill is active (the skill itself is the action)
+    if ((!msg && !activeSkill && attachments.length === 0) || isStreaming) return
 
     // Convert files → data URLs (needed for display AND the API payload).
     let msgAttachments: MessageAttachment[] | undefined
@@ -2167,7 +2203,7 @@ export function ChatWindow() {
     clearDraft(draftKey)
     setSlashOpen(false)
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
-    await send(msg, msgAttachments, activeSkill?.id)
+    await send(msg, msgAttachments, activeSkill?.id, displayContent, skillPrefix)
   }
 
   // ─── render ───────────────────────────────────────────────────────────────

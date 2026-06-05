@@ -194,6 +194,7 @@ class LLMGateway:
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        tool_choice: str = "auto",
     ) -> tuple[ChatCompletionMessage, LLMUsage]:
         """
         Non-streaming call that accepts already-serialised message dicts and
@@ -207,7 +208,7 @@ class LLMGateway:
             temperature=temperature if temperature is not None else settings.llm_temperature,
             max_tokens=max_tokens or settings.llm_max_tokens,
             tools=tools or None,  # type: ignore[arg-type]
-            tool_choice="auto",
+            tool_choice=tool_choice,
             stream=False,
         )
         logger.info("llm.complete_with_tools_raw  %.0f ms", (time.monotonic() - t0) * 1000)
