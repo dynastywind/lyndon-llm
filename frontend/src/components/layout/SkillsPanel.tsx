@@ -2,7 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Check, ChevronDown, Code2, Copy, Eye, EyeOff, Loader2, PackagePlus, Puzzle, Trash2, UploadCloud, X } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  Code2,
+  Copy,
+  Eye,
+  EyeOff,
+  Loader2,
+  PackagePlus,
+  Puzzle,
+  Trash2,
+  UploadCloud,
+  X,
+} from 'lucide-react'
 import { deleteSkill, getSkills, toggleSkill, uploadSkill } from '@/api/client'
 import type { Skill, SkillToolDef } from '@/types'
 
@@ -42,7 +55,11 @@ function splitSkillMd(raw: string): { front: string; body: string } {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
 
 // ── SKILL.md modal ────────────────────────────────────────────────────────────
@@ -77,7 +94,9 @@ function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void })
               <span className="text-base font-semibold leading-tight">{skill.name}</span>
               <div className="flex items-center gap-2 shrink-0">
                 {/* enabled indicator */}
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${skill.enabled ? 'bg-green-500/15 text-green-400' : 'bg-muted text-muted-foreground'}`}>
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${skill.enabled ? 'bg-green-500/15 text-green-400' : 'bg-muted text-muted-foreground'}`}
+                >
                   {skill.enabled ? 'Enabled' : 'Disabled'}
                 </span>
                 <Dialog.Close asChild>
@@ -101,16 +120,17 @@ function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void })
               <div>
                 <p className="text-muted-foreground mb-0.5">Tools</p>
                 <div className="flex flex-wrap gap-1">
-                  {skill.tools.length === 0
-                    ? <span>—</span>
-                    : skill.tools.map((t) => (
-                        <span key={t.id} className="flex items-center gap-1">
-                          <Code2 size={11} className="text-muted-foreground" />
-                          <span className="font-mono">{t.tool_name}</span>
-                          <LangBadge lang={t.language} />
-                        </span>
-                      ))
-                  }
+                  {skill.tools.length === 0 ? (
+                    <span>—</span>
+                  ) : (
+                    skill.tools.map((t) => (
+                      <span key={t.id} className="flex items-center gap-1">
+                        <Code2 size={11} className="text-muted-foreground" />
+                        <span className="font-mono">{t.tool_name}</span>
+                        <LangBadge lang={t.language} />
+                      </span>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -326,7 +346,10 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
   return (
     <div
       className="mb-6"
-      onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+      onDragOver={(e) => {
+        e.preventDefault()
+        setDragging(true)
+      }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
     >
@@ -340,21 +363,35 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
             className="text-xs px-3 py-1.5 rounded border border-border bg-background hover:bg-muted transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-wait"
           >
             {uploading ? (
-              <><Loader2 size={13} className="animate-spin" /> Installing…</>
+              <>
+                <Loader2 size={13} className="animate-spin" /> Installing…
+              </>
             ) : (
-              <><UploadCloud size={13} /> Upload Skill <ChevronDown size={11} className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`} /></>
+              <>
+                <UploadCloud size={13} /> Upload Skill{' '}
+                <ChevronDown
+                  size={11}
+                  className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`}
+                />
+              </>
             )}
           </button>
           {menuOpen && (
             <div className="absolute top-full mt-1 z-10 w-36 rounded border border-border bg-card shadow-md overflow-hidden">
               <button
-                onClick={() => { setMenuOpen(false); zipRef.current?.click() }}
+                onClick={() => {
+                  setMenuOpen(false)
+                  zipRef.current?.click()
+                }}
                 className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors"
               >
                 <PackagePlus size={12} /> ZIP file
               </button>
               <button
-                onClick={() => { setMenuOpen(false); folderRef.current?.click() }}
+                onClick={() => {
+                  setMenuOpen(false)
+                  folderRef.current?.click()
+                }}
                 className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors border-t border-border"
               >
                 <UploadCloud size={12} /> Folder
@@ -404,8 +441,8 @@ function EmptyState() {
       <Puzzle size={32} className="mx-auto mb-3 opacity-30" />
       <p className="text-sm font-medium mb-1">No skills installed</p>
       <p className="text-xs mb-3">
-        Upload a ZIP or folder containing a{' '}
-        <code className="bg-muted px-1 rounded">SKILL.md</code> manifest.
+        Upload a ZIP or folder containing a <code className="bg-muted px-1 rounded">SKILL.md</code>{' '}
+        manifest.
       </p>
       <details className="text-left max-w-sm mx-auto">
         <summary className="text-xs cursor-pointer hover:text-foreground select-none">

@@ -56,6 +56,7 @@ import { useStream } from '@/hooks/useStream'
 import { getChatMessages, getModels } from '@/api/client'
 import type {
   Message,
+  Skill,
   ToolCallRecord,
   ChartSpec,
   ChartSeries,
@@ -563,7 +564,13 @@ function toolLabel(call: ToolCallRecord): string {
   }
 }
 
-function ToolCallRow({ call, skillNames = {} }: { call: ToolCallRecord; skillNames?: Record<string, string> }) {
+function ToolCallRow({
+  call,
+  skillNames = {},
+}: {
+  call: ToolCallRecord
+  skillNames?: Record<string, string>
+}) {
   const isRunning = call.status === 'running'
   const isError = call.status === 'error'
   const skillInfo = parseSkillName(call.name)
@@ -572,11 +579,7 @@ function ToolCallRow({ call, skillNames = {} }: { call: ToolCallRecord; skillNam
 
   // Skill tools use a purple/violet accent; regular tools use the default gold/mute
   const runningBg = isSkill ? 'rgba(139,92,246,0.07)' : 'rgba(200,168,106,0.05)'
-  const color = isRunning
-    ? 'var(--lv-ink)'
-    : isError
-      ? 'hsl(var(--destructive))'
-      : 'var(--lv-mute)'
+  const color = isRunning ? 'var(--lv-ink)' : isError ? 'hsl(var(--destructive))' : 'var(--lv-mute)'
 
   return (
     <div
@@ -631,7 +634,13 @@ function ToolCallRow({ call, skillNames = {} }: { call: ToolCallRecord; skillNam
 
 // ─── ToolCallsSection ─────────────────────────────────────────────────────────
 
-function ToolCallsSection({ calls, skillNames = {} }: { calls: ToolCallRecord[]; skillNames?: Record<string, string> }) {
+function ToolCallsSection({
+  calls,
+  skillNames = {},
+}: {
+  calls: ToolCallRecord[]
+  skillNames?: Record<string, string>
+}) {
   if (!calls.length) return null
   return (
     <div
@@ -726,8 +735,7 @@ function renderLineContent(line: string, keyPrefix: string): React.ReactNode {
  */
 function renderInputOverlay(text: string, skillName?: string): React.ReactNode {
   // If the input starts with a recognised skill slug, highlight it
-  const slashPrefix =
-    skillName && text.startsWith(`/${skillName}`) ? `/${skillName}` : null
+  const slashPrefix = skillName && text.startsWith(`/${skillName}`) ? `/${skillName}` : null
 
   const lines = text.split('\n')
   return lines.map((line, i) => {
@@ -1610,7 +1618,15 @@ function ThinkingBlock({ content, isLive }: { content: string; isLive: boolean }
 
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
-function MessageBubble({ msg, isLive = false, skillNames = {} }: { msg: Message; isLive?: boolean; skillNames?: Record<string, string> }) {
+function MessageBubble({
+  msg,
+  isLive = false,
+  skillNames = {},
+}: {
+  msg: Message
+  isLive?: boolean
+  skillNames?: Record<string, string>
+}) {
   const [hover, setHover] = useState(false)
   const isUser = msg.role === 'user'
   const hasCharts = (msg.charts?.length ?? 0) > 0 || msg.content.includes('```chart')
@@ -1763,7 +1779,9 @@ function MessageBubble({ msg, isLive = false, skillNames = {} }: { msg: Message;
         {msg.thinking && <ThinkingBlock content={msg.thinking} isLive={isLive && !msg.content} />}
 
         {/* Tool calls */}
-        {msg.toolCalls && msg.toolCalls.length > 0 && <ToolCallsSection calls={msg.toolCalls} skillNames={skillNames} />}
+        {msg.toolCalls && msg.toolCalls.length > 0 && (
+          <ToolCallsSection calls={msg.toolCalls} skillNames={skillNames} />
+        )}
 
         {/* Charts */}
         {msg.charts?.map((spec, i) => (
@@ -1892,7 +1910,7 @@ export function ChatWindow() {
   const [input, setInput] = useState(() => drafts[draftKey] ?? '')
 
   // ── Slash-command skill picker ────────────────────────────────────────
-  const [installedSkills, setInstalledSkills] = useState<import('@/types').Skill[]>([])
+  const [installedSkills, setInstalledSkills] = useState<Skill[]>([])
   // id → display name map used by ToolCallRow to show the skill name in tool call rows
   const skillNameMap = useMemo(
     () => Object.fromEntries(installedSkills.map((s) => [s.id, s.name])),
@@ -1904,7 +1922,9 @@ export function ChatWindow() {
 
   useEffect(() => {
     import('@/api/client').then(({ getSkills }) =>
-      getSkills().then(setInstalledSkills).catch(() => {}),
+      getSkills()
+        .then(setInstalledSkills)
+        .catch(() => {}),
     )
   }, [])
 
@@ -1917,12 +1937,10 @@ export function ChatWindow() {
 
   const filteredSkills = useMemo(() => {
     if (!slashFilter && !slashOpen) return installedSkills
-    return installedSkills.filter((s) =>
-      s.name.toLowerCase().includes(slashFilter.toLowerCase()),
-    )
+    return installedSkills.filter((s) => s.name.toLowerCase().includes(slashFilter.toLowerCase()))
   }, [installedSkills, slashFilter, slashOpen])
 
-  const selectSlashSkill = (skill: import('@/types').Skill) => {
+  const selectSlashSkill = (skill: Skill) => {
     const body = input.startsWith('/') ? input.replace(/^\/\S*\s?/, '') : input
     const next = `/${skill.name} ${body}`
     setInput(next)
@@ -2125,9 +2143,7 @@ export function ChatWindow() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     // Strip the /skill-name prefix before sending; the skill_id drives routing
-    const rawMsg = activeSkill
-      ? input.replace(/^\/\S+\s*/, '').trim()
-      : input.trim()
+    const rawMsg = activeSkill ? input.replace(/^\/\S+\s*/, '').trim() : input.trim()
     const msg = rawMsg
     if ((!msg && attachments.length === 0) || isStreaming) return
 
@@ -2401,14 +2417,18 @@ export function ChatWindow() {
                         <button
                           key={skill.id}
                           type="button"
-                          onMouseDown={(e) => { e.preventDefault(); selectSlashSkill(skill) }}
+                          onMouseDown={(e) => {
+                            e.preventDefault()
+                            selectSlashSkill(skill)
+                          }}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
                             gap: 8,
                             width: '100%',
                             padding: '8px 12px',
-                            background: idx === slashIndex ? 'rgba(139,92,246,0.12)' : 'transparent',
+                            background:
+                              idx === slashIndex ? 'rgba(139,92,246,0.12)' : 'transparent',
                             border: 'none',
                             cursor: 'pointer',
                             textAlign: 'left',
@@ -2421,7 +2441,16 @@ export function ChatWindow() {
                           <span style={{ fontSize: 13, color: 'var(--lv-ink)', fontWeight: 500 }}>
                             /{skill.name}
                           </span>
-                          <span style={{ fontSize: 11, color: 'var(--lv-mute)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: 'var(--lv-mute)',
+                              flex: 1,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
                             {skill.description}
                           </span>
                         </button>

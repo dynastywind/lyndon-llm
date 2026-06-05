@@ -97,6 +97,7 @@ export function usePlanExecution() {
     stopStreaming,
     bumpScrollToBottom,
     bumpSessionVersion,
+    clearChatPlan,
   ])
 
   const cancel = useCallback(async () => {

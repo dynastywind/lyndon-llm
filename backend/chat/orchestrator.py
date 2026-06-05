@@ -92,9 +92,19 @@ _PLAN_RESEARCH_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Skills / installed capabilities query
+# Skills meta-query — user wants to LIST / inspect installed skills
+_SKILLS_LIST_RE = re.compile(
+    r"\b("
+    r"what\s+skills?|list\s+(my\s+)?skills?|show\s+(me\s+)?(my\s+)?skills?|"
+    r"do\s+i\s+have\s+(any\s+)?skills?|available\s+skills?|"
+    r"what\s+tools?\s+do\s+(i|you)\s+have|installed\s+(skill|skills|tool|tools|plugin|plugins)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Skill invocation — user wants to USE a skill tool
 _SKILLS_RE = re.compile(
-    r"\b(skill|skills|installed\s+(tool|tools|plugin|plugins)|my\s+(tool|tools))\b",
+    r"\b(skill|skills|my\s+(tool|tools))\b",
     re.IGNORECASE,
 )
 
@@ -163,7 +173,9 @@ class HeuristicOrchestrator:
             tool_set.add("render_chart")
         if _CODE_EXEC_RE.search(text):
             tool_set.add("run_code")
-        if _SKILLS_RE.search(text):
+        if _SKILLS_LIST_RE.search(text):
+            tool_set.add("list_skills")
+        elif _SKILLS_RE.search(text):
             tool_set.add(SKILL_SIGNAL)
 
         # Allow on-demand KB search mid-turn when tools are active and KB exists
