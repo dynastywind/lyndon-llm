@@ -29,6 +29,8 @@ from uuid import uuid4
 
 from chat.memory.manager import MemoryManager
 from chat.orchestrator import (
+    RouteDecision,
+    SKILL_SIGNAL,
     get_orchestrator,
     kb_has_sources,
     legacy_route_decision,
@@ -183,6 +185,17 @@ class ChatEngine:
             )
         else:
             decision = legacy_route_decision()
+
+        # Expand the skill sentinel into the real registered skill tool names.
+        # The orchestrator emits "__skill__" when it detects a skill invocation;
+        # only here do we know which skill tools are actually registered.
+        from core.permissions.gate import Mode
+        from core.tools.registry import tool_registry
+
+        if SKILL_SIGNAL in decision.tools:
+            skill_names = frozenset(tool_registry._skill_registry[Mode.CHAT].keys())
+            expanded = (decision.tools - {SKILL_SIGNAL}) | skill_names
+            decision = RouteDecision(decision.route, expanded, decision.reason)
 
         timer.mark("route_ms")
         logger.info(

@@ -15,7 +15,11 @@ from config.settings import settings
 
 RouteName = Literal["direct", "rag", "tools", "rag_and_tools", "plan"]
 
-ALL_CHAT_TOOLS = frozenset({"web_search", "rag_query", "render_chart", "run_code", "list_skills"})
+# Sentinel added to tool_set when the user explicitly invokes a skill.
+# The engine expands it to the actual registered skill tool names at request time.
+SKILL_SIGNAL = "__skill__"
+
+ALL_CHAT_TOOLS = frozenset({"web_search", "rag_query", "render_chart", "run_code", SKILL_SIGNAL})
 
 # Greeting / short chit-chat with no other signals
 _GREETING_RE = re.compile(
@@ -160,7 +164,7 @@ class HeuristicOrchestrator:
         if _CODE_EXEC_RE.search(text):
             tool_set.add("run_code")
         if _SKILLS_RE.search(text):
-            tool_set.add("list_skills")
+            tool_set.add(SKILL_SIGNAL)
 
         # Allow on-demand KB search mid-turn when tools are active and KB exists
         if tool_set and has_kb_sources and not wants_rag:
