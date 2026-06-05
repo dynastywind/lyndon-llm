@@ -54,6 +54,10 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String(16), nullable=False)  # user|assistant|tool
     content: Mapped[str] = mapped_column(Text, nullable=False)
     tool_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # JSON array of {id, name, args, status, preview} — persisted after the agentic loop.
+    tool_calls_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # "/skill-name" prefix on user messages sent via slash-command picker.
+    skill_prefix: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # JSON-encoded list of {name, type, data} attachment dicts (base64 payload).
     # Null for messages that carry no attachments.
     attachments_json: Mapped[str | None] = mapped_column(Text, nullable=True)

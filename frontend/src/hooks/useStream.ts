@@ -222,6 +222,7 @@ export function useStream() {
           appliedSessionPrompt,
           selectedModel ?? undefined,
           skillId,
+          skillPrefix,
         )
       } finally {
         stopStreaming(activeSessionId)

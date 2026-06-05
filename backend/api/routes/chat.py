@@ -36,6 +36,7 @@ class ChatRequest(BaseModel):
     )
     model: str | None = None  # override the default LLM model for this request
     skill_id: str | None = None  # slash-command: force routing to this skill's tools only
+    skill_prefix: str | None = None  # "/skill-name" prefix to persist with user message
 
 
 class IngestRequest(BaseModel):
@@ -83,6 +84,7 @@ async def chat(
             session_prompt=body.session_prompt or None,
             model=body.model or None,
             skill_id=body.skill_id or None,
+            skill_prefix=body.skill_prefix or None,
         ):
             evt_type = event["type"]
             payload = {k: v for k, v in event.items() if k != "type"}
@@ -268,6 +270,8 @@ async def get_all_session_messages(
                 "role": m.role,
                 "content": m.content,
                 "tool_name": m.tool_name,
+                "tool_calls": repo._tool_calls(m),
+                "skill_prefix": m.skill_prefix,
                 "created_at": _iso(m.created_at),
                 "attachments": repo._attachments(m),
             }
@@ -299,6 +303,8 @@ async def get_session_messages(
                 "role": m.role,
                 "content": m.content,
                 "tool_name": m.tool_name,
+                "tool_calls": repo._tool_calls(m),
+                "skill_prefix": m.skill_prefix,
                 "created_at": _iso(m.created_at),
                 "attachments": repo._attachments(m),
             }

@@ -1,5 +1,6 @@
 import type {
   Plan,
+  StepResult,
   FileDiff,
   ReviewResult,
   TestResult,
@@ -222,6 +223,7 @@ export async function streamChat(
   sessionPrompt?: string,
   model?: string,
   skillId?: string,
+  skillPrefix?: string,
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/`, {
     method: 'POST',
@@ -233,6 +235,7 @@ export async function streamChat(
       ...(sessionPrompt ? { session_prompt: sessionPrompt } : {}),
       ...(model ? { model } : {}),
       ...(skillId ? { skill_id: skillId } : {}),
+      ...(skillPrefix ? { skill_prefix: skillPrefix } : {}),
     }),
   })
   if (!res.ok) throw new Error(`Chat error: ${res.statusText}`)
@@ -575,7 +578,10 @@ export async function createPlan(goal: string, sessionId: string): Promise<Plan>
   return res.json()
 }
 
-export async function executePlan(planId: string, sessionId: string) {
+export async function executePlan(
+  planId: string,
+  sessionId: string,
+): Promise<{ results: StepResult[] }> {
   const res = await fetch(`${BASE}/cowork/execute`, {
     method: 'POST',
     headers: headers(sessionId, 'cowork'),

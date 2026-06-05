@@ -81,6 +81,13 @@ export type ChatPlanStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'sk
 export type RiskLevel = 'low' | 'medium' | 'high'
 export type StepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
 
+export interface StepResult {
+  step_id: string
+  status: StepStatus
+  output: string | null
+  error: string | null
+}
+
 export interface PlanStep {
   step_id: string
   order: number
@@ -155,6 +162,8 @@ export interface ChatSessionMessage {
   role: 'user' | 'assistant' | 'tool'
   content: string
   tool_name: string | null
+  tool_calls: ToolCallRecord[]
+  skill_prefix: string | null
   created_at: string
   /** Raw attachment payloads as stored in the DB (base64 data, no prefix). */
   attachments: Array<{ name: string; type: string; data: string }>

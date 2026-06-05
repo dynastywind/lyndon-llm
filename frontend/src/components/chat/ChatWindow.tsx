@@ -578,33 +578,10 @@ function ToolCallRow({
   const isSkill = skillInfo !== null
   const skillDisplayName = skillInfo ? (skillNames[skillInfo.skillId] ?? skillInfo.toolName) : null
 
-  // Prompt-based skill activation: static pill, no running indicator
-  if (isActive && isSkill) {
-    return (
-      <div
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 4,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          color: 'rgb(167,139,250)',
-          background: 'rgba(139,92,246,0.10)',
-          border: '1px solid rgba(139,92,246,0.25)',
-          borderRadius: 4,
-          padding: '2px 7px 2px 5px',
-          userSelect: 'none',
-        }}
-      >
-        <Puzzle size={9} />
-        {skillDisplayName}
-      </div>
-    )
-  }
-
   // Skill tools use a purple/violet accent; regular tools use the default gold/mute
   const runningBg = isSkill ? 'rgba(139,92,246,0.07)' : 'rgba(200,168,106,0.05)'
-  const color = isRunning ? 'var(--lv-ink)' : isError ? 'hsl(var(--destructive))' : 'var(--lv-mute)'
+  const color =
+    isRunning || isActive ? 'var(--lv-ink)' : isError ? 'hsl(var(--destructive))' : 'var(--lv-mute)'
 
   return (
     <div
@@ -1912,6 +1889,8 @@ function toStoreMessage(m: ChatSessionMessage): Message {
     content: m.content,
     timestamp: new Date(m.created_at),
     toolName: m.tool_name ?? undefined,
+    toolCalls: m.tool_calls?.length ? m.tool_calls : undefined,
+    skillPrefix: m.skill_prefix ?? undefined,
     // Reconstruct full data URLs from the stored {name, type, data} payloads.
     attachments: m.attachments?.length
       ? m.attachments.map((a) => ({

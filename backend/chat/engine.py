@@ -146,6 +146,7 @@ class ChatEngine:
         session_prompt: str | None = None,
         model: str | None = None,
         skill_id: str | None = None,
+        skill_prefix: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         with _langfuse_session_ctx(self.session.session_id):
             async for event in self._stream_response_inner(
@@ -155,6 +156,7 @@ class ChatEngine:
                 session_prompt=session_prompt,
                 model=model,
                 skill_id=skill_id,
+                skill_prefix=skill_prefix,
             ):
                 yield event
 
@@ -166,6 +168,7 @@ class ChatEngine:
         session_prompt: str | None = None,
         model: str | None = None,
         skill_id: str | None = None,
+        skill_prefix: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         timer = _Timer()
 
@@ -188,6 +191,7 @@ class ChatEngine:
                 "user",
                 user_message,
                 attachments=attachments or None,
+                skill_prefix=skill_prefix,
             )
 
         # 1. Route: direct | rag | tools | rag_and_tools
@@ -300,6 +304,18 @@ class ChatEngine:
         first_token = False
         total_usage = LLMUsage()
         cot_parser = _ThinkingStreamParser() if settings.cot_enabled else None
+        # Accumulate tool call events to persist alongside the assistant message.
+        # Each entry: {id, name, args, status, preview}
+        collected_tool_calls: list[dict] = []
+        # Prompt-based skill activation (no runnable tools) is stored as a synthetic entry.
+        if skill_prompt_body and skill_id:
+            collected_tool_calls.append({
+                "id": f"skill_activated_{skill_id}",
+                "name": f"skill__{skill_id}__[prompt]",
+                "args": {},
+                "status": "active",
+                "preview": None,
+            })
 
         if decision.needs_tools:
             # Fast path: when web_search is the only tool needed, skip the
@@ -343,6 +359,7 @@ class ChatEngine:
                         total_usage += event["usage"]
                         continue  # internal event — do not forward to client
                     else:
+                        _collect_tool_event(collected_tool_calls, event)
                         yield event
             else:
                 async for event in self._agentic_loop(
@@ -377,6 +394,7 @@ class ChatEngine:
                         total_usage += event["usage"]
                         continue  # internal event — do not forward to client
                     else:
+                        _collect_tool_event(collected_tool_calls, event)
                         yield event
         else:
             async for item in llm_gateway.stream_from_raw(llm_messages, model=model):
@@ -434,7 +452,12 @@ class ChatEngine:
             from db.repos.chat import ChatRepo
 
             _repo = ChatRepo(self._db)
-            await _repo.add_message(self.session.session_id, "assistant", full_response)
+            await _repo.add_message(
+                self.session.session_id,
+                "assistant",
+                full_response,
+                tool_calls=collected_tool_calls or None,
+            )
             await _repo.maybe_set_title(self.session.session_id, user_message)
 
         await event_bus.emit(
@@ -874,6 +897,24 @@ def _extract_chart_spec(tool_name: str, result_text: str) -> dict | None:
 def _chart_spec_to_markdown(spec: dict) -> str:
     """Embed a chart spec in assistant content so it persists in chat history."""
     return "\n\n```chart\n" + json.dumps(spec, ensure_ascii=False) + "\n```\n\n"
+
+
+def _collect_tool_event(collected: list[dict], event: dict) -> None:
+    """Accumulate tool_start / tool_result events into a list for DB persistence."""
+    if event["type"] == "tool_start":
+        collected.append({
+            "id": event["id"],
+            "name": event["name"],
+            "args": event.get("args", {}),
+            "status": "running",
+            "preview": None,
+        })
+    elif event["type"] == "tool_result":
+        for entry in collected:
+            if entry["id"] == event["id"]:
+                entry["status"] = "done" if event.get("success") else "error"
+                entry["preview"] = event.get("preview")
+                break
 
 
 def _inject_attachments(messages: list[dict], attachments: list[dict]) -> list[dict]:

@@ -215,6 +215,8 @@ class ChatRepo:
         content: str,
         tool_name: str | None = None,
         attachments: list[dict] | None = None,
+        tool_calls: list[dict] | None = None,
+        skill_prefix: str | None = None,
     ) -> ChatMessage:
         """
         Persist a message.  `attachments` is a list of
@@ -227,11 +229,23 @@ class ChatRepo:
             content=content,
             tool_name=tool_name,
             attachments_json=json.dumps(attachments) if attachments else None,
+            tool_calls_json=json.dumps(tool_calls) if tool_calls else None,
+            skill_prefix=skill_prefix,
         )
         self._db.add(row)
         await self._db.commit()
         await self._db.refresh(row)
         return row
+
+    @staticmethod
+    def _tool_calls(msg: ChatMessage) -> list[dict]:
+        """Decode the JSON tool calls list, returning [] when absent."""
+        if not msg.tool_calls_json:
+            return []
+        try:
+            return json.loads(msg.tool_calls_json)
+        except (ValueError, TypeError):
+            return []
 
     @staticmethod
     def _attachments(msg: ChatMessage) -> list[dict]:

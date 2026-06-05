@@ -63,6 +63,9 @@ async def _migrate(conn) -> None:
         "ALTER TABLE users ADD COLUMN avatar BLOB",
         # v8 — store raw SKILL.md text so the viewer shows the full file
         "ALTER TABLE skills ADD COLUMN skill_md TEXT NOT NULL DEFAULT ''",
+        # v9 — persist tool calls and skill prefix with each chat message
+        "ALTER TABLE chat_messages ADD COLUMN tool_calls_json TEXT",
+        "ALTER TABLE chat_messages ADD COLUMN skill_prefix TEXT",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore
@@ -87,9 +90,11 @@ def _register_all_tools() -> None:
 
     # Cowork tools (read + write + exec)
     from cowork.tools.file_io import FileReadTool, FileWriteTool
+    from cowork.tools.mac_control import MacControlTool
     from cowork.tools.shell import ShellTool
 
     tool_registry.register(Mode.COWORK, ShellTool)
+    tool_registry.register(Mode.COWORK, MacControlTool)
     tool_registry.register(Mode.COWORK, FileReadTool)
     tool_registry.register(Mode.COWORK, FileWriteTool)
     tool_registry.register(Mode.COWORK, RAGQueryTool)
@@ -98,6 +103,7 @@ def _register_all_tools() -> None:
 
     # Code tools (same as cowork + git-aware)
     tool_registry.register(Mode.CODE, ShellTool)
+    tool_registry.register(Mode.CODE, MacControlTool)
     tool_registry.register(Mode.CODE, FileReadTool)
     tool_registry.register(Mode.CODE, FileWriteTool)
 
