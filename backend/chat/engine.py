@@ -281,11 +281,17 @@ class ChatEngine:
             # directly, inject results, then do a single streaming call.
             # This cuts first-token latency roughly in half for news/weather queries.
             if decision.tools == frozenset({"web_search"}):
-                async for event in self._search_and_stream(
-                    user_message,
-                    llm_messages,
-                    model=model,
-                ):
+                fast_path_gen = self._search_and_stream(user_message, llm_messages, model=model)
+            elif decision.tools == frozenset({"list_skills"}):
+                # Fast path: list_skills result is injected into context so the
+                # LLM synthesises a natural reply instead of describing its tools
+                # from the system prompt (which small models tend to do otherwise).
+                fast_path_gen = self._list_skills_and_stream(llm_messages, model=model)
+            else:
+                fast_path_gen = None
+
+            if fast_path_gen is not None:
+                async for event in fast_path_gen:
                     if event["type"] == "tool_result":
                         timer.mark("search_ms")
                     if event["type"] == "token":
@@ -650,6 +656,48 @@ class ChatEngine:
         }
 
         enriched = _inject_tool_results(messages, [("web_search", result_text)])
+        async for item in llm_gateway.stream_from_raw(enriched, model=model):
+            if isinstance(item, LLMUsage):
+                yield {"type": "_usage", "usage": item}
+            else:
+                yield {"type": "token", "text": item}
+
+    async def _list_skills_and_stream(
+        self,
+        messages: list[dict],
+        model: str | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """
+        Fast path for skill-listing queries — calls list_skills directly and
+        injects the result into context so the LLM doesn't fall back to
+        describing its system-prompt tools instead.
+        """
+        tools = tool_registry.get_tools(Mode.CHAT, self._gate, user_id=self.user_id)
+        tool_id = f"call_{uuid4().hex[:8]}"
+
+        yield {"type": "tool_start", "id": tool_id, "name": "list_skills", "args": {}}
+
+        result_text, success = await self._call_tool(tools, "list_skills", {})
+
+        yield {
+            "type": "tool_result",
+            "id": tool_id,
+            "name": "list_skills",
+            "success": success,
+            "preview": (result_text or "")[:200],
+        }
+
+        # Prepend a clear framing so the LLM answers only from the skill data,
+        # not from the system-prompt tool descriptions.
+        framed = (
+            f"The user's installed skills are:\n{result_text}\n\n"
+            "Answer based only on the above list. "
+            "Do not mention web_search, rag_query, render_chart, or other built-in tools — "
+            "those are internal capabilities, not user-installed skills."
+            if success
+            else result_text
+        )
+        enriched = _inject_tool_results(messages, [("list_skills", framed)])
         async for item in llm_gateway.stream_from_raw(enriched, model=model):
             if isinstance(item, LLMUsage):
                 yield {"type": "_usage", "usage": item}
