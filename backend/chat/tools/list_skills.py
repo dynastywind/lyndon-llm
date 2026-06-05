@@ -17,7 +17,10 @@ class ListSkillsTool(BaseTool):
     permission = Permission.READ
 
     @require_permission(Permission.READ)
-    async def run(self, include_disabled: bool = False) -> ToolResult:  # type: ignore[override]
+    async def run(self, include_disabled: bool | str = False) -> ToolResult:  # type: ignore[override]
+        # LLMs sometimes pass booleans as strings ("false"/"true") — normalise.
+        if isinstance(include_disabled, str):
+            include_disabled = include_disabled.lower() not in ("false", "0", "")
         if not self.user_id:
             return ToolResult(
                 tool_name=self.name,
