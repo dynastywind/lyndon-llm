@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from core.permissions.gate import Permission, require_permission
@@ -46,21 +45,14 @@ class ListSkillsTool(BaseTool):
                 )
                 return ToolResult(tool_name=self.name, success=True, output=msg)
 
-            output = [
-                {
-                    "name": s["name"],
-                    "description": s["description"],
-                    "version": s["version"],
-                    "enabled": s["enabled"],
-                    "installed_at": s["installed_at"],
-                    "tools": [t["tool_name"] for t in s["tools"]],
-                }
-                for s in skills
-            ]
+            lines = []
+            for s in skills:
+                status = "" if s["enabled"] else " (disabled)"
+                lines.append(f"• **{s['name']}**{status} — {s['description']}")
             return ToolResult(
                 tool_name=self.name,
                 success=True,
-                output=json.dumps(output, indent=2, ensure_ascii=False),
+                output="\n".join(lines),
             )
 
         except Exception as e:
