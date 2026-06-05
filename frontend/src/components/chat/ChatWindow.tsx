@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Copy,
   Plus,
+  Puzzle,
   X,
   FileText,
   Image as ImageIcon,
@@ -515,8 +516,26 @@ function ChartBlock({ spec }: { spec: ChartSpec }) {
 
 // ─── ToolCallRow ──────────────────────────────────────────────────────────────
 
+/** Parse a skill qualified name → { skillId, toolName } or null. */
+function parseSkillName(name: string): { skillId: string; toolName: string } | null {
+  if (!name.startsWith('skill__')) return null
+  const parts = name.split('__')
+  // format: skill__{skill_id}__{tool_name}  (skill_id is a UUID — no __ inside)
+  if (parts.length < 3) return null
+  return { skillId: parts[1], toolName: parts.slice(2).join('__') }
+}
+
 function toolLabel(call: ToolCallRecord): string {
   const args = call.args
+
+  // Skill tools — show as  skill · tool_name  arg=value
+  const skill = parseSkillName(call.name)
+  if (skill) {
+    const first = Object.entries(args)[0]
+    const hint = first ? `  ${first[0]}=${String(first[1]).slice(0, 40)}` : ''
+    return `${skill.toolName}${hint}`
+  }
+
   switch (call.name) {
     case 'web_search': {
       const q = (args.query as string | undefined) ?? ''
@@ -548,8 +567,16 @@ function toolLabel(call: ToolCallRecord): string {
 function ToolCallRow({ call }: { call: ToolCallRecord }) {
   const isRunning = call.status === 'running'
   const isError = call.status === 'error'
+  const skillInfo = parseSkillName(call.name)
+  const isSkill = skillInfo !== null
 
-  const color = isRunning ? 'var(--lv-ink)' : isError ? 'hsl(var(--destructive))' : 'var(--lv-mute)'
+  // Skill tools use a purple/violet accent; regular tools use the default gold/mute
+  const runningBg = isSkill ? 'rgba(139,92,246,0.07)' : 'rgba(200,168,106,0.05)'
+  const color = isRunning
+    ? 'var(--lv-ink)'
+    : isError
+      ? 'hsl(var(--destructive))'
+      : 'var(--lv-mute)'
 
   return (
     <div
@@ -562,13 +589,14 @@ function ToolCallRow({ call }: { call: ToolCallRecord }) {
         fontSize: 10.5,
         color,
         userSelect: 'none',
-        // Highlight the row while the tool is actively running
-        background: isRunning ? 'rgba(200,168,106,0.05)' : 'transparent',
+        background: isRunning ? runningBg : 'transparent',
         padding: isRunning ? '3px 8px 3px 6px' : '0',
         marginLeft: isRunning ? '-6px' : '0',
+        borderRadius: isRunning ? 4 : 0,
         transition: 'background 0.2s',
       }}
     >
+      {/* status icon */}
       {isRunning ? (
         <AsteriskAnimated size={13} />
       ) : isError ? (
@@ -576,6 +604,26 @@ function ToolCallRow({ call }: { call: ToolCallRecord }) {
       ) : (
         <span style={{ color: 'var(--lv-gold)', flexShrink: 0 }}>✓</span>
       )}
+
+      {/* skill badge — shown before the tool label */}
+      {isSkill && (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            fontSize: 9.5,
+            fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.04em',
+            color: isRunning ? 'rgb(167,139,250)' : 'rgba(139,92,246,0.7)',
+            flexShrink: 0,
+          }}
+        >
+          <Puzzle size={9} />
+          skill
+        </span>
+      )}
+
       <span>{toolLabel(call)}</span>
     </div>
   )
