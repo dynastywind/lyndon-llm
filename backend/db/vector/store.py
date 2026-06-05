@@ -64,14 +64,18 @@ class ChromaVectorStore(VectorStoreBase):
         )
 
     async def query(self, query_embeddings, n_results=5, where=None) -> dict:
+        col = self._get_col()
+        # ChromaDB requires n_results to be a plain Python int (not numpy scalar
+        # or float) and must not exceed the number of stored vectors.
+        safe_n = max(1, min(int(n_results), col.count() or 1))
         kwargs: dict = {
             "query_embeddings": query_embeddings,
-            "n_results": n_results,
+            "n_results": safe_n,
             "include": ["documents", "metadatas", "distances"],
         }
         if where:
             kwargs["where"] = where
-        return self._get_col().query(**kwargs)
+        return col.query(**kwargs)
 
     async def delete(self, ids: list[str]) -> None:
         self._get_col().delete(ids=ids)
@@ -149,7 +153,7 @@ class QdrantVectorStore(VectorStoreBase):
         hits = self._client.search(
             collection_name=self._collection,
             query_vector=query_embeddings[0],
-            limit=n_results,
+            limit=max(1, int(n_results)),
             query_filter=qdrant_filter,
             with_payload=True,
         )

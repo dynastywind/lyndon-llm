@@ -34,7 +34,7 @@ class HybridRetriever:
     async def retrieve(
         self, query: str, top_k: int | None = None, user_id: str | None = None
     ) -> list[RetrievedChunk]:
-        k = top_k or settings.rag_top_k
+        k = int(top_k or settings.rag_top_k)
         dense = await self._dense_search(query, k=k * 2, user_id=user_id)
         sparse = self._bm25_search(query, candidates=dense, k=k * 2)
         return self._reciprocal_rank_fusion(dense, sparse)[:k]
