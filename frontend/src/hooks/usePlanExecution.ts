@@ -82,6 +82,11 @@ export function usePlanExecution() {
       stopStreaming(sessionId)
       bumpScrollToBottom()
       bumpSessionVersion()
+      // Remove the card on success; leave it visible on failure so the user
+      // can see which steps failed.
+      if (useAppStore.getState().chatPlanStatus === 'done') {
+        clearChatPlan()
+      }
     }
   }, [
     chatPendingPlan,
