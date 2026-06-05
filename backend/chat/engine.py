@@ -668,9 +668,12 @@ class ChatEngine:
         model: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
-        Fast path for skill-listing queries — calls list_skills directly and
-        injects the result into context so the LLM doesn't fall back to
-        describing its system-prompt tools instead.
+        Fast path for skill-listing queries.
+
+        Calls list_skills directly and streams the result as plain tokens —
+        no LLM call needed.  Bypassing the LLM entirely is the only reliable
+        way to prevent small local models from mixing in their built-in tool
+        descriptions (from the system prompt) alongside the user's skill list.
         """
         tools = tool_registry.get_tools(Mode.CHAT, self._gate, user_id=self.user_id)
         tool_id = f"call_{uuid4().hex[:8]}"
@@ -687,22 +690,15 @@ class ChatEngine:
             "preview": (result_text or "")[:200],
         }
 
-        # Prepend a clear framing so the LLM answers only from the skill data,
-        # not from the system-prompt tool descriptions.
-        framed = (
-            f"The user's installed skills are:\n{result_text}\n\n"
-            "Answer based only on the above list. "
-            "Do not mention web_search, rag_query, render_chart, or other built-in tools — "
-            "those are internal capabilities, not user-installed skills."
-            if success
-            else result_text
-        )
-        enriched = _inject_tool_results(messages, [("list_skills", framed)])
-        async for item in llm_gateway.stream_from_raw(enriched, model=model):
-            if isinstance(item, LLMUsage):
-                yield {"type": "_usage", "usage": item}
-            else:
-                yield {"type": "token", "text": item}
+        # Stream the skill list directly — no LLM involvement.
+        if success and result_text:
+            reply = f"Here are your installed skills:\n\n{result_text}"
+        elif success:
+            reply = "You have no skills installed yet. You can add one from Settings → Skills."
+        else:
+            reply = f"Could not retrieve skills: {result_text}"
+
+        yield {"type": "token", "text": reply}
 
     async def _retrieve(self, query: str) -> list[RetrievedChunk]:
         try:
