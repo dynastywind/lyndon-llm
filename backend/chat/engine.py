@@ -111,6 +111,17 @@ def _format_context(chunks: list[RetrievedChunk]) -> str:
     return "## Retrieved context\n\n" + "\n\n---\n\n".join(parts)
 
 
+def _extract_skill_md_body(skill_md: str) -> str:
+    """Return the markdown body of a SKILL.md — everything after the closing frontmatter '---'."""
+    # SKILL.md starts with ---\n...\n---\n; strip the frontmatter block.
+    text = skill_md.strip()
+    if text.startswith("---"):
+        end = text.find("\n---", 3)
+        if end != -1:
+            return text[end + 4:].strip()
+    return text
+
+
 class ChatEngine:
     def __init__(
         self, session: Session, db: AsyncSession | None = None, user_id: str | None = None
@@ -196,6 +207,7 @@ class ChatEngine:
         from core.tools.registry import tool_registry
 
         skill_pinned = False
+        skill_prompt_body: str | None = None  # body of a prompt-only skill (no scripts)
         if skill_id:
             pinned = frozenset(
                 qname
@@ -207,6 +219,14 @@ class ChatEngine:
             if pinned:
                 skill_pinned = True
                 decision = RouteDecision("tools", pinned, f"slash command skill={skill_id}")
+            elif self._db:
+                # Prompt-based skill (no runnable tools): fetch skill_md body and inject
+                # it as a leading system-prompt block so the LLM follows the skill instructions.
+                from db.repos.skill import SkillRepo as _SR
+                _skill = await _SR(self._db).get_skill(skill_id)
+                if _skill and _skill.skill_md:
+                    skill_prompt_body = _extract_skill_md_body(_skill.skill_md)
+                    decision = RouteDecision("direct", frozenset(), f"prompt skill={skill_id}")
 
         # Expand the generic skill sentinel emitted by the heuristic orchestrator.
         if SKILL_SIGNAL in decision.tools:
@@ -244,6 +264,8 @@ class ChatEngine:
         #    model always sees them as immutable conversation-opening context
         #    while the DB and memory manager store only the clean user message.
         system_prompt = BASE_SYSTEM_PROMPT
+        if skill_prompt_body:
+            system_prompt = f"{system_prompt}\n\n{skill_prompt_body}"
         if context_block:
             system_prompt = f"{system_prompt}\n\n{context_block}"
         await self.memory.build_system_prompt(system_prompt, user_message)
