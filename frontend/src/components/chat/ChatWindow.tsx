@@ -528,12 +528,11 @@ function parseSkillName(name: string): { skillId: string; toolName: string } | n
 function toolLabel(call: ToolCallRecord): string {
   const args = call.args
 
-  // Skill tools — show as  skill · tool_name  arg=value
+  // Skill tools — name shown in the badge; label is just the first arg hint
   const skill = parseSkillName(call.name)
   if (skill) {
     const first = Object.entries(args)[0]
-    const hint = first ? `  ${first[0]}=${String(first[1]).slice(0, 40)}` : ''
-    return `${skill.toolName}${hint}`
+    return first ? `${first[0]}=${String(first[1]).slice(0, 50)}` : ''
   }
 
   switch (call.name) {
@@ -564,11 +563,12 @@ function toolLabel(call: ToolCallRecord): string {
   }
 }
 
-function ToolCallRow({ call }: { call: ToolCallRecord }) {
+function ToolCallRow({ call, skillNames = {} }: { call: ToolCallRecord; skillNames?: Record<string, string> }) {
   const isRunning = call.status === 'running'
   const isError = call.status === 'error'
   const skillInfo = parseSkillName(call.name)
   const isSkill = skillInfo !== null
+  const skillDisplayName = skillInfo ? (skillNames[skillInfo.skillId] ?? skillInfo.toolName) : null
 
   // Skill tools use a purple/violet accent; regular tools use the default gold/mute
   const runningBg = isSkill ? 'rgba(139,92,246,0.07)' : 'rgba(200,168,106,0.05)'
@@ -605,7 +605,7 @@ function ToolCallRow({ call }: { call: ToolCallRecord }) {
         <span style={{ color: 'var(--lv-gold)', flexShrink: 0 }}>✓</span>
       )}
 
-      {/* skill badge — shown before the tool label */}
+      {/* skill badge — shows the skill's display name */}
       {isSkill && (
         <span
           style={{
@@ -620,7 +620,7 @@ function ToolCallRow({ call }: { call: ToolCallRecord }) {
           }}
         >
           <Puzzle size={9} />
-          skill
+          {skillDisplayName}
         </span>
       )}
 
@@ -631,7 +631,7 @@ function ToolCallRow({ call }: { call: ToolCallRecord }) {
 
 // ─── ToolCallsSection ─────────────────────────────────────────────────────────
 
-function ToolCallsSection({ calls }: { calls: ToolCallRecord[] }) {
+function ToolCallsSection({ calls, skillNames = {} }: { calls: ToolCallRecord[]; skillNames?: Record<string, string> }) {
   if (!calls.length) return null
   return (
     <div
@@ -646,7 +646,7 @@ function ToolCallsSection({ calls }: { calls: ToolCallRecord[] }) {
       }}
     >
       {calls.map((call) => (
-        <ToolCallRow key={call.id} call={call} />
+        <ToolCallRow key={call.id} call={call} skillNames={skillNames} />
       ))}
     </div>
   )
@@ -1610,7 +1610,7 @@ function ThinkingBlock({ content, isLive }: { content: string; isLive: boolean }
 
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
-function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean }) {
+function MessageBubble({ msg, isLive = false, skillNames = {} }: { msg: Message; isLive?: boolean; skillNames?: Record<string, string> }) {
   const [hover, setHover] = useState(false)
   const isUser = msg.role === 'user'
   const hasCharts = (msg.charts?.length ?? 0) > 0 || msg.content.includes('```chart')
@@ -1763,7 +1763,7 @@ function MessageBubble({ msg, isLive = false }: { msg: Message; isLive?: boolean
         {msg.thinking && <ThinkingBlock content={msg.thinking} isLive={isLive && !msg.content} />}
 
         {/* Tool calls */}
-        {msg.toolCalls && msg.toolCalls.length > 0 && <ToolCallsSection calls={msg.toolCalls} />}
+        {msg.toolCalls && msg.toolCalls.length > 0 && <ToolCallsSection calls={msg.toolCalls} skillNames={skillNames} />}
 
         {/* Charts */}
         {msg.charts?.map((spec, i) => (
@@ -1893,6 +1893,11 @@ export function ChatWindow() {
 
   // ── Slash-command skill picker ────────────────────────────────────────
   const [installedSkills, setInstalledSkills] = useState<import('@/types').Skill[]>([])
+  // id → display name map used by ToolCallRow to show the skill name in tool call rows
+  const skillNameMap = useMemo(
+    () => Object.fromEntries(installedSkills.map((s) => [s.id, s.name])),
+    [installedSkills],
+  )
   const [slashOpen, setSlashOpen] = useState(false)
   const [slashFilter, setSlashFilter] = useState('')
   const [slashIndex, setSlashIndex] = useState(0)
@@ -2251,6 +2256,7 @@ export function ChatWindow() {
                   key={msg.id}
                   msg={msg}
                   isLive={isStreaming && i === messages.length - 1 && msg.role === 'assistant'}
+                  skillNames={skillNameMap}
                 />
               ))}
             </div>
