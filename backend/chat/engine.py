@@ -134,6 +134,7 @@ class ChatEngine:
         custom_system_prompt: str | None = None,
         session_prompt: str | None = None,
         model: str | None = None,
+        skill_id: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         with _langfuse_session_ctx(self.session.session_id):
             async for event in self._stream_response_inner(
@@ -142,6 +143,7 @@ class ChatEngine:
                 custom_system_prompt=custom_system_prompt,
                 session_prompt=session_prompt,
                 model=model,
+                skill_id=skill_id,
             ):
                 yield event
 
@@ -152,6 +154,7 @@ class ChatEngine:
         custom_system_prompt: str | None = None,
         session_prompt: str | None = None,
         model: str | None = None,
+        skill_id: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         timer = _Timer()
 
@@ -186,12 +189,24 @@ class ChatEngine:
         else:
             decision = legacy_route_decision()
 
-        # Expand the skill sentinel into the real registered skill tool names.
-        # The orchestrator emits "__skill__" when it detects a skill invocation;
-        # only here do we know which skill tools are actually registered.
+        # Slash-command override: if a specific skill_id was provided (e.g. from
+        # the frontend's "/" picker), force routing to that skill's tools only —
+        # bypassing the orchestrator's heuristic entirely.
         from core.permissions.gate import Mode
         from core.tools.registry import tool_registry
 
+        if skill_id:
+            pinned = frozenset(
+                qname
+                for qname, meta in tool_registry._skill_registry[Mode.CHAT].items()
+                # _tool_meta lives on skill_manager, but _skill_registry values are
+                # classes whose `name` encodes the skill_id after the first "__".
+                if qname.startswith(f"skill__{skill_id}__")
+            )
+            if pinned:
+                decision = RouteDecision("tools", pinned, f"slash command skill={skill_id}")
+
+        # Expand the generic skill sentinel emitted by the heuristic orchestrator.
         if SKILL_SIGNAL in decision.tools:
             skill_names = frozenset(tool_registry._skill_registry[Mode.CHAT].keys())
             expanded = (decision.tools - {SKILL_SIGNAL}) | skill_names

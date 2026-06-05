@@ -28,7 +28,7 @@ export function useStream() {
   } = useAppStore()
 
   const send = useCallback(
-    async (userMessage: string, attachments?: MessageAttachment[]) => {
+    async (userMessage: string, attachments?: MessageAttachment[], skillId?: string) => {
       // Lazily create a session on the very first message.
       let activeSessionId = sessionId
       if (!activeSessionId) {
@@ -198,6 +198,7 @@ export function useStream() {
           isFirstMessage ? systemPrompt || undefined : undefined,
           appliedSessionPrompt,
           selectedModel ?? undefined,
+          skillId,
         )
       } finally {
         stopStreaming(activeSessionId)

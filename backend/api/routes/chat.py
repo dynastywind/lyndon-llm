@@ -35,6 +35,7 @@ class ChatRequest(BaseModel):
         None  # one-off per-session instruction; prepended to first LLM user turn only
     )
     model: str | None = None  # override the default LLM model for this request
+    skill_id: str | None = None  # slash-command: force routing to this skill's tools only
 
 
 class IngestRequest(BaseModel):
@@ -81,6 +82,7 @@ async def chat(
             custom_system_prompt=body.system_prompt or None,
             session_prompt=body.session_prompt or None,
             model=body.model or None,
+            skill_id=body.skill_id or None,
         ):
             evt_type = event["type"]
             payload = {k: v for k, v in event.items() if k != "type"}

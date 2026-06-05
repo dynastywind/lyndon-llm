@@ -724,7 +724,11 @@ function renderLineContent(line: string, keyPrefix: string): React.ReactNode {
  * - Everything else is emitted verbatim to keep the layout pixel-identical
  *   to the underlying textarea so the caret never drifts.
  */
-function renderInputOverlay(text: string): React.ReactNode {
+function renderInputOverlay(text: string, skillName?: string): React.ReactNode {
+  // If the input starts with a recognised skill slug, highlight it
+  const slashPrefix =
+    skillName && text.startsWith(`/${skillName}`) ? `/${skillName}` : null
+
   const lines = text.split('\n')
   return lines.map((line, i) => {
     const bulletMatch = BULLET_RE.exec(line)
@@ -738,6 +742,25 @@ function renderInputOverlay(text: string): React.ReactNode {
           {indent}
           <span style={{ color: 'var(--lv-gold)', fontWeight: 600 }}>•</span>
           {space}
+          {renderLineContent(rest, `${i}-r`)}
+        </>
+      )
+    } else if (i === 0 && slashPrefix && line.startsWith(slashPrefix)) {
+      // Highlight the /skill-name prefix on the first line
+      const rest = line.slice(slashPrefix.length)
+      content = (
+        <>
+          <span
+            style={{
+              background: 'rgba(139,92,246,0.15)',
+              color: 'rgb(167,139,250)',
+              borderRadius: 3,
+              padding: '0 2px',
+              fontWeight: 500,
+            }}
+          >
+            {slashPrefix}
+          </span>
           {renderLineContent(rest, `${i}-r`)}
         </>
       )
@@ -1868,6 +1891,41 @@ export function ChatWindow() {
   // Each session keeps its own draft; initialise from store on mount.
   const [input, setInput] = useState(() => drafts[draftKey] ?? '')
 
+  // ── Slash-command skill picker ────────────────────────────────────────
+  const [installedSkills, setInstalledSkills] = useState<import('@/types').Skill[]>([])
+  const [slashOpen, setSlashOpen] = useState(false)
+  const [slashFilter, setSlashFilter] = useState('')
+  const [slashIndex, setSlashIndex] = useState(0)
+
+  useEffect(() => {
+    import('@/api/client').then(({ getSkills }) =>
+      getSkills().then(setInstalledSkills).catch(() => {}),
+    )
+  }, [])
+
+  // Derive the active skill from whatever is at the start of the input.
+  const activeSkill = useMemo(() => {
+    if (!input.startsWith('/')) return null
+    const slug = input.split(/\s/)[0].slice(1).toLowerCase()
+    return installedSkills.find((s) => s.name.toLowerCase() === slug) ?? null
+  }, [input, installedSkills])
+
+  const filteredSkills = useMemo(() => {
+    if (!slashFilter && !slashOpen) return installedSkills
+    return installedSkills.filter((s) =>
+      s.name.toLowerCase().includes(slashFilter.toLowerCase()),
+    )
+  }, [installedSkills, slashFilter, slashOpen])
+
+  const selectSlashSkill = (skill: import('@/types').Skill) => {
+    const body = input.startsWith('/') ? input.replace(/^\/\S*\s?/, '') : input
+    const next = `/${skill.name} ${body}`
+    setInput(next)
+    setDraft(draftKey, next)
+    setSlashOpen(false)
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+
   // ── Context panel — collect all attachments from current session ──────
   // Newest-first; deduplicated by data URL prefix so identical files are
   // not listed twice even if sent in multiple messages.
@@ -2061,7 +2119,11 @@ export function ChatWindow() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    const msg = input.trim()
+    // Strip the /skill-name prefix before sending; the skill_id drives routing
+    const rawMsg = activeSkill
+      ? input.replace(/^\/\S+\s*/, '').trim()
+      : input.trim()
+    const msg = rawMsg
     if ((!msg && attachments.length === 0) || isStreaming) return
 
     // Convert files → data URLs (needed for display AND the API payload).
@@ -2082,8 +2144,9 @@ export function ChatWindow() {
 
     setInput('')
     clearDraft(draftKey)
+    setSlashOpen(false)
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
-    await send(msg, msgAttachments)
+    await send(msg, msgAttachments, activeSkill?.id)
   }
 
   // ─── render ───────────────────────────────────────────────────────────────
@@ -2309,6 +2372,57 @@ export function ChatWindow() {
                     is shown as-is so layout stays identical to the raw textarea text
                     and the caret never drifts. */}
                 <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                  {/* Slash-command skill picker — floats above the input */}
+                  {slashOpen && filteredSkills.length > 0 && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: '100%',
+                        left: 0,
+                        right: 0,
+                        marginBottom: 6,
+                        background: 'var(--lv-card)',
+                        border: '1px solid var(--lv-rule-strong)',
+                        borderRadius: 8,
+                        boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+                        zIndex: 50,
+                        overflow: 'hidden',
+                        maxHeight: 220,
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {filteredSkills.map((skill, idx) => (
+                        <button
+                          key={skill.id}
+                          type="button"
+                          onMouseDown={(e) => { e.preventDefault(); selectSlashSkill(skill) }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            width: '100%',
+                            padding: '8px 12px',
+                            background: idx === slashIndex ? 'rgba(139,92,246,0.12)' : 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            fontFamily: 'var(--font-sans)',
+                            transition: 'background 0.1s',
+                          }}
+                          onMouseEnter={() => setSlashIndex(idx)}
+                        >
+                          <Puzzle size={13} style={{ color: 'rgb(139,92,246)', flexShrink: 0 }} />
+                          <span style={{ fontSize: 13, color: 'var(--lv-ink)', fontWeight: 500 }}>
+                            /{skill.name}
+                          </span>
+                          <span style={{ fontSize: 11, color: 'var(--lv-mute)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {skill.description}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {/* Inline-code render layer — sits behind the textarea */}
                   {input && (
                     <div
@@ -2329,7 +2443,7 @@ export function ChatWindow() {
                         margin: 0,
                       }}
                     >
-                      {renderInputOverlay(input)}
+                      {renderInputOverlay(input, activeSkill?.name)}
                     </div>
                   )}
 
@@ -2339,10 +2453,43 @@ export function ChatWindow() {
                     value={input}
                     className={input ? 'chat-input-transparent' : 'chat-input-placeholder'}
                     onChange={(e) => {
-                      setInput(e.target.value)
-                      setDraft(draftKey, e.target.value)
+                      const val = e.target.value
+                      setInput(val)
+                      setDraft(draftKey, val)
+                      // Slash-command picker: open when "/" typed without an active skill match
+                      if (!activeSkill && val.startsWith('/')) {
+                        const afterSlash = val.slice(1).split(/\s/)[0]
+                        setSlashFilter(afterSlash)
+                        setSlashIndex(0)
+                        setSlashOpen(true)
+                      } else {
+                        setSlashOpen(false)
+                      }
                     }}
                     onKeyDown={(e) => {
+                      // Slash picker keyboard navigation
+                      if (slashOpen && filteredSkills.length > 0) {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          setSlashIndex((i) => Math.min(i + 1, filteredSkills.length - 1))
+                          return
+                        }
+                        if (e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          setSlashIndex((i) => Math.max(i - 1, 0))
+                          return
+                        }
+                        if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+                          e.preventDefault()
+                          selectSlashSkill(filteredSkills[slashIndex])
+                          return
+                        }
+                        if (e.key === 'Escape') {
+                          e.preventDefault()
+                          setSlashOpen(false)
+                          return
+                        }
+                      }
                       if (e.key === 'Enter') {
                         if (e.altKey) {
                           // Alt+↵ → insert newline

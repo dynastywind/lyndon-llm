@@ -221,6 +221,7 @@ export async function streamChat(
   systemPrompt?: string,
   sessionPrompt?: string,
   model?: string,
+  skillId?: string,
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/`, {
     method: 'POST',
@@ -231,6 +232,7 @@ export async function streamChat(
       ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
       ...(sessionPrompt ? { session_prompt: sessionPrompt } : {}),
       ...(model ? { model } : {}),
+      ...(skillId ? { skill_id: skillId } : {}),
     }),
   })
   if (!res.ok) throw new Error(`Chat error: ${res.statusText}`)
