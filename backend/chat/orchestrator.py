@@ -178,8 +178,10 @@ class HeuristicOrchestrator:
         elif _SKILLS_RE.search(text):
             tool_set.add(SKILL_SIGNAL)
 
-        # Allow on-demand KB search mid-turn when tools are active and KB exists
-        if tool_set and has_kb_sources and not wants_rag:
+        # Allow on-demand KB search mid-turn when tools are active and KB exists.
+        # Skip for list_skills — it's a deterministic meta-query that doesn't
+        # benefit from RAG and the extra tool breaks the fast-path exact-match.
+        if tool_set and has_kb_sources and not wants_rag and "list_skills" not in tool_set:
             tool_set.add("rag_query")
 
         # Planning — checked before routing to tool / rag paths.
