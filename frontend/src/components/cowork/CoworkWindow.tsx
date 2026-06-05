@@ -3,7 +3,7 @@ import { Play, CheckCircle, XCircle, Loader2, AlertTriangle } from 'lucide-react
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { createPlan, executePlan } from '@/api/client'
-import type { PlanStep, RiskLevel } from '@/types'
+import type { PlanStep, RiskLevel, StepResult } from '@/types'
 
 const RISK_BADGE: Record<RiskLevel, { label: string; className: string }> = {
   low: { label: 'Low', className: 'bg-green-500/20 text-green-400' },
@@ -11,15 +11,16 @@ const RISK_BADGE: Record<RiskLevel, { label: string; className: string }> = {
   high: { label: 'High', className: 'bg-red-500/20 text-red-400' },
 }
 
-function StepCard({ step }: { step: PlanStep }) {
+function StepCard({ step, result }: { step: PlanStep; result?: StepResult }) {
   const badge = RISK_BADGE[step.risk]
+  const effectiveStatus = result?.status ?? step.status ?? 'pending'
   const statusIcon = {
     pending: null,
     running: <Loader2 size={14} className="animate-spin text-blue-400" />,
     done: <CheckCircle size={14} className="text-green-400" />,
     failed: <XCircle size={14} className="text-red-400" />,
     skipped: <AlertTriangle size={14} className="text-yellow-400" />,
-  }[step.status ?? 'pending']
+  }[effectiveStatus]
 
   return (
     <div className="flex gap-3 p-3 rounded-lg border border-border bg-card/50">
@@ -34,6 +35,16 @@ function StepCard({ step }: { step: PlanStep }) {
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
         <p className="text-xs text-muted-foreground/60 mt-0.5 font-mono">tool: {step.tool}</p>
+        {result?.output && (
+          <pre className="mt-2 text-xs bg-muted/50 rounded p-2 overflow-x-auto max-h-40 whitespace-pre-wrap break-all">
+            {result.output}
+          </pre>
+        )}
+        {result?.error && (
+          <p className="mt-1.5 text-xs text-red-400 bg-red-500/10 rounded p-2 break-all">
+            {result.error}
+          </p>
+        )}
       </div>
     </div>
   )
@@ -44,10 +55,12 @@ export function CoworkWindow() {
   const [goal, setGoal] = useState('')
   const [loading, setLoading] = useState(false)
   const [executing, setExecuting] = useState(false)
+  const [results, setResults] = useState<StepResult[]>([])
 
   const handlePlan = async () => {
     if (!goal.trim()) return
     setLoading(true)
+    setResults([])
     try {
       const plan = await createPlan(goal, sessionId ?? '')
       setPlan(plan)
@@ -59,12 +72,16 @@ export function CoworkWindow() {
   const handleExecute = async () => {
     if (!currentPlan) return
     setExecuting(true)
+    setResults([])
     try {
-      await executePlan(currentPlan.plan_id, sessionId ?? '')
+      const data = await executePlan(currentPlan.plan_id, sessionId ?? '')
+      setResults(data.results ?? [])
     } finally {
       setExecuting(false)
     }
   }
+
+  const resultMap = Object.fromEntries(results.map((r) => [r.step_id, r]))
 
   return (
     <div className="flex flex-col h-full p-6 gap-4">
@@ -110,7 +127,7 @@ export function CoworkWindow() {
             </button>
           </div>
           {currentPlan.steps.map((step) => (
-            <StepCard key={step.step_id} step={step} />
+            <StepCard key={step.step_id} step={step} result={resultMap[step.step_id]} />
           ))}
         </div>
       )}

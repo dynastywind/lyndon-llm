@@ -87,6 +87,7 @@ class Settings(BaseSettings):
 
     # Cowork
     cowork_shell_timeout: int = 30  # seconds
+    mac_control_timeout: int = 15  # seconds — AppleScript calls are fast
     cowork_max_plan_steps: int = 20
 
     # Sandbox
