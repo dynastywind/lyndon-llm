@@ -24,7 +24,7 @@ export interface ToolCallRecord {
   id: string
   name: string
   args: Record<string, unknown>
-  status: 'running' | 'done' | 'error'
+  status: 'running' | 'done' | 'error' | 'active'
   /** First 200 chars of the tool result, shown as a tooltip hint. */
   preview?: string
 }

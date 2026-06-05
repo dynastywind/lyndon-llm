@@ -135,6 +135,18 @@ export function useStream() {
                 break
               }
 
+              case 'skill_activated': {
+                // Prompt-based skill — no script runs, but show the skill badge
+                const activatedCall: ToolCallRecord = {
+                  id: `skill_activated_${data.skill_id as string}`,
+                  name: `skill__${data.skill_id as string}__[prompt]`,
+                  args: {},
+                  status: 'active',
+                }
+                updateMsg((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), activatedCall] }))
+                break
+              }
+
               case 'tool_start': {
                 const newCall: ToolCallRecord = {
                   id: data.id as string,

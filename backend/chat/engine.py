@@ -266,6 +266,8 @@ class ChatEngine:
         system_prompt = BASE_SYSTEM_PROMPT
         if skill_prompt_body:
             system_prompt = f"{system_prompt}\n\n{skill_prompt_body}"
+            # Tell the frontend a prompt-based skill is active so it can show a badge.
+            yield {"type": "skill_activated", "skill_id": skill_id, "skill_name": getattr(_skill, "name", "")}
         if context_block:
             system_prompt = f"{system_prompt}\n\n{context_block}"
         await self.memory.build_system_prompt(system_prompt, user_message)
