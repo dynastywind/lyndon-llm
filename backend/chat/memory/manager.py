@@ -23,22 +23,80 @@ logger = logging.getLogger(__name__)
 _EMPTY_VALUES = re.compile(r"^\s*(unknown|none|n/a|–|-|)\s*$", re.IGNORECASE)
 
 
-def _extract_user_profile(content: str) -> str:
-    """Return the '## User Profile' block from a memory file, or '' if absent."""
-    match = re.search(r"(## User Profile\n.*?)(?=\n## |\Z)", content, re.DOTALL)
+def _extract_section(content: str, heading: str) -> str:
+    """Return the named '## <heading>' block from a memory file, or '' if absent."""
+    pattern = rf"(## {re.escape(heading)}\n.*?)(?=\n## |\Z)"
+    match = re.search(pattern, content, re.DOTALL)
     return match.group(1).strip() if match else ""
 
 
-def _has_meaningful_profile(profile: str) -> bool:
-    """Return True only if the profile contains at least one real (non-placeholder) value.
+def _extract_user_profile(content: str) -> str:
+    """Return the '## User Profile' block from a memory file, or '' if absent."""
+    return _extract_section(content, "User Profile")
 
-    Prevents sessions that never mentioned personal info from triggering a
+
+def _parse_profile_items(profile_block: str) -> dict[str, str]:
+    """Parse '- Key: Value' lines from a User Profile block into an ordered dict."""
+    items: dict[str, str] = {}
+    for line in profile_block.splitlines():
+        line = line.strip().lstrip("- ")
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if key:
+            items[key] = value
+    return items
+
+
+def _merge_user_profiles(base_profile: str, override_profile: str) -> str:
+    """Merge two '## User Profile' blocks, with *override* winning for the same key.
+
+    - Keys present only in *base* are kept as-is.
+    - Keys present only in *override* are added (unless the value is a placeholder).
+    - Keys present in both: override's value is used ONLY when it is a real,
+      non-placeholder value; otherwise the base value is preserved.
+
+    Returns a formatted '## User Profile' block (or '' when both inputs are empty).
+    """
+    base_items = _parse_profile_items(base_profile)
+    override_items = _parse_profile_items(override_profile)
+
+    merged = dict(base_items)  # start from base
+    for key, value in override_items.items():
+        if _EMPTY_VALUES.match(value):
+            # placeholder in override — keep existing base value if any
+            continue
+        merged[key] = value  # real value: update or add
+
+    if not merged:
+        return ""
+    lines = "\n".join(f"- {k}: {v}" for k, v in merged.items())
+    return f"## User Profile\n{lines}"
+
+
+# Keys that carry no substantive personal information — a session that only
+# knows the user's name hasn't actually learned anything new.
+_TRIVIAL_KEYS = re.compile(r"^\s*(name|first.?name|last.?name)\s*$", re.IGNORECASE)
+
+
+def _has_meaningful_profile(profile: str) -> bool:
+    """Return True only when the profile contains at least one substantive,
+    non-trivial, non-placeholder value.
+
+    Prevents sessions that never discussed personal info (and whose profile
+    is filled with blank/Unknown values or only a bare name) from triggering a
     cross-session update that would overwrite previously confirmed facts.
     """
     for line in profile.splitlines():
         if ":" not in line:
             continue
-        value = line.split(":", 1)[1]
+        key, _, value = line.partition(":")
+        key = key.strip().lstrip("- ")
+        value = value.strip()
+        if _TRIVIAL_KEYS.match(key):
+            continue  # name alone is not substantive
         if not _EMPTY_VALUES.match(value):
             return True
     return False
@@ -68,25 +126,61 @@ class MemoryManager:
         Retrieve relevant long-term memories and session file memory, then
         prepend them to the system prompt so the LLM has full context.
 
-        Injection order (after base prompt):
-          1. This session's file memory (conversation summary + user profile)
-          2. Cross-session long-term memories from vector store
+        Injection strategy
+        ------------------
+        The cross-session file and the per-session file both contain a
+        '## User Profile' section.  Injecting both separately would give the
+        model two User Profile blocks with potentially conflicting values.
+        Instead we merge them into a SINGLE unified profile (session values
+        override cross-session values for the same key, because they are more
+        recent), and emit it once.  The per-session Conversation Summary and
+        the cross-session Key Facts are kept as separate supporting sections.
+
+        Final prompt structure:
+          <base_prompt>
+
+          ## About the User          ← single merged profile
+          ...
+
+          ## Key Facts               ← from cross-session file (if any)
+          ...
+
+          ## This Session's Summary  ← conversation summary from session file
+          ...
+
+          ## Relevant memories from past sessions  ← Chroma (if any)
+          ...
         """
         enriched = base_prompt
 
-        # 1. Inject cross-session memory (persistent user profile + key facts).
-        # Use load_sections() to strip the file header so the model receives
-        # clean ## User Profile / ## Key Facts content without metadata noise.
-        cross_memory = self.cross_session_file.load_sections()
-        if cross_memory:
-            enriched = f"{enriched}\n\n## Cross-Session Memory\n{cross_memory}"
+        # Load both memory sources (neither may exist yet).
+        cross_sections = self.cross_session_file.load_sections() or ""
+        session_content = self.session_file.load(self.session_id) or ""
 
-        # 2. Inject per-session file memory (conversation summary + user profile)
-        session_memory = self.session_file.load(self.session_id)
-        if session_memory:
-            enriched = f"{enriched}\n\n## This Session's Memory\n{session_memory}"
+        # --- 1. Single merged User Profile (session values override cross-session) -
+        # Both files contain a ## User Profile section.  We merge them in Python
+        # so the model sees exactly ONE authoritative profile, never two.
+        cross_profile = _extract_user_profile(cross_sections)
+        session_profile = _extract_user_profile(session_content)
+        merged_profile = _merge_user_profiles(cross_profile, session_profile)
+        if merged_profile:
+            # Strip the "## User Profile" heading line; the outer heading acts as label.
+            profile_body = merged_profile.split("\n", 1)[1] if "\n" in merged_profile else ""
+            enriched = f"{enriched}\n\n## User Profile\n{profile_body}"
 
-        # 3. Inject relevant cross-session long-term memories
+        # --- 2. Key Facts from cross-session file (accumulates across sessions) -
+        key_facts = _extract_section(cross_sections, "Key Facts")
+        if key_facts:
+            enriched = f"{enriched}\n\n{key_facts}"
+
+        # --- 3. Conversation summary from this session's file ------------------
+        conv_summary = _extract_section(session_content, "Conversation Summary")
+        if conv_summary:
+            # Strip inner heading; re-label so it's distinct from the profile block.
+            summary_body = conv_summary.split("\n", 1)[1] if "\n" in conv_summary else ""
+            enriched = f"{enriched}\n\n## This Session's Summary\n{summary_body}"
+
+        # --- 4. Relevant long-term memories from Chroma -----------------------
         memories = await self.long_term.retrieve(
             query=user_message,
             top_k=settings.long_term_top_k,
@@ -202,11 +296,63 @@ class MemoryManager:
         saved_content = self.session_file.load(self.session_id) or content
         new_profile = _extract_user_profile(saved_content)
         # Only propagate to cross-session memory when this session actually
-        # learned something new about the user — skip if the profile only
-        # contains Unknown/None placeholders (e.g. session never mentioned
-        # personal info) to avoid overwriting previously confirmed facts.
+        # learned something substantive about the user.
         if new_profile and new_profile != old_profile and _has_meaningful_profile(new_profile):
-            await self.cross_session_file.update(new_profile, llm_gateway.complete)
+            await self._update_cross_session(new_profile)
+
+    async def _update_cross_session(self, new_session_profile: str) -> None:
+        """Merge the session's User Profile into the cross-session file.
+
+        Profile fields are merged in Python code (reliable, no LLM hallucination
+        risk).  Key Facts are updated via a focused LLM call so noteworthy
+        observations can be accumulated in natural language.
+        """
+        existing_sections = self.cross_session_file.load_sections() or ""
+        existing_profile = _extract_user_profile(existing_sections)
+        existing_key_facts = _extract_section(existing_sections, "Key Facts")
+
+        # --- 1. Code-based profile merge (session overrides cross-session) ------
+        merged_profile = _merge_user_profiles(existing_profile, new_session_profile)
+        if not merged_profile:
+            return  # nothing to write
+
+        # --- 2. LLM updates Key Facts only (accumulate noteworthy facts) --------
+        KEY_FACTS_SYSTEM = (
+            "You are a personal memory assistant. "
+            "Given existing Key Facts and a User Profile from a new session, "
+            "return an updated '## Key Facts' section that accumulates important, "
+            "non-redundant facts or behaviours observed about the user. "
+            "Keep existing facts unless directly contradicted. "
+            "Do NOT include profile field values already captured in User Profile. "
+            "Return ONLY the section, formatted as:\n\n"
+            "## Key Facts\n- fact\n- fact\n...\n\n"
+            "No commentary, no other headings."
+        )
+        user_msg = (
+            f"Existing Key Facts:\n{existing_key_facts or 'None'}\n\n"
+            f"User Profile from latest session:\n{new_session_profile}"
+        )
+        try:
+            raw = await llm_gateway.complete(
+                messages=[
+                    LLMMessage("system", KEY_FACTS_SYSTEM),
+                    LLMMessage("user", user_msg),
+                ]
+            )
+            key_facts_result = raw[0] if isinstance(raw, tuple) else raw
+        except Exception:
+            logger.warning(
+                "LLM call for Key Facts failed — keeping existing Key Facts",
+                exc_info=True,
+            )
+            key_facts_result = existing_key_facts
+
+        sections = merged_profile
+        if key_facts_result and key_facts_result.strip():
+            sections = f"{sections}\n\n{key_facts_result.strip()}"
+
+        self.cross_session_file.save(sections)
+        logger.debug("Cross-session memory updated (code-merged profile + LLM key facts)")
 
     async def store_memory(
         self,
