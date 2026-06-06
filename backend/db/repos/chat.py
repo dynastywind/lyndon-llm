@@ -44,11 +44,13 @@ class ChatRepo:
         await self._db.refresh(row)
         return row
 
-    async def ensure_session(self, session_id: str, mode: str = "chat") -> ChatSession:
+    async def ensure_session(
+        self, session_id: str, mode: str = "chat", user_id: str | None = None
+    ) -> ChatSession:
         """Return existing DB record or create it — idempotent."""
         row = await self.get_session(session_id)
         if row is None:
-            row = await self.create_session(session_id, mode)
+            row = await self.create_session(session_id, mode, user_id=user_id)
         return row
 
     async def get_session(self, session_id: str) -> ChatSession | None:

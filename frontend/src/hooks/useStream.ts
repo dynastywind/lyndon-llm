@@ -300,7 +300,7 @@ export function useStream() {
               updateMsg((m) => ({ ...m, thinking: (m.thinking ?? '') + (data.text as string) }))
               break
             case 'skill_activated': {
-              const activatedCall: import('@/types').ToolCallRecord = {
+              const activatedCall: ToolCallRecord = {
                 id: `skill_activated_${data.skill_id as string}`,
                 name: `skill__${data.skill_id as string}__[prompt]`,
                 args: {},
@@ -310,7 +310,7 @@ export function useStream() {
               break
             }
             case 'tool_start': {
-              const newCall: import('@/types').ToolCallRecord = {
+              const newCall: ToolCallRecord = {
                 id: data.id as string,
                 name: data.name as string,
                 args: data.args as Record<string, unknown>,
@@ -336,12 +336,12 @@ export function useStream() {
               break
             }
             case 'chart': {
-              const spec = data.spec as import('@/types').ChartSpec
+              const spec = data.spec as ChartSpec
               updateMsg((m) => ({ ...m, content: m.content + chartSpecToMarkdown(spec) }))
               break
             }
             case 'plan_preview':
-              setChatPendingPlan(data as unknown as import('@/types').ChatPlan)
+              setChatPendingPlan(data as unknown as ChatPlan)
               setChatPlanStatus('pending_confirm')
               useAppStore.setState((s) => ({
                 sessionMessages: {

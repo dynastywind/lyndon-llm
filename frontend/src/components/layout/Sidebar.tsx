@@ -293,7 +293,7 @@ export function Sidebar() {
   }
 
   const { sessions, loading, loadingMore, hasMore, sentinelRef, removeSession } = useChatHistory(
-    mode === 'chat' ? 'chat' : 'code',
+    mode === 'sandbox' ? 'chat' : mode,
   )
 
   useEffect(() => {
@@ -1277,8 +1277,25 @@ function SessionRow({
             flexShrink: 1,
           }}
         >
-          {session.title ?? 'New chat'}
+          {session.title ?? (session.mode === 'cowork' ? 'New task' : 'New chat')}
         </span>
+        {session.mode !== 'chat' && (
+          <span
+            style={{
+              fontSize: 9,
+              padding: '1px 5px',
+              borderRadius: 3,
+              background: 'var(--lv-rule)',
+              color: 'var(--lv-mute)',
+              fontFamily: 'var(--font-mono)',
+              textTransform: 'uppercase' as const,
+              letterSpacing: '0.05em',
+              flexShrink: 0,
+            }}
+          >
+            {session.mode}
+          </span>
+        )}
       </div>
       <span
         style={{

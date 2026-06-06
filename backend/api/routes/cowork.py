@@ -7,12 +7,15 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.auth_deps import get_optional_user
 from api.deps import get_session
 from core.session.manager import Session
 from cowork.executor import Executor
 from cowork.planner import Plan, Planner, PlanStep
 from db.base import get_db
 from db.models.cowork import CoworkPlan as CoworkPlanRow
+from db.models.user import User
+from db.repos.chat import ChatRepo
 
 router = APIRouter()
 _planner = Planner()
@@ -31,6 +34,7 @@ async def create_plan(
     body: GoalRequest,
     session: Session = Depends(get_session),
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
 ):
     plan = await _planner.create_plan(body.goal, session_id=session.session_id)
     row = CoworkPlanRow(
@@ -42,6 +46,13 @@ async def create_plan(
     )
     db.add(row)
     await db.commit()
+
+    repo = ChatRepo(db)
+    await repo.ensure_session(
+        session.session_id, mode="cowork", user_id=user.id if user else None
+    )
+    await repo.maybe_set_title(session.session_id, body.goal)
+
     return {
         "plan_id": plan.plan_id,
         "display": _planner.format_plan_for_display(plan),
@@ -59,7 +70,8 @@ async def execute_plan(
     row = result.scalar_one_or_none()
     if not row:
         raise HTTPException(
-            404, "Plan not found — it may have been created in a previous session. Please create a new plan."
+            404,
+            "Plan not found — it may have been created in a previous session. Please create a new plan.",
         )
 
     steps = [PlanStep(**s) for s in json.loads(row.steps_json)]
@@ -76,4 +88,7 @@ async def execute_plan(
 
     executor = Executor(session)
     results = await executor.run(plan)
+
+    await ChatRepo(db).touch_session(plan.session_id)
+
     return {"results": [r.__dict__ for r in results]}

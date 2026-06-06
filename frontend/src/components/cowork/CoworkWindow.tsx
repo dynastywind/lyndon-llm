@@ -51,7 +51,7 @@ function StepCard({ step, result }: { step: PlanStep; result?: StepResult }) {
 }
 
 export function CoworkWindow() {
-  const { sessionId, currentPlan, setPlan } = useAppStore()
+  const { sessionId, currentPlan, setPlan, bumpSessionVersion } = useAppStore()
   const [goal, setGoal] = useState('')
   const [loading, setLoading] = useState(false)
   const [executing, setExecuting] = useState(false)
@@ -64,6 +64,7 @@ export function CoworkWindow() {
     try {
       const plan = await createPlan(goal, sessionId ?? '')
       setPlan(plan)
+      bumpSessionVersion()
     } finally {
       setLoading(false)
     }
@@ -76,6 +77,7 @@ export function CoworkWindow() {
     try {
       const data = await executePlan(currentPlan.plan_id, sessionId ?? '')
       setResults(data.results ?? [])
+      bumpSessionVersion()
     } finally {
       setExecuting(false)
     }
