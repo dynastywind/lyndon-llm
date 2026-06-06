@@ -51,6 +51,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { cn } from '@/lib/utils'
+import { useT } from '@/i18n'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
 import { getChatMessages, getModels, getStreamStatus } from '@/api/client'
@@ -227,6 +228,7 @@ function AsteriskAnimated({ size = 20 }: { size?: number }) {
 // ─── CodeBlock ────────────────────────────────────────────────────────────────
 
 function CodeBlock({ language, code }: { language: string | undefined; code: string }) {
+  const { t } = useT()
   const [copied, setCopied] = useState(false)
   const themeName = useAppStore((s) => s.codeTheme)
   const theme = CODE_THEMES[themeName] ?? CODE_THEMES[CODE_THEME_DEFAULT]
@@ -285,7 +287,7 @@ function CodeBlock({ language, code }: { language: string | undefined; code: str
           }}
         >
           {copied ? <Check size={10} /> : <Copy size={10} />}
-          {copied ? 'Copied!' : 'Copy'}
+          {copied ? t('chat.copied') : t('chat.copy')}
         </button>
       </div>
       <SyntaxHighlighter
@@ -345,6 +347,26 @@ function resolvedSeries(spec: ChartSpec): ChartSeries[] {
     .map((key) => ({ key }))
 }
 
+/** Fallback shown when the chart boundary catches a render error. */
+function ChartErrorFallback({ message }: { message: string }) {
+  const { t } = useT()
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        background: 'rgba(var(--lv-wash-rgb),0.015)',
+        border: '1px solid var(--lv-rule)',
+        padding: 14,
+        fontFamily: 'var(--font-mono)',
+        fontSize: 11,
+        color: 'var(--lv-mute)',
+      }}
+    >
+      {t('chat.chartError', { message })}
+    </div>
+  )
+}
+
 /** Error boundary — prevents a Recharts crash from taking down the whole page. */
 class ChartErrorBoundary extends Component<
   { children: ReactNode },
@@ -362,21 +384,7 @@ class ChartErrorBoundary extends Component<
 
   render() {
     if (this.state.crashed) {
-      return (
-        <div
-          style={{
-            marginTop: 12,
-            background: 'rgba(var(--lv-wash-rgb),0.015)',
-            border: '1px solid var(--lv-rule)',
-            padding: 14,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--lv-mute)',
-          }}
-        >
-          Chart could not be rendered: {this.state.message}
-        </div>
-      )
+      return <ChartErrorFallback message={this.state.message} />
     }
     return this.props.children
   }
@@ -526,7 +534,10 @@ function parseSkillName(name: string): { skillId: string; toolName: string } | n
   return { skillId: parts[1], toolName: parts.slice(2).join('__') }
 }
 
-function toolLabel(call: ToolCallRecord): string {
+function toolLabel(
+  call: ToolCallRecord,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   const args = call.args
 
   // Skill tools — name shown in the badge; label is just the first arg hint
@@ -546,7 +557,7 @@ function toolLabel(call: ToolCallRecord): string {
       return `rag.query  "${q}"`
     }
     case 'run_code': {
-      const lang = (args.language as string | undefined) ?? 'code'
+      const lang = (args.language as string | undefined) ?? t('chat.toolCode')
       const code = ((args.code as string | undefined) ?? '').trim().split('\n')[0]
       const preview = code.length > 40 ? code.slice(0, 40) + '…' : code
       return `run.code  [${lang}]  ${preview}`
@@ -571,6 +582,7 @@ function ToolCallRow({
   call: ToolCallRecord
   skillNames?: Record<string, string>
 }) {
+  const { t } = useT()
   const isActive = call.status === 'active'
   const isRunning = call.status === 'running'
   const isError = call.status === 'error'
@@ -629,7 +641,7 @@ function ToolCallRow({
         </span>
       )}
 
-      <span>{toolLabel(call)}</span>
+      <span>{toolLabel(call, t)}</span>
     </div>
   )
 }
@@ -665,7 +677,10 @@ function ToolCallsSection({
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-function formatTimestamp(date: Date): string {
+function formatTimestamp(
+  date: Date,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
   const now = new Date()
 
@@ -679,7 +694,7 @@ function formatTimestamp(date: Date): string {
   const time = date.toLocaleTimeString([], { timeZone: tz, hour: '2-digit', minute: '2-digit' })
 
   if (localDate(date) === localDate(now)) return time
-  if (localDate(date) === localDate(yesterday)) return `Yesterday · ${time}`
+  if (localDate(date) === localDate(yesterday)) return t('chat.yesterdayAt', { time })
   return (
     date.toLocaleDateString([], { timeZone: tz, month: 'short', day: 'numeric' }) + ' · ' + time
   )
@@ -791,6 +806,26 @@ function renderInputOverlay(text: string, skillName?: string): React.ReactNode {
 // ─── Markdown component overrides ────────────────────────────────────────────
 // Defined at module level so the object reference is stable across renders.
 
+/** Fallback shown when a fenced ```chart block contains an unparseable spec. */
+function InvalidChartSpec() {
+  const { t } = useT()
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        background: 'rgba(var(--lv-wash-rgb),0.015)',
+        border: '1px solid var(--lv-rule)',
+        padding: 14,
+        fontFamily: 'var(--font-mono)',
+        fontSize: 11,
+        color: 'var(--lv-mute)',
+      }}
+    >
+      {t('chat.chartError', { message: t('chat.invalidChartSpec') })}
+    </div>
+  )
+}
+
 const MD_COMPONENTS: Components = {
   // Suppress the <pre> wrapper — CodeBlock provides its own container.
   pre({ children }) {
@@ -805,21 +840,7 @@ const MD_COMPONENTS: Components = {
       try {
         return <ChartBlock spec={JSON.parse(code) as ChartSpec} />
       } catch {
-        return (
-          <div
-            style={{
-              marginTop: 12,
-              background: 'rgba(var(--lv-wash-rgb),0.015)',
-              border: '1px solid var(--lv-rule)',
-              padding: 14,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: 'var(--lv-mute)',
-            }}
-          >
-            Chart could not be rendered: invalid chart spec
-          </div>
-        )
+        return <InvalidChartSpec />
       }
     }
 
@@ -960,6 +981,7 @@ function AttachmentPreviewModal({
   attachment: MessageAttachment
   onClose: () => void
 }) {
+  const { t } = useT()
   const isImage = attachment.type.startsWith('image/')
   const isPdf = attachment.type === 'application/pdf'
 
@@ -1118,7 +1140,7 @@ function AttachmentPreviewModal({
                 color: 'var(--lv-mute)',
               }}
             >
-              Binary file — cannot preview
+              {t('chat.binaryNoPreview')}
             </div>
           )}
         </div>
@@ -1298,6 +1320,7 @@ function ContextPanel({
   sessionPrompt?: string
   promptPending?: boolean
 }) {
+  const { t } = useT()
   const [previewing, setPreviewing] = useState<MessageAttachment | null>(null)
   const isEmpty = items.length === 0 && !sessionPrompt
 
@@ -1322,7 +1345,7 @@ function ContextPanel({
               fontWeight: 500,
             }}
           >
-            Context
+            {t('chat.context')}
           </span>
         </div>
 
@@ -1349,11 +1372,11 @@ function ContextPanel({
                 userSelect: 'none',
               }}
             >
-              Files and photos
+              {t('chat.emptyHint1')}
               <br />
-              you share will
+              {t('chat.emptyHint2')}
               <br />
-              appear here
+              {t('chat.emptyHint3')}
             </p>
           ) : (
             <>
@@ -1378,7 +1401,7 @@ function ContextPanel({
                         fontWeight: 500,
                       }}
                     >
-                      Prompt
+                      {t('chat.prompt')}
                     </span>
                     {promptPending && (
                       <span
@@ -1392,7 +1415,7 @@ function ContextPanel({
                           padding: '1px 5px',
                         }}
                       >
-                        pending
+                        {t('chat.pending')}
                       </span>
                     )}
                   </div>
@@ -1435,7 +1458,7 @@ function ContextPanel({
                       marginBottom: 8,
                     }}
                   >
-                    Files
+                    {t('chat.files')}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {items.map((att, i) => (
@@ -1493,6 +1516,7 @@ function MsgActionBtn({
 }
 
 function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
+  const { t } = useT()
   const [copied, setCopied] = useState(false)
 
   const handleCopy = () => {
@@ -1523,10 +1547,10 @@ function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
             userSelect: 'none',
           }}
         >
-          {formatTimestamp(msg.timestamp)}
+          {formatTimestamp(msg.timestamp, t)}
         </span>
       )}
-      <MsgActionBtn onClick={handleCopy} title={copied ? 'Copied!' : 'Copy'}>
+      <MsgActionBtn onClick={handleCopy} title={copied ? t('chat.copied') : t('chat.copy')}>
         {copied ? <Check size={13} /> : <Copy size={13} />}
       </MsgActionBtn>
     </div>
@@ -1536,6 +1560,7 @@ function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
 // ─── ThinkingBlock ────────────────────────────────────────────────────────────
 
 function ThinkingBlock({ content, isLive }: { content: string; isLive: boolean }) {
+  const { t } = useT()
   // Expanded while the model is still thinking (no response yet); collapsed once done.
   const [open, setOpen] = useState(isLive)
 
@@ -1580,7 +1605,7 @@ function ThinkingBlock({ content, isLive }: { content: string; isLive: boolean }
             flex: 1,
           }}
         >
-          {isLive ? 'Reasoning…' : 'Reasoning'}
+          {isLive ? t('chat.reasoningLive') : t('chat.reasoning')}
         </span>
         <span
           style={{
@@ -1630,6 +1655,7 @@ function MessageBubble({
   isLive?: boolean
   skillNames?: Record<string, string>
 }) {
+  const { t } = useT()
   const [hover, setHover] = useState(false)
   const isUser = msg.role === 'user'
   const hasCharts = (msg.charts?.length ?? 0) > 0 || msg.content.includes('```chart')
@@ -1666,7 +1692,7 @@ function MessageBubble({
                 transition: 'opacity 0.2s var(--ease-snap)',
               }}
             >
-              {formatTimestamp(msg.timestamp)}
+              {formatTimestamp(msg.timestamp, t)}
             </span>
             <span
               style={{
@@ -1678,7 +1704,7 @@ function MessageBubble({
                 fontWeight: 500,
               }}
             >
-              You
+              {t('chat.you')}
             </span>
           </div>
           {/* Bubble */}
@@ -1762,7 +1788,7 @@ function MessageBubble({
               onClick={() => {
                 navigator.clipboard.writeText(msg.content).catch(() => {})
               }}
-              title="Copy"
+              title={t('chat.copy')}
             >
               <Copy size={13} />
             </MsgActionBtn>
@@ -1804,7 +1830,7 @@ function MessageBubble({
                 fontWeight: 500,
               }}
             >
-              {formatTimestamp(msg.timestamp)}
+              {formatTimestamp(msg.timestamp, t)}
             </span>
           )}
         </div>
@@ -1843,6 +1869,7 @@ function MessageBubble({
 // ─── MoreDivider ──────────────────────────────────────────────────────────────
 
 function MoreDivider({ loading, onClick }: { loading: boolean; onClick?: () => void }) {
+  const { t } = useT()
   return (
     <div
       onClick={!loading ? onClick : undefined}
@@ -1869,10 +1896,10 @@ function MoreDivider({ loading, onClick }: { loading: boolean; onClick?: () => v
       >
         {loading ? (
           <>
-            <Loader2 size={10} className="animate-spin" /> loading
+            <Loader2 size={10} className="animate-spin" /> {t('chat.loading')}
           </>
         ) : (
-          '— more —'
+          t('chat.more')
         )}
       </span>
       <div style={{ flex: 1, height: 1, background: 'var(--lv-rule)' }} />
@@ -1904,17 +1931,18 @@ function toStoreMessage(m: ChatSessionMessage): Message {
 
 // ─── Greeting helper ─────────────────────────────────────────────────────────
 
-function getGreeting(): string {
+function getGreeting(t: (key: string, vars?: Record<string, string | number>) => string): string {
   const h = new Date().getHours()
-  if (h >= 5 && h < 12) return 'Good morning'
-  if (h < 17) return 'Good afternoon'
-  if (h < 22) return 'Good evening'
-  return 'Night owl'
+  if (h >= 5 && h < 12) return t('chat.greetingMorning')
+  if (h < 17) return t('chat.greetingAfternoon')
+  if (h < 22) return t('chat.greetingEvening')
+  return t('chat.greetingNight')
 }
 
 // ─── ChatWindow ───────────────────────────────────────────────────────────────
 
 export function ChatWindow() {
+  const { t } = useT()
   const {
     user,
     sessionMessages,
@@ -2296,7 +2324,7 @@ export function ChatWindow() {
               lineHeight: 1.25,
             }}
           >
-            {getGreeting()}
+            {getGreeting(t)}
             {user?.username ? `, ${user.username}` : ''}.
           </div>
           <div
@@ -2308,7 +2336,7 @@ export function ChatWindow() {
               color: 'var(--lv-soft)',
             }}
           >
-            What&apos;s on your mind?
+            {t('chat.onYourMind')}
           </div>
         </div>
 
@@ -2385,7 +2413,7 @@ export function ChatWindow() {
                     const box = e.currentTarget.closest<HTMLElement>('div[data-input-box]')
                     if (box) box.style.borderColor = 'rgba(200,168,106,0.15)'
                   }}
-                  placeholder="Ask anything…"
+                  placeholder={t('chat.askAnythingPlaceholder')}
                   rows={3}
                   style={{
                     width: '100%',
@@ -2419,7 +2447,7 @@ export function ChatWindow() {
                   <DropdownMenu.Trigger asChild>
                     <button
                       type="button"
-                      title="Add attachment"
+                      title={t('chat.addAttachment')}
                       style={{
                         width: 28,
                         height: 28,
@@ -2476,7 +2504,7 @@ export function ChatWindow() {
                         className="hover:bg-accent focus:bg-accent transition-colors"
                       >
                         <ImageIcon size={13} style={{ color: 'var(--lv-mute)' }} />
-                        Add files or photos
+                        {t('chat.addFilesOrPhotos')}
                       </DropdownMenu.Item>
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
@@ -2512,6 +2540,10 @@ export function ChatWindow() {
                         }}
                       />
                       {selectedModel ?? '—'}
+                      <span style={{ color: 'var(--lv-mute)' }}>·</span>
+                      <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {t(`chat.effort_${effortMode}`)}
+                      </span>
                       <ChevronDown size={10} style={{ color: 'var(--lv-mute)' }} />
                     </button>
                   </DropdownMenu.Trigger>
@@ -2546,7 +2578,7 @@ export function ChatWindow() {
                           color: 'var(--lv-mute)',
                         }}
                       >
-                        Model
+                        {t('chat.model')}
                       </div>
                       {availableModels.length === 0 ? (
                         <div
@@ -2557,7 +2589,7 @@ export function ChatWindow() {
                             color: 'var(--lv-mute)',
                           }}
                         >
-                          No models found
+                          {t('chat.noModels')}
                         </div>
                       ) : (
                         availableModels.map((m) => (
@@ -2612,7 +2644,7 @@ export function ChatWindow() {
                           color: 'var(--lv-mute)',
                         }}
                       >
-                        Effort
+                        {t('chat.effort')}
                       </div>
                       <div
                         style={{
@@ -2644,7 +2676,7 @@ export function ChatWindow() {
                               transition: 'all 0.15s',
                             }}
                           >
-                            {e === 'medium' ? 'Mid' : e.charAt(0).toUpperCase() + e.slice(1)}
+                            {t(`chat.effort_${e}`)}
                           </button>
                         ))}
                       </div>
@@ -2687,7 +2719,7 @@ export function ChatWindow() {
               marginTop: 12,
             }}
           >
-            ↵ send · ⌥↵ newline
+            {t('chat.kbdHint')}
           </p>
         </div>
       </div>
@@ -2728,12 +2760,12 @@ export function ChatWindow() {
             flex: 1,
           }}
         >
-          {sessionTitle ?? 'New chat'}
+          {sessionTitle ?? t('chat.newChat')}
         </div>
         <button
           type="button"
           onClick={() => setShowContext((v) => !v)}
-          title="Toggle context panel"
+          title={t('chat.toggleContext')}
           style={{
             background: 'none',
             border: 'none',
@@ -2782,7 +2814,7 @@ export function ChatWindow() {
                     letterSpacing: '0.1em',
                   }}
                 >
-                  Ask anything
+                  {t('chat.askAnything')}
                 </p>
               </div>
             )}
@@ -2847,7 +2879,7 @@ export function ChatWindow() {
                   <DropdownMenu.Trigger asChild>
                     <button
                       type="button"
-                      title="Add to message"
+                      title={t('chat.addToMessage')}
                       style={{
                         width: 32,
                         height: 32,
@@ -2904,7 +2936,7 @@ export function ChatWindow() {
                         className="hover:bg-accent focus:bg-accent transition-colors"
                       >
                         <ImageIcon size={13} style={{ color: 'var(--lv-mute)' }} />
-                        Add files or photos
+                        {t('chat.addFilesOrPhotos')}
                       </DropdownMenu.Item>
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
@@ -3069,7 +3101,7 @@ export function ChatWindow() {
                         // Shift/⌘/Ctrl+↵ → browser default newline
                       }
                     }}
-                    placeholder="Continue the thread…"
+                    placeholder={t('chat.continueThread')}
                     rows={1}
                     style={{
                       position: 'relative',
@@ -3133,7 +3165,7 @@ export function ChatWindow() {
                 <span
                   style={{ fontFamily: 'var(--font-mono)', fontSize: 9.5, color: 'var(--lv-mute)' }}
                 >
-                  ↵ send · ⌥↵ newline
+                  {t('chat.kbdHint')}
                 </span>
                 <span style={{ flex: 1 }} />
                 <DropdownMenu.Root>
@@ -3163,6 +3195,10 @@ export function ChatWindow() {
                         }}
                       />
                       {selectedModel ?? '—'}
+                      <span style={{ color: 'var(--lv-mute)' }}>·</span>
+                      <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {t(`chat.effort_${effortMode}`)}
+                      </span>
                       <ChevronDown size={10} style={{ color: 'var(--lv-mute)' }} />
                     </button>
                   </DropdownMenu.Trigger>
@@ -3195,7 +3231,7 @@ export function ChatWindow() {
                             color: 'var(--lv-mute)',
                           }}
                         >
-                          No models found
+                          {t('chat.noModels')}
                         </div>
                       ) : (
                         availableModels.map((m) => (
@@ -3250,7 +3286,7 @@ export function ChatWindow() {
                           color: 'var(--lv-mute)',
                         }}
                       >
-                        Effort
+                        {t('chat.effort')}
                       </div>
                       <div
                         style={{
@@ -3285,7 +3321,7 @@ export function ChatWindow() {
                               transition: 'all 0.15s',
                             }}
                           >
-                            {e === 'medium' ? 'Mid' : e.charAt(0).toUpperCase() + e.slice(1)}
+                            {t(`chat.effort_${e}`)}
                           </button>
                         ))}
                       </div>

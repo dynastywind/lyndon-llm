@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react'
 import { deleteSkill, getSkills, toggleSkill, uploadSkill } from '@/api/client'
+import { useT } from '@/i18n'
 import type { Skill, SkillToolDef } from '@/types'
 
 // ── language badge colours ────────────────────────────────────────────────────
@@ -65,6 +66,7 @@ function formatDate(iso: string) {
 // ── SKILL.md modal ────────────────────────────────────────────────────────────
 
 function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void }) {
+  const { t } = useT()
   const [rawView, setRawView] = useState(false)
   const [copied, setCopied] = useState(false)
   const raw = skill.skill_md || ''
@@ -97,7 +99,7 @@ function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void })
                 <span
                   className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${skill.enabled ? 'bg-green-500/15 text-green-400' : 'bg-muted text-muted-foreground'}`}
                 >
-                  {skill.enabled ? 'Enabled' : 'Disabled'}
+                  {skill.enabled ? t('skills.enabled') : t('skills.disabled')}
                 </span>
                 <Dialog.Close asChild>
                   <button className="text-muted-foreground hover:text-foreground transition-colors">
@@ -110,15 +112,15 @@ function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void })
             {/* metadata grid */}
             <div className="grid grid-cols-3 gap-x-6 gap-y-1 mb-4 text-xs">
               <div>
-                <p className="text-muted-foreground mb-0.5">Version</p>
+                <p className="text-muted-foreground mb-0.5">{t('skills.version')}</p>
                 <p className="font-mono">{skill.version}</p>
               </div>
               <div>
-                <p className="text-muted-foreground mb-0.5">Added</p>
+                <p className="text-muted-foreground mb-0.5">{t('skills.added')}</p>
                 <p>{formatDate(skill.created_at)}</p>
               </div>
               <div>
-                <p className="text-muted-foreground mb-0.5">Tools</p>
+                <p className="text-muted-foreground mb-0.5">{t('skills.tools')}</p>
                 <div className="flex flex-wrap gap-1">
                   {skill.tools.length === 0 ? (
                     <span>—</span>
@@ -139,7 +141,7 @@ function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void })
             {skill.description && (
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">
-                  Description
+                  {t('skills.description')}
                 </p>
                 <p className="text-sm text-foreground/80 leading-relaxed">{skill.description}</p>
               </div>
@@ -155,14 +157,14 @@ function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void })
             <div className="flex items-center justify-end gap-1.5 px-4 py-2 shrink-0">
               <button
                 onClick={copy}
-                title="Copy raw SKILL.md"
+                title={t('skills.copyRaw')}
                 className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
               >
                 {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
               </button>
               <button
                 onClick={() => setRawView((v) => !v)}
-                title={rawView ? 'Rendered view' : 'Raw view'}
+                title={rawView ? t('skills.renderedView') : t('skills.rawView')}
                 className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded hover:bg-muted"
               >
                 {rawView ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -180,7 +182,7 @@ function SkillMdModal({ skill, onClose }: { skill: Skill; onClose: () => void })
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{body}</ReactMarkdown>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground italic">No body text in SKILL.md.</p>
+                <p className="text-xs text-muted-foreground italic">{t('skills.noBody')}</p>
               )}
             </div>
           </div>
@@ -203,6 +205,7 @@ function SkillCard({
   onDelete: (id: string) => void
   onViewMarkdown: (skill: Skill) => void
 }) {
+  const { t, tn } = useT()
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   return (
@@ -225,7 +228,7 @@ function SkillCard({
               v{skill.version}
             </span>
             <span className="text-[10px] text-muted-foreground">
-              {skill.tools.length} {skill.tools.length === 1 ? 'tool' : 'tools'}
+              {tn('skills.toolCount', skill.tools.length, { count: skill.tools.length })}
             </span>
           </div>
           <p className="text-xs text-muted-foreground truncate mt-0.5">{skill.description}</p>
@@ -246,7 +249,7 @@ function SkillCard({
         {/* enabled toggle */}
         <label
           className="relative inline-flex items-center cursor-pointer shrink-0"
-          title={skill.enabled ? 'Disable' : 'Enable'}
+          title={skill.enabled ? t('skills.disable') : t('skills.enable')}
         >
           <input
             type="checkbox"
@@ -260,25 +263,25 @@ function SkillCard({
         {/* delete */}
         {confirmDelete ? (
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-xs text-destructive">Delete?</span>
+            <span className="text-xs text-destructive">{t('skills.deleteConfirm')}</span>
             <button
               onClick={() => onDelete(skill.id)}
               className="text-xs bg-destructive text-destructive-foreground px-2 py-0.5 rounded hover:opacity-80"
             >
-              Yes
+              {t('skills.yes')}
             </button>
             <button
               onClick={() => setConfirmDelete(false)}
               className="text-xs text-muted-foreground hover:text-foreground"
             >
-              No
+              {t('skills.no')}
             </button>
           </div>
         ) : (
           <button
             onClick={() => setConfirmDelete(true)}
             className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
-            aria-label="Delete skill"
+            aria-label={t('skills.deleteSkill')}
           >
             <Trash2 size={14} />
           </button>
@@ -291,6 +294,7 @@ function SkillCard({
 // ── upload zone ───────────────────────────────────────────────────────────────
 
 function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
+  const { t } = useT()
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -306,12 +310,12 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
         const skill = await uploadSkill(fd)
         onUploaded(skill)
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Upload failed')
+        setError(err instanceof Error ? err.message : t('skills.uploadFailed'))
       } finally {
         setUploading(false)
       }
     },
-    [onUploaded],
+    [onUploaded, t],
   )
 
   const handleZipFile = (file: File) => {
@@ -338,7 +342,7 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
       if (f.name.endsWith('.zip')) {
         handleZipFile(f)
       } else {
-        setError('Drop a .zip file or a folder')
+        setError(t('skills.dropZipOrFolder'))
       }
     }
   }
@@ -364,11 +368,11 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
           >
             {uploading ? (
               <>
-                <Loader2 size={13} className="animate-spin" /> Installing…
+                <Loader2 size={13} className="animate-spin" /> {t('skills.installing')}
               </>
             ) : (
               <>
-                <UploadCloud size={13} /> Upload Skill{' '}
+                <UploadCloud size={13} /> {t('skills.uploadSkill')}{' '}
                 <ChevronDown
                   size={11}
                   className={`transition-transform ${menuOpen ? 'rotate-180' : ''}`}
@@ -385,7 +389,7 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
                 }}
                 className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors"
               >
-                <PackagePlus size={12} /> ZIP file
+                <PackagePlus size={12} /> {t('skills.zipFile')}
               </button>
               <button
                 onClick={() => {
@@ -394,13 +398,15 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
                 }}
                 className="w-full text-left text-xs px-3 py-2 flex items-center gap-2 hover:bg-muted transition-colors border-t border-border"
               >
-                <UploadCloud size={12} /> Folder
+                <UploadCloud size={12} /> {t('skills.folder')}
               </button>
             </div>
           )}
         </div>
         {dragging && (
-          <span className="text-xs text-muted-foreground animate-pulse">Drop to install…</span>
+          <span className="text-xs text-muted-foreground animate-pulse">
+            {t('skills.dropToInstall')}
+          </span>
         )}
       </div>
 
@@ -436,17 +442,18 @@ function UploadZone({ onUploaded }: { onUploaded: (skill: Skill) => void }) {
 // ── empty state ───────────────────────────────────────────────────────────────
 
 function EmptyState() {
+  const { t } = useT()
   return (
     <div className="text-center py-8 text-muted-foreground">
       <Puzzle size={32} className="mx-auto mb-3 opacity-30" />
-      <p className="text-sm font-medium mb-1">No skills installed</p>
+      <p className="text-sm font-medium mb-1">{t('skills.noSkills')}</p>
       <p className="text-xs mb-3">
-        Upload a ZIP or folder containing a <code className="bg-muted px-1 rounded">SKILL.md</code>{' '}
-        manifest.
+        {t('skills.uploadHintBefore')} <code className="bg-muted px-1 rounded">SKILL.md</code>{' '}
+        {t('skills.uploadHintAfter')}
       </p>
       <details className="text-left max-w-sm mx-auto">
         <summary className="text-xs cursor-pointer hover:text-foreground select-none">
-          SKILL.md format
+          {t('skills.skillMdFormat')}
         </summary>
         <pre className="mt-2 text-[11px] bg-muted rounded p-3 overflow-x-auto whitespace-pre-wrap">{`---
 name: my-skill
@@ -481,6 +488,7 @@ function Pagination({
   total: number
   onChange: (p: number) => void
 }) {
+  const { t } = useT()
   const pages = Math.ceil(total / PAGE_SIZE)
   if (pages <= 1) return null
   return (
@@ -490,18 +498,18 @@ function Pagination({
         disabled={page === 0}
         className="px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
-        ← Prev
+        ← {t('skills.prev')}
       </button>
       <span>
         {page + 1} / {pages}
-        <span className="ml-2 opacity-60">({total} skills)</span>
+        <span className="ml-2 opacity-60">({t('skills.skillsCount', { count: total })})</span>
       </span>
       <button
         onClick={() => onChange(page + 1)}
         disabled={page >= pages - 1}
         className="px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
-        Next →
+        {t('skills.next')} →
       </button>
     </div>
   )
@@ -510,6 +518,7 @@ function Pagination({
 // ── main component ────────────────────────────────────────────────────────────
 
 export function SkillsPanel() {
+  const { t } = useT()
   const [skills, setSkills] = useState<Skill[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -523,11 +532,11 @@ export function SkillsPanel() {
       const data = await getSkills()
       setSkills(data)
     } catch {
-      setError('Failed to load skills')
+      setError(t('skills.loadFailed'))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     load()

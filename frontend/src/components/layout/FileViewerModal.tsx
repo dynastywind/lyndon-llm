@@ -3,6 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import MonacoEditor from '@monaco-editor/react'
 import { AlertCircle, Loader2, X } from 'lucide-react'
 import { fetchRagSourceContent, type RagSource } from '@/api/client'
+import { useT } from '@/i18n'
 
 // ── Monaco language map ───────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ interface Props {
 }
 
 export function FileViewerModal({ src, onClose }: Props) {
+  const { t } = useT()
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -70,7 +72,7 @@ export function FileViewerModal({ src, onClose }: Props) {
       })
       .catch((err: unknown) => {
         if (cancelled) return
-        setError(err instanceof Error ? err.message : 'Failed to load file')
+        setError(err instanceof Error ? err.message : t('fileViewer.loadError'))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -79,7 +81,7 @@ export function FileViewerModal({ src, onClose }: Props) {
     return () => {
       cancelled = true
     }
-  }, [src])
+  }, [src, t])
 
   // Revoke blob URL when src changes away or component unmounts
   useEffect(() => {
@@ -150,7 +152,7 @@ export function FileViewerModal({ src, onClose }: Props) {
                   color: 'var(--lv-gold)',
                 }}
               >
-                {isPdf ? 'PDF' : ext.toUpperCase()} · VIEW
+                {isPdf ? 'PDF' : ext.toUpperCase()} · {t('fileViewer.viewLabel')}
               </span>
               <Dialog.Title
                 style={{
@@ -169,7 +171,7 @@ export function FileViewerModal({ src, onClose }: Props) {
 
             <button
               onClick={onClose}
-              title="Close"
+              title={t('fileViewer.close')}
               style={{
                 background: 'none',
                 border: 'none',
@@ -207,7 +209,7 @@ export function FileViewerModal({ src, onClose }: Props) {
                   letterSpacing: '0.1em',
                 }}
               >
-                <Loader2 size={14} className="animate-spin" /> Loading…
+                <Loader2 size={14} className="animate-spin" /> {t('fileViewer.loading')}
               </div>
             )}
 

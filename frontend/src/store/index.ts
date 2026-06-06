@@ -140,6 +140,8 @@ interface AppState {
   setCodeTheme: (theme: CodeThemeName) => void
   uiTheme: 'dark' | 'light'
   setUiTheme: (theme: 'dark' | 'light') => void
+  language: 'en' | 'zh'
+  setLanguage: (language: 'en' | 'zh') => void
 
   // Profile
   profession: string
@@ -326,6 +328,11 @@ export const useAppStore = create<AppState>()(
         localStorage.setItem('lv-theme', uiTheme)
         set({ uiTheme })
       },
+      language: (localStorage.getItem('lv-lang') as 'en' | 'zh') ?? 'en',
+      setLanguage: (language) => {
+        localStorage.setItem('lv-lang', language)
+        set({ language })
+      },
 
       // ── Profile ───────────────────────────────────────────────────────
       profession: '',
@@ -341,6 +348,7 @@ export const useAppStore = create<AppState>()(
         repoPath: s.repoPath,
         codeTheme: s.codeTheme,
         uiTheme: s.uiTheme,
+        language: s.language,
         systemPrompt: s.systemPrompt,
         appliedSessionPrompts: s.appliedSessionPrompts,
         selectedModel: s.selectedModel,

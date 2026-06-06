@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useT } from '@/i18n'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
 import {
@@ -48,16 +49,19 @@ const LV = {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-function relativeTime(isoString: string): string {
+function relativeTime(
+  isoString: string,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   const diff = Date.now() - new Date(isoString).getTime()
   const mins = Math.floor(diff / 60_000)
-  if (mins < 1) return 'now'
-  if (mins < 60) return `${mins}m`
+  if (mins < 1) return t('sidebar.timeNow')
+  if (mins < 60) return t('sidebar.timeMinutes', { mins })
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h`
+  if (hours < 24) return t('sidebar.timeHours', { hours })
   const days = Math.floor(hours / 24)
-  if (days === 1) return 'yesterday'
-  if (days < 7) return `${days}d`
+  if (days === 1) return t('sidebar.timeYesterday')
+  if (days < 7) return t('sidebar.timeDays', { days })
   return new Date(isoString).toLocaleDateString()
 }
 
@@ -250,6 +254,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ── component ─────────────────────────────────────────────────────────────────
 export function Sidebar() {
+  const { t } = useT()
   const {
     mode,
     setMode,
@@ -287,12 +292,8 @@ export function Sidebar() {
   const [promptDraft, setPromptDraft] = useState('')
   const promptInputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Search
+  // Search dialog
   const [searchOpen, setSearchOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<(ChatSession & { snippet?: string })[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
-  const searchInputRef = useRef<HTMLInputElement>(null)
 
   // The key for the current session prompt slot
   const promptKey = sessionId ?? '__new__'
@@ -331,35 +332,17 @@ export function Sidebar() {
     if (!IS_TAURI && mode !== 'chat') setMode('chat')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Search: reset when closed; auto-focus when opened
+  // ⌘K / Ctrl+K global shortcut — toggles the search dialog
   useEffect(() => {
-    if (!searchOpen) {
-      setSearchQuery('')
-      setSearchResults([])
-    } else {
-      setTimeout(() => searchInputRef.current?.focus(), 50)
-    }
-  }, [searchOpen])
-
-  // Search: debounced query → backend
-  useEffect(() => {
-    if (!searchOpen || !searchQuery.trim()) {
-      setSearchResults([])
-      return
-    }
-    setSearchLoading(true)
-    const t = setTimeout(async () => {
-      try {
-        const data = await searchChatSessions(mode === 'chat' ? 'chat' : 'code', searchQuery.trim())
-        setSearchResults(data.sessions)
-      } catch {
-        // ignore network errors silently
-      } finally {
-        setSearchLoading(false)
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen((v) => !v)
       }
-    }, 300)
-    return () => clearTimeout(t)
-  }, [searchQuery, searchOpen, mode])
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   const handleNewChat = () => {
     if (!sessionId) return
@@ -434,86 +417,25 @@ export function Sidebar() {
             </span>
           </div>
           <button
-            onClick={() => setSearchOpen((o) => !o)}
-            title={searchOpen ? 'Close search' : 'Search messages'}
+            onClick={() => setSearchOpen(true)}
+            title={t('sidebar.searchTitle')}
             style={{
               marginLeft: 'auto',
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              color: searchOpen ? LV.gold : LV.mute,
+              color: LV.mute,
               padding: 4,
               display: 'flex',
               alignItems: 'center',
               transition: 'color 0.15s',
             }}
+            className="hover:!text-[var(--lv-gold)] transition-colors"
           >
-            <Search size={15} />
+            <Search size={16} />
           </button>
         </div>
       </div>
-
-      {/* Search input bar (shown when search icon is active) */}
-      {searchOpen && (
-        <div
-          style={{
-            padding: '8px 12px',
-            borderBottom: `1px solid ${LV.rule}`,
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: LV.elev,
-              borderRadius: 6,
-              padding: '5px 10px',
-              border: `1px solid ${LV.rule}`,
-            }}
-          >
-            <Search size={13} color={LV.mute} />
-            <input
-              ref={searchInputRef}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Escape' && setSearchOpen(false)}
-              placeholder={
-                mode === 'cowork'
-                  ? 'Search sessions…'
-                  : mode === 'code'
-                    ? 'Search workspaces…'
-                    : 'Search messages…'
-              }
-              style={{
-                flex: 1,
-                background: 'none',
-                border: 'none',
-                outline: 'none',
-                fontFamily: LV.font.sans,
-                fontSize: 13,
-                color: LV.ink,
-              }}
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: LV.mute,
-                  display: 'flex',
-                  padding: 0,
-                }}
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Mode tabs — desktop only; web is chat-only */}
       {IS_TAURI && (
@@ -581,14 +503,14 @@ export function Sidebar() {
           >
             <path d="M5 12h14M12 5v14" />
           </svg>
-          {mode === 'chat' ? 'New chat' : 'New session'}
+          {mode === 'chat' ? t('sidebar.newChat') : t('sidebar.newSession')}
         </button>
 
         {/* More menu */}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button
-              title="More options"
+              title={t('sidebar.moreOptions')}
               style={{
                 background: 'none',
                 border: 'none',
@@ -636,7 +558,9 @@ export function Sidebar() {
                 className="hover:bg-accent focus:bg-accent transition-colors"
               >
                 <MessageSquarePlus size={13} style={{ color: LV.mute }} />
-                {currentSessionPrompt ? 'Edit session prompt' : 'New chat with a prompt'}
+                {currentSessionPrompt
+                  ? t('sidebar.editSessionPrompt')
+                  : t('sidebar.newChatWithPrompt')}
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
@@ -678,7 +602,7 @@ export function Sidebar() {
                   marginBottom: 6,
                 }}
               >
-                Session Prompt
+                {t('sidebar.sessionPromptTitle')}
               </p>
               <p
                 style={{
@@ -689,7 +613,7 @@ export function Sidebar() {
                   lineHeight: 1.6,
                 }}
               >
-                Quoted before your first message in this session. Applies once then clears.
+                {t('sidebar.sessionPromptHint')}
               </p>
               <textarea
                 ref={promptInputRef}
@@ -700,7 +624,7 @@ export function Sidebar() {
                   // Ctrl/Cmd+Enter to confirm
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handlePromptConfirm()
                 }}
-                placeholder="e.g. Assume I'm a senior backend engineer. Be terse and skip basics."
+                placeholder={t('sidebar.sessionPromptPlaceholder')}
                 rows={6}
                 style={{
                   width: '100%',
@@ -736,7 +660,7 @@ export function Sidebar() {
                     color: 'var(--lv-soft)',
                   }}
                 >
-                  Cancel
+                  {t('sidebar.cancel')}
                 </button>
                 {currentSessionPrompt && (
                   <button
@@ -754,7 +678,7 @@ export function Sidebar() {
                       color: 'var(--lv-mute)',
                     }}
                   >
-                    Clear
+                    {t('sidebar.clear')}
                   </button>
                 )}
                 <button
@@ -770,7 +694,7 @@ export function Sidebar() {
                     color: 'var(--lv-bg)',
                   }}
                 >
-                  Start
+                  {t('sidebar.start')}
                 </button>
               </div>
             </div>
@@ -781,183 +705,99 @@ export function Sidebar() {
       {/* Session list */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {searchOpen && searchQuery.trim() ? (
-            /* ── Search results ── */
-            <>
-              <SectionLabel>Results</SectionLabel>
-              {searchLoading && (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 16px',
-                    color: LV.mute,
-                    fontFamily: LV.font.mono,
-                    fontSize: 11,
-                  }}
-                >
-                  <Loader2 size={11} className="animate-spin" />
-                  Searching…
-                </div>
-              )}
-              {!searchLoading && searchResults.length === 0 && (
-                <p
-                  style={{
-                    padding: '8px 16px',
-                    fontFamily: LV.font.mono,
-                    fontSize: 11,
-                    color: LV.mute,
-                  }}
-                >
-                  No results for &quot;{searchQuery}&quot;
-                </p>
-              )}
-              {searchResults.map((s) => (
-                <button
-                  key={s.session_id}
-                  onClick={() => {
-                    setSessionId(s.session_id)
-                    setSessionTitle(s.title)
-                    setSearchOpen(false)
-                  }}
-                  style={{
-                    width: '100%',
-                    textAlign: 'left',
-                    background: 'none',
-                    border: 'none',
-                    padding: '8px 16px',
-                    cursor: 'pointer',
-                    borderLeft: `2px solid ${s.session_id === sessionId ? LV.gold : 'transparent'}`,
-                  }}
-                  className="hover:bg-[var(--lv-wash)]"
-                >
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: LV.ink,
-                      fontFamily: LV.font.sans,
-                      fontWeight: 500,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {s.title || 'Untitled'}
-                  </div>
-                  {s.snippet && (
-                    <div
-                      style={{
-                        fontSize: 11.5,
-                        color: LV.mute,
-                        fontFamily: LV.font.sans,
-                        marginTop: 2,
-                        overflow: 'hidden',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                      }}
-                    >
-                      {s.snippet}
-                    </div>
-                  )}
-                </button>
-              ))}
-            </>
+          {loading ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 16px',
+                color: LV.mute,
+                fontFamily: LV.font.mono,
+                fontSize: 11,
+              }}
+            >
+              <Loader2 size={11} className="animate-spin" />
+              {t('sidebar.loading')}
+            </div>
+          ) : sessions.length === 0 ? (
+            <p
+              style={{
+                padding: '8px 16px',
+                fontFamily: LV.font.mono,
+                fontSize: 11,
+                color: LV.mute,
+              }}
+            >
+              {t('sidebar.noHistory')}
+            </p>
           ) : (
-            /* ── Normal session list ── */
             <>
-              {loading ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 16px',
-                    color: LV.mute,
-                    fontFamily: LV.font.mono,
-                    fontSize: 11,
-                  }}
-                >
-                  <Loader2 size={11} className="animate-spin" />
-                  Loading…
-                </div>
-              ) : sessions.length === 0 ? (
-                <p
-                  style={{
-                    padding: '8px 16px',
-                    fontFamily: LV.font.mono,
-                    fontSize: 11,
-                    color: LV.mute,
-                  }}
-                >
-                  No history yet.
-                </p>
-              ) : (
+              {/* ── Pinned ── */}
+              {sessions.some((s) => pinnedSessionIds.includes(s.session_id)) && (
                 <>
-                  {/* ── Pinned ── */}
-                  {sessions.some((s) => pinnedSessionIds.includes(s.session_id)) && (
-                    <>
-                      <SectionLabel>Pinned</SectionLabel>
-                      {sessions
-                        .filter((s) => pinnedSessionIds.includes(s.session_id))
-                        .sort(
-                          (a, b) =>
-                            pinnedSessionIds.indexOf(a.session_id) -
-                            pinnedSessionIds.indexOf(b.session_id),
-                        )
-                        .map((s) => (
-                          <SessionRow
-                            key={s.session_id}
-                            session={s}
-                            active={sessionId === s.session_id}
-                            isStreaming={streamingSet[s.session_id] === true}
-                            isPinned
-                            onSelect={handleResumeSession}
-                            onDelete={handleDeleteSession}
-                            onPin={() => unpinSession(s.session_id)}
-                            onRename={(newTitle) => {
-                              if (sessionId === s.session_id) setSessionTitle(newTitle || null)
-                              bumpSessionVersion()
-                            }}
-                          />
-                        ))}
-                    </>
-                  )}
-
-                  {/* ── Recent ── */}
-                  <SectionLabel>
-                    {mode === 'cowork' ? 'Sessions' : mode === 'code' ? 'Workspaces' : 'Recent'}
-                  </SectionLabel>
+                  <SectionLabel>{t('sidebar.sectionPinned')}</SectionLabel>
                   {sessions
-                    .filter((s) => !pinnedSessionIds.includes(s.session_id))
+                    .filter((s) => pinnedSessionIds.includes(s.session_id))
+                    .sort(
+                      (a, b) =>
+                        pinnedSessionIds.indexOf(a.session_id) -
+                        pinnedSessionIds.indexOf(b.session_id),
+                    )
                     .map((s) => (
                       <SessionRow
                         key={s.session_id}
                         session={s}
                         active={sessionId === s.session_id}
                         isStreaming={streamingSet[s.session_id] === true}
-                        isPinned={false}
+                        isPinned
                         onSelect={handleResumeSession}
                         onDelete={handleDeleteSession}
-                        onPin={() => pinSession(s.session_id)}
+                        onPin={() => unpinSession(s.session_id)}
                         onRename={(newTitle) => {
                           if (sessionId === s.session_id) setSessionTitle(newTitle || null)
                           bumpSessionVersion()
                         }}
                       />
                     ))}
-                  {hasMore && (
-                    <div
-                      ref={sentinelRef}
-                      style={{ padding: '8px 16px', display: 'flex', justifyContent: 'center' }}
-                    >
-                      {loadingMore && (
-                        <Loader2 size={11} className="animate-spin" style={{ color: LV.mute }} />
-                      )}
-                    </div>
-                  )}
                 </>
+              )}
+
+              {/* ── Recent ── */}
+              <SectionLabel>
+                {mode === 'cowork'
+                  ? t('sidebar.sectionSessions')
+                  : mode === 'code'
+                    ? t('sidebar.sectionWorkspaces')
+                    : t('sidebar.sectionRecent')}
+              </SectionLabel>
+              {sessions
+                .filter((s) => !pinnedSessionIds.includes(s.session_id))
+                .map((s) => (
+                  <SessionRow
+                    key={s.session_id}
+                    session={s}
+                    active={sessionId === s.session_id}
+                    isStreaming={streamingSet[s.session_id] === true}
+                    isPinned={false}
+                    onSelect={handleResumeSession}
+                    onDelete={handleDeleteSession}
+                    onPin={() => pinSession(s.session_id)}
+                    onRename={(newTitle) => {
+                      if (sessionId === s.session_id) setSessionTitle(newTitle || null)
+                      bumpSessionVersion()
+                    }}
+                  />
+                ))}
+              {hasMore && (
+                <div
+                  ref={sentinelRef}
+                  style={{ padding: '8px 16px', display: 'flex', justifyContent: 'center' }}
+                >
+                  {loadingMore && (
+                    <Loader2 size={11} className="animate-spin" style={{ color: LV.mute }} />
+                  )}
+                </div>
               )}
             </>
           )}
@@ -1036,7 +876,7 @@ export function Sidebar() {
                       {user.username}
                     </div>
                     <div style={{ fontFamily: LV.font.mono, fontSize: 9.5, color: LV.mute }}>
-                      Settings
+                      {t('sidebar.settings')}
                     </div>
                   </div>
                   {/* Sliders icon */}
@@ -1082,11 +922,19 @@ export function Sidebar() {
                 >
                   {(
                     [
-                      { tab: 'profile' as SettingsTab, icon: UserCircle, label: 'Profile' },
-                      { tab: 'knowledge' as SettingsTab, icon: BookOpen, label: 'Knowledge' },
-                      { tab: 'tools' as SettingsTab, icon: Server, label: 'MCP' },
-                      { tab: 'skills' as SettingsTab, icon: Puzzle, label: 'Skills' },
-                      { tab: 'ai' as SettingsTab, icon: MessageSquare, label: 'AI & Chat' },
+                      {
+                        tab: 'profile' as SettingsTab,
+                        icon: UserCircle,
+                        label: t('sidebar.tabProfile'),
+                      },
+                      {
+                        tab: 'knowledge' as SettingsTab,
+                        icon: BookOpen,
+                        label: t('sidebar.tabKnowledge'),
+                      },
+                      { tab: 'tools' as SettingsTab, icon: Server, label: t('sidebar.tabMcp') },
+                      { tab: 'skills' as SettingsTab, icon: Puzzle, label: t('sidebar.tabSkills') },
+                      { tab: 'ai' as SettingsTab, icon: MessageSquare, label: t('sidebar.tabAi') },
                     ] as const
                   ).map(({ tab, icon: Icon, label }) => (
                     <DropdownMenu.Item
@@ -1129,7 +977,7 @@ export function Sidebar() {
                     }}
                     className="hover:bg-accent focus:bg-accent transition-colors"
                   >
-                    Logout
+                    {t('sidebar.logout')}
                   </DropdownMenu.Item>
 
                   <DropdownMenu.Item
@@ -1147,7 +995,7 @@ export function Sidebar() {
                     }}
                     className="hover:bg-accent focus:bg-accent transition-colors"
                   >
-                    Delete account
+                    {t('sidebar.deleteAccount')}
                   </DropdownMenu.Item>
                 </DropdownMenu.Content>
               </DropdownMenu.Portal>
@@ -1195,7 +1043,7 @@ export function Sidebar() {
                   <circle cx="12" cy="7" r="4" />
                 </svg>
               </div>
-              <span style={{ color: LV.ink, fontWeight: 500 }}>Login</span>
+              <span style={{ color: LV.ink, fontWeight: 500 }}>{t('sidebar.login')}</span>
             </button>
           )}
         </div>
@@ -1212,6 +1060,16 @@ export function Sidebar() {
         pendingOAuthToken={pendingOAuthToken}
       />
       <DeleteAccountDialog open={deleteAccountOpen} onOpenChange={setDeleteAccountOpen} />
+      <SearchDialog
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onSelect={(session) => {
+          setSessionId(session.session_id)
+          setSessionTitle(session.title)
+          setSearchOpen(false)
+        }}
+        mode={mode}
+      />
     </aside>
   )
 }
@@ -1236,6 +1094,7 @@ function SessionRow({
   onPin: () => void
   onRename: (newTitle: string) => void
 }) {
+  const { t } = useT()
   const [confirming, setConfirming] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [renameVal, setRenameVal] = useState('')
@@ -1332,7 +1191,8 @@ function SessionRow({
             flexShrink: 1,
           }}
         >
-          {session.title ?? (session.mode === 'cowork' ? 'New task' : 'New chat')}
+          {session.title ??
+            (session.mode === 'cowork' ? t('sidebar.newTask') : t('sidebar.newChat'))}
         </span>
         {session.mode !== 'chat' && (
           <span
@@ -1359,7 +1219,7 @@ function SessionRow({
           color: 'var(--lv-mute)',
         }}
       >
-        {relativeTime(session.updated_at)}
+        {relativeTime(session.updated_at, t)}
       </span>
 
       {/* Action buttons — hidden until hover */}
@@ -1381,7 +1241,7 @@ function SessionRow({
             e.stopPropagation()
             onPin()
           }}
-          title={isPinned ? 'Unpin' : 'Pin'}
+          title={isPinned ? t('sidebar.unpin') : t('sidebar.pin')}
           style={{
             background: 'none',
             border: 'none',
@@ -1396,7 +1256,7 @@ function SessionRow({
         </button>
         <button
           onClick={openRename}
-          title="Rename"
+          title={t('sidebar.rename')}
           style={{
             background: 'none',
             border: 'none',
@@ -1415,7 +1275,7 @@ function SessionRow({
             e.stopPropagation()
             setConfirming((v) => !v)
           }}
-          title="Delete"
+          title={t('sidebar.delete')}
           style={{
             background: 'none',
             border: 'none',
@@ -1469,7 +1329,7 @@ function SessionRow({
                   marginBottom: 14,
                 }}
               >
-                Rename chat
+                {t('sidebar.renameChat')}
               </p>
               <input
                 ref={inputRef}
@@ -1505,7 +1365,7 @@ function SessionRow({
                     color: 'var(--lv-soft)',
                   }}
                 >
-                  Cancel
+                  {t('sidebar.cancel')}
                 </button>
                 <button
                   onClick={handleRenameConfirm}
@@ -1522,7 +1382,7 @@ function SessionRow({
                     opacity: saving ? 0.6 : 1,
                   }}
                 >
-                  {saving ? 'Saving…' : 'Confirm'}
+                  {saving ? t('sidebar.saving') : t('sidebar.confirm')}
                 </button>
               </div>
             </div>
@@ -1554,13 +1414,13 @@ function SessionRow({
                 marginBottom: 12,
               }}
             >
-              Delete{' '}
+              {t('sidebar.deleteConfirmPrefix')}{' '}
               <span style={{ color: 'var(--lv-ink)', fontWeight: 500 }}>
                 {'"'}
-                {session.title ?? 'New chat'}
+                {session.title ?? t('sidebar.newChat')}
                 {'"'}
               </span>
-              ?
+              {t('sidebar.deleteConfirmSuffix')}
             </p>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
@@ -1576,7 +1436,7 @@ function SessionRow({
                   color: 'var(--lv-soft)',
                 }}
               >
-                Cancel
+                {t('sidebar.cancel')}
               </button>
               <button
                 onClick={() => {
@@ -1594,12 +1454,345 @@ function SessionRow({
                   color: 'hsl(var(--destructive-foreground))',
                 }}
               >
-                Delete
+                {t('sidebar.delete')}
               </button>
             </div>
           </div>,
           document.body,
         )}
     </div>
+  )
+}
+
+// ── SearchResultRow ───────────────────────────────────────────────────────────
+function SearchResultRow({
+  session,
+  highlighted,
+  onMouseEnter,
+  onClick,
+}: {
+  session: ChatSession & { snippet?: string }
+  highlighted: boolean
+  onMouseEnter: () => void
+  onClick: () => void
+}) {
+  const { t } = useT()
+  const [hover, setHover] = useState(false)
+  const isLit = highlighted || hover
+  return (
+    <div
+      onMouseEnter={() => {
+        setHover(true)
+        onMouseEnter()
+      }}
+      onMouseLeave={() => setHover(false)}
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        padding: '13px 20px 13px 24px',
+        cursor: 'pointer',
+        background: isLit ? 'var(--lv-elev)' : 'transparent',
+        borderRadius: isLit ? 8 : 0,
+        margin: '0 8px',
+        transition: 'background 0.12s cubic-bezier(0.2,0.8,0.2,1)',
+      }}
+    >
+      <MessageSquare
+        size={20}
+        strokeWidth={1.4}
+        style={{
+          flexShrink: 0,
+          color: isLit ? 'var(--lv-soft)' : 'var(--lv-mute)',
+          transition: 'color 0.12s',
+        }}
+      />
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          fontFamily: 'var(--font-sans)',
+          fontSize: 15,
+          fontWeight: 400,
+          color: isLit ? 'var(--lv-ink)' : 'var(--lv-soft)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          transition: 'color 0.12s',
+        }}
+      >
+        {session.title || t('sidebar.untitled')}
+      </span>
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          color: 'var(--lv-mute)',
+          flexShrink: 0,
+          letterSpacing: '0.04em',
+        }}
+      >
+        {relativeTime(session.updated_at, t)}
+      </span>
+    </div>
+  )
+}
+
+// ── SearchDialog ──────────────────────────────────────────────────────────────
+function SearchDialog({
+  open,
+  onClose,
+  onSelect,
+  mode,
+}: {
+  open: boolean
+  onClose: () => void
+  onSelect: (session: ChatSession) => void
+  mode: string
+}) {
+  const { t } = useT()
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<(ChatSession & { snippet?: string })[]>([])
+  const [loading, setLoading] = useState(false)
+  const [highlightIdx, setHighlightIdx] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Focus & reset on open
+  useEffect(() => {
+    if (open) {
+      setQuery('')
+      setHighlightIdx(0)
+      setResults([])
+      setTimeout(() => inputRef.current?.focus(), 30)
+    }
+  }, [open])
+
+  // Escape key closes the dialog
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, onClose])
+
+  // Debounced backend search
+  useEffect(() => {
+    if (!open || !query.trim()) {
+      setResults([])
+      setLoading(false)
+      return
+    }
+    setLoading(true)
+    const t = setTimeout(async () => {
+      try {
+        const data = await searchChatSessions(mode === 'chat' ? 'chat' : 'code', query.trim())
+        setResults(data.sessions)
+        setHighlightIdx(0)
+      } catch {
+        /* ignore network errors */
+      } finally {
+        setLoading(false)
+      }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [query, open, mode])
+
+  if (!open) return null
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 300,
+        background: 'rgba(0,0,0,0.6)',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        paddingTop: '10vh',
+        animation: 'lv-search-backdrop 0.15s ease-out',
+      }}
+    >
+      <style>{`
+        @keyframes lv-search-backdrop { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes lv-search-panel { from { opacity: 0; transform: translateY(-8px) scale(0.98) } to { opacity: 1; transform: translateY(0) scale(1) } }
+      `}</style>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%',
+          maxWidth: 680,
+          background: 'var(--lv-bg)',
+          border: '1px solid var(--lv-rule-strong)',
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: '70vh',
+          animation: 'lv-search-panel 0.2s cubic-bezier(0.2,0.8,0.2,1)',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Search input header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--lv-rule)',
+            flexShrink: 0,
+          }}
+        >
+          <Search size={18} style={{ color: 'var(--lv-mute)', flexShrink: 0 }} />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value)
+              setHighlightIdx(0)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setHighlightIdx((i) => Math.min(i + 1, results.length - 1))
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setHighlightIdx((i) => Math.max(i - 1, 0))
+              } else if (e.key === 'Enter' && results.length > 0) {
+                onSelect(results[highlightIdx])
+              }
+            }}
+            placeholder={t('sidebar.searchPlaceholder')}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: 'none',
+              outline: 'none',
+              fontFamily: 'var(--font-sans)',
+              fontSize: 16,
+              fontWeight: 400,
+              color: 'var(--lv-ink)',
+              caretColor: 'var(--lv-gold)',
+            }}
+          />
+          {/* Gold status dot */}
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              background: 'var(--lv-gold)',
+              flexShrink: 0,
+              display: 'inline-block',
+            }}
+          />
+          {/* Close button */}
+          <button
+            onClick={onClose}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--lv-mute)',
+              lineHeight: 0,
+              padding: 2,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--lv-ink)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--lv-mute)'
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Results list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
+          {loading && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '32px 24px',
+                justifyContent: 'center',
+                fontFamily: 'var(--font-sans)',
+                fontSize: 14,
+                color: 'var(--lv-mute)',
+              }}
+            >
+              <Loader2 size={14} className="animate-spin" />
+              {t('sidebar.searching')}
+            </div>
+          )}
+          {!loading && query.trim() && results.length === 0 && (
+            <div
+              style={{
+                padding: '32px 24px',
+                textAlign: 'center',
+                fontFamily: 'var(--font-sans)',
+                fontSize: 14,
+                color: 'var(--lv-mute)',
+              }}
+            >
+              {t('sidebar.noResults')}
+            </div>
+          )}
+          {!loading &&
+            results.map((session, idx) => (
+              <SearchResultRow
+                key={session.session_id}
+                session={session}
+                highlighted={idx === highlightIdx}
+                onMouseEnter={() => setHighlightIdx(idx)}
+                onClick={() => onSelect(session)}
+              />
+            ))}
+        </div>
+
+        {/* Footer keyboard hints */}
+        <div
+          style={{
+            borderTop: '1px solid var(--lv-rule)',
+            padding: '10px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            flexShrink: 0,
+          }}
+        >
+          {(
+            [
+              { id: 'navigate', label: t('sidebar.hintNavigate') },
+              { id: 'open', label: t('sidebar.hintOpen') },
+              { id: 'close', label: t('sidebar.hintClose') },
+            ] as const
+          ).map((hint) => (
+            <span
+              key={hint.id}
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 10,
+                color: 'var(--lv-mute)',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {hint.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }

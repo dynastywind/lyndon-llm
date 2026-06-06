@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { getMetrics } from '@/api/client'
+import { useT } from '@/i18n'
 import type { MetricRecord, MetricsSummary } from '@/types'
 
 const TOOLTIP_STYLE = {
@@ -31,9 +32,14 @@ function fmtTime(isoStr: string): string {
   return new Date(isoStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function fmtMs(ms: number | null | undefined): string {
+function fmtMs(
+  ms: number | null | undefined,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
   if (ms == null) return '—'
-  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`
+  return ms >= 1000
+    ? t('metrics.unitSeconds', { value: (ms / 1000).toFixed(1) })
+    : t('metrics.unitMillis', { value: ms })
 }
 
 // ── Stat card ────────────────────────────────────────────────────────────────
@@ -100,6 +106,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export function MetricsPanel({ active = true }: { active?: boolean }) {
+  const { t, tn } = useT()
   const [data, setData] = useState<MetricRecord[]>([])
   const [summary, setSummary] = useState<MetricsSummary | null>(null)
   const [total, setTotal] = useState(0)
@@ -139,7 +146,7 @@ export function MetricsPanel({ active = true }: { active?: boolean }) {
         }}
       >
         <Loader2 size={13} className="animate-spin" />
-        Loading metrics…
+        {t('metrics.loading')}
       </div>
     )
   }
@@ -155,7 +162,7 @@ export function MetricsPanel({ active = true }: { active?: boolean }) {
           color: 'var(--lv-mute)',
         }}
       >
-        No metrics yet — send a message to record the first data point.
+        {t('metrics.empty')}
       </div>
     )
   }
@@ -180,11 +187,11 @@ export function MetricsPanel({ active = true }: { active?: boolean }) {
             color: 'var(--lv-mute)',
           }}
         >
-          {total} request{total !== 1 ? 's' : ''} recorded
+          {tn('metrics.requestsRecorded', total)}
         </span>
         <button
           onClick={load}
-          title="Refresh"
+          title={t('metrics.refresh')}
           style={{
             background: 'none',
             border: 'none',
@@ -201,24 +208,24 @@ export function MetricsPanel({ active = true }: { active?: boolean }) {
       {/* Summary stats */}
       {summary && (
         <div>
-          <SectionLabel>Summary — last {data.length} requests</SectionLabel>
+          <SectionLabel>{t('metrics.summaryLast', { count: data.length })}</SectionLabel>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <StatCard label="Avg total" value={fmtMs(summary.avg_total_ms)} />
-            <StatCard label="p90 total" value={fmtMs(summary.p90_total_ms)} />
-            <StatCard label="Avg TTFT" value={fmtMs(summary.avg_ttft_ms)} />
-            <StatCard label="p90 TTFT" value={fmtMs(summary.p90_ttft_ms)} />
+            <StatCard label={t('metrics.avgTotal')} value={fmtMs(summary.avg_total_ms, t)} />
+            <StatCard label={t('metrics.p90Total')} value={fmtMs(summary.p90_total_ms, t)} />
+            <StatCard label={t('metrics.avgTtft')} value={fmtMs(summary.avg_ttft_ms, t)} />
+            <StatCard label={t('metrics.p90Ttft')} value={fmtMs(summary.p90_ttft_ms, t)} />
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-            <StatCard label="Min" value={fmtMs(summary.min_total_ms)} />
-            <StatCard label="Max" value={fmtMs(summary.max_total_ms)} />
-            <StatCard label="Count" value={String(summary.count)} />
+            <StatCard label={t('metrics.min')} value={fmtMs(summary.min_total_ms, t)} />
+            <StatCard label={t('metrics.max')} value={fmtMs(summary.max_total_ms, t)} />
+            <StatCard label={t('metrics.count')} value={String(summary.count)} />
           </div>
         </div>
       )}
 
       {/* Response time over time */}
       <div>
-        <SectionLabel>Response time (ms)</SectionLabel>
+        <SectionLabel>{t('metrics.responseTime')}</SectionLabel>
         <div style={{ height: 180 }}>
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
@@ -233,16 +240,18 @@ export function MetricsPanel({ active = true }: { active?: boolean }) {
               <YAxis
                 tick={AXIS_STYLE}
                 width={40}
-                tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${v}`)}
+                tickFormatter={(v) =>
+                  v >= 1000 ? t('metrics.unitSeconds', { value: (v / 1000).toFixed(1) }) : `${v}`
+                }
               />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
-                formatter={(v) => [fmtMs(v as number), 'Total']}
+                formatter={(v) => [fmtMs(v as number, t), t('metrics.seriesTotal')]}
               />
               <Area
                 type="monotone"
                 dataKey="total_ms"
-                name="Total"
+                name={t('metrics.seriesTotal')}
                 stroke="#c8a86a"
                 fill="url(#grad-total)"
                 strokeWidth={1.5}
@@ -255,7 +264,7 @@ export function MetricsPanel({ active = true }: { active?: boolean }) {
 
       {/* TTFT + Search breakdown */}
       <div>
-        <SectionLabel>Phase breakdown (ms)</SectionLabel>
+        <SectionLabel>{t('metrics.phaseBreakdown')}</SectionLabel>
         <div style={{ height: 180 }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
@@ -264,15 +273,27 @@ export function MetricsPanel({ active = true }: { active?: boolean }) {
               <YAxis
                 tick={AXIS_STYLE}
                 width={40}
-                tickFormatter={(v) => (v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${v}`)}
+                tickFormatter={(v) =>
+                  v >= 1000 ? t('metrics.unitSeconds', { value: (v / 1000).toFixed(1) }) : `${v}`
+                }
               />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
-                formatter={(v, name) => [fmtMs(v as number), name as string]}
+                formatter={(v, name) => [fmtMs(v as number, t), name as string]}
               />
               <Legend wrapperStyle={{ fontSize: 10, fontFamily: 'var(--font-mono)' }} />
-              <Bar dataKey="ttft_ms" name="TTFT" fill="#c8a86a" radius={[2, 2, 0, 0]} />
-              <Bar dataKey="search_ms" name="Search" fill="#6e695f" radius={[2, 2, 0, 0]} />
+              <Bar
+                dataKey="ttft_ms"
+                name={t('metrics.seriesTtft')}
+                fill="#c8a86a"
+                radius={[2, 2, 0, 0]}
+              />
+              <Bar
+                dataKey="search_ms"
+                name={t('metrics.seriesSearch')}
+                fill="#6e695f"
+                radius={[2, 2, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>

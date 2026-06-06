@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import * as AlertDialog from '@radix-ui/react-alert-dialog'
 import { deleteAccount } from '@/api/client'
+import { useT } from '@/i18n'
 import { useAppStore } from '@/store'
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function DeleteAccountDialog({ open, onOpenChange }: Props) {
+  const { t } = useT()
   const { logout } = useAppStore()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -21,7 +23,7 @@ export function DeleteAccountDialog({ open, onOpenChange }: Props) {
       logout()
       onOpenChange(false)
     } catch {
-      setError('Failed to delete account. Please try again.')
+      setError(t('deleteAccount.error'))
       setLoading(false)
     }
   }
@@ -60,7 +62,7 @@ export function DeleteAccountDialog({ open, onOpenChange }: Props) {
               color: 'var(--lv-ink)',
             }}
           >
-            Delete account?
+            {t('deleteAccount.title')}
           </AlertDialog.Title>
           <AlertDialog.Description
             style={{
@@ -70,8 +72,7 @@ export function DeleteAccountDialog({ open, onOpenChange }: Props) {
               lineHeight: 1.5,
             }}
           >
-            This will permanently delete your account and all associated data — MCP servers,
-            memories, knowledge base files, and session history. This action cannot be undone.
+            {t('deleteAccount.description')}
           </AlertDialog.Description>
 
           {error && (
@@ -93,7 +94,7 @@ export function DeleteAccountDialog({ open, onOpenChange }: Props) {
                   cursor: 'pointer',
                 }}
               >
-                Cancel
+                {t('deleteAccount.cancel')}
               </button>
             </AlertDialog.Cancel>
             <button
@@ -111,7 +112,7 @@ export function DeleteAccountDialog({ open, onOpenChange }: Props) {
                 opacity: loading ? 0.6 : 1,
               }}
             >
-              {loading ? 'Deleting…' : 'Delete account'}
+              {loading ? t('deleteAccount.deleting') : t('deleteAccount.confirm')}
             </button>
           </div>
         </AlertDialog.Content>

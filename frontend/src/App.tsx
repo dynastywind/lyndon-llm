@@ -13,6 +13,7 @@ export default function App() {
     sessionId,
     homeVersion,
     uiTheme,
+    language,
     setUser,
     setPendingOAuthToken,
     bumpSessionVersion,
@@ -32,6 +33,11 @@ export default function App() {
       root.classList.add('dark')
     }
   }, [uiTheme])
+
+  // Reflect the chosen language on <html lang> for accessibility / browser hints
+  useEffect(() => {
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'
+  }, [language])
 
   // Sync avatarVersion with the server whenever a user logs in on this device.
   // avatarVersion is device-local (localStorage), so a different device won't

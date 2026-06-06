@@ -75,6 +75,10 @@ frontend/src/
 │       └── Badge.tsx
 ├── config/
 │   └── codeThemes.ts
+├── i18n/
+│   ├── index.ts                    # translate / translateN + useT() hook
+│   ├── en.ts                       # English dictionary (source of truth)
+│   └── zh.ts                       # Simplified Chinese (typed against en)
 ├── hooks/
 │   ├── useStream.ts                 # Core streaming hook
 │   ├── useChatHistory.ts
@@ -146,6 +150,12 @@ useEffect(() => {
 ```
 
 Tailwind's `darkMode: 'class'` config enables CSS-variable-driven dark mode for all components.
+
+---
+
+## Internationalization
+
+The UI is fully localized (English default, Simplified Chinese). A `language` field in the Zustand store drives a lightweight, provider-free `useT()` hook; switching language re-renders the whole app instantly. See **`doc/frontend/i18n.md`** for the dictionary structure, the compile-time key-parity guarantee, and how to add strings or languages.
 
 ---
 
