@@ -347,7 +347,7 @@ async def test_model_forwarded_on_agentic_loop_path():
     received_complete_model: list = []
     received_stream_model: list = []
 
-    async def capturing_complete(messages, tool_schemas, model=None):
+    async def capturing_complete(messages, tool_schemas, model=None, tool_choice=None):
         received_complete_model.append(model)
         from core.llm.gateway import LLMUsage
 

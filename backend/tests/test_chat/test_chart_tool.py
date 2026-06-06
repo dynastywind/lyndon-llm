@@ -78,7 +78,7 @@ async def test_agentic_loop_continues_after_successful_chart(monkeypatch):
     calls = 0
     streamed_messages = None
 
-    async def fake_complete_with_tools_raw(messages, tools, model=None):
+    async def fake_complete_with_tools_raw(messages, tools, model=None, tool_choice=None):
         nonlocal calls
         calls += 1
         from core.llm.gateway import LLMUsage
