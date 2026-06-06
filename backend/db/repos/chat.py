@@ -159,6 +159,18 @@ class ChatRepo:
 
         return rows, total, snippets
 
+    async def set_streaming(self, session_id: str, value: bool) -> None:
+        """Mark a session as having an active (or finished) LLM background task."""
+        await self._db.execute(
+            update(ChatSession).where(ChatSession.id == session_id).values(streaming=value)
+        )
+        await self._db.commit()
+
+    async def clear_all_streaming(self) -> None:
+        """Reset every streaming flag — called at server startup to clear stale state."""
+        await self._db.execute(update(ChatSession).values(streaming=False))
+        await self._db.commit()
+
     async def rename_session(self, session_id: str, title: str) -> bool:
         """Rename a session. Returns False if the session doesn't exist."""
         row = await self.get_session(session_id)

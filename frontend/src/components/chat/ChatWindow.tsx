@@ -53,7 +53,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
-import { getChatMessages, getModels } from '@/api/client'
+import { getChatMessages, getModels, getStreamStatus } from '@/api/client'
 import type {
   Message,
   Skill,
@@ -1940,7 +1940,7 @@ export function ChatWindow() {
       .catch(() => {})
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { send } = useStream()
+  const { send, resume } = useStream()
 
   // Each session keeps its own draft; initialise from store on mount.
   const [input, setInput] = useState(() => drafts[draftKey] ?? '')
@@ -2113,6 +2113,18 @@ export function ChatWindow() {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight
           canLoadRef.current = true
         })
+
+        // After loading persisted messages, check whether the backend has an
+        // active LLM task for this session (happens when the page was refreshed
+        // while the model was generating).  If so, re-attach to the stream.
+        try {
+          const { streaming } = await getStreamStatus(sid)
+          if (!cancelled && streaming) {
+            resume(sid) // fire-and-forget — manages its own streaming state
+          }
+        } catch {
+          // status check failed — proceed normally
+        }
       } catch {
         if (!cancelled) canLoadRef.current = true
       }

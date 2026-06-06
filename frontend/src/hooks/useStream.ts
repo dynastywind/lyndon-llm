@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { createChatSession, streamChat } from '@/api/client'
+import { createChatSession, resumeStream, streamChat } from '@/api/client'
 import { useAppStore } from '@/store'
 import { generateId } from '@/lib/utils'
 import type { ToolCallRecord, ChartSpec, MessageAttachment, ChatPlan } from '@/types'
@@ -248,5 +248,142 @@ export function useStream() {
     ],
   )
 
-  return { send }
+  /**
+   * Re-attach to an in-progress LLM stream after a page refresh.
+   * Adds an empty assistant bubble, replays all accumulated tokens, then
+   * continues live until the backend task finishes.
+   */
+  const resume = useCallback(
+    async (targetSessionId: string) => {
+      const msgId = generateId()
+
+      // Add an empty assistant bubble to receive the replayed + live tokens
+      useAppStore.setState((s) => ({
+        sessionMessages: {
+          ...s.sessionMessages,
+          [targetSessionId]: [
+            ...(s.sessionMessages[targetSessionId] ?? []),
+            {
+              id: msgId,
+              role: 'assistant' as const,
+              content: '',
+              timestamp: new Date(),
+              toolCalls: [],
+            },
+          ],
+        },
+      }))
+
+      const updateMsg = (
+        updater: (
+          prev: ReturnType<typeof useAppStore.getState>['sessionMessages'][string][number],
+        ) => ReturnType<typeof useAppStore.getState>['sessionMessages'][string][number],
+      ) => {
+        useAppStore.setState((s) => {
+          const msgs = [...(s.sessionMessages[targetSessionId] ?? [])]
+          const idx = msgs.findIndex((m) => m.id === msgId)
+          if (idx < 0) return s
+          msgs[idx] = updater(msgs[idx])
+          return { sessionMessages: { ...s.sessionMessages, [targetSessionId]: msgs } }
+        })
+      }
+
+      startStreaming(targetSessionId)
+      try {
+        await resumeStream(targetSessionId, (type, data) => {
+          switch (type) {
+            case 'token':
+              updateMsg((m) => ({ ...m, content: m.content + (data.text as string) }))
+              bumpScrollToBottom()
+              break
+            case 'thinking_token':
+              updateMsg((m) => ({ ...m, thinking: (m.thinking ?? '') + (data.text as string) }))
+              break
+            case 'skill_activated': {
+              const activatedCall: import('@/types').ToolCallRecord = {
+                id: `skill_activated_${data.skill_id as string}`,
+                name: `skill__${data.skill_id as string}__[prompt]`,
+                args: {},
+                status: 'active',
+              }
+              updateMsg((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), activatedCall] }))
+              break
+            }
+            case 'tool_start': {
+              const newCall: import('@/types').ToolCallRecord = {
+                id: data.id as string,
+                name: data.name as string,
+                args: data.args as Record<string, unknown>,
+                status: 'running',
+              }
+              updateMsg((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), newCall] }))
+              break
+            }
+            case 'tool_result': {
+              const { id, success, preview } = data as {
+                id: string
+                success: boolean
+                preview: string
+              }
+              updateMsg((m) => ({
+                ...m,
+                toolCalls: (m.toolCalls ?? []).map((tc) =>
+                  tc.id === id
+                    ? { ...tc, status: success ? ('done' as const) : ('error' as const), preview }
+                    : tc,
+                ),
+              }))
+              break
+            }
+            case 'chart': {
+              const spec = data.spec as import('@/types').ChartSpec
+              updateMsg((m) => ({ ...m, content: m.content + chartSpecToMarkdown(spec) }))
+              break
+            }
+            case 'plan_preview':
+              setChatPendingPlan(data as unknown as import('@/types').ChatPlan)
+              setChatPlanStatus('pending_confirm')
+              useAppStore.setState((s) => ({
+                sessionMessages: {
+                  ...s.sessionMessages,
+                  [targetSessionId]: (s.sessionMessages[targetSessionId] ?? []).filter(
+                    (m) => m.id !== msgId,
+                  ),
+                },
+              }))
+              break
+            case 'error':
+              console.warn('[resume] backend error:', data.message)
+              break
+            default:
+              break
+          }
+        })
+      } catch {
+        // Resume failed (stream already finished or 404) — remove the empty bubble
+        useAppStore.setState((s) => ({
+          sessionMessages: {
+            ...s.sessionMessages,
+            [targetSessionId]: (s.sessionMessages[targetSessionId] ?? []).filter(
+              (m) => m.id !== msgId,
+            ),
+          },
+        }))
+      } finally {
+        stopStreaming(targetSessionId)
+        bumpScrollToBottom()
+        bumpSessionVersion()
+      }
+    },
+    [
+      startStreaming,
+      stopStreaming,
+      bumpScrollToBottom,
+      bumpSessionVersion,
+      setChatPendingPlan,
+      setChatPlanStatus,
+    ],
+  )
+
+  return { send, resume }
 }

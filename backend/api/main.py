@@ -18,6 +18,7 @@ from config.settings import settings
 async def lifespan(app: FastAPI):
     # Startup — create DB tables then register tools
     await _init_db()
+    await _clear_stale_streaming()
     _register_all_tools()
     from core.mcp.manager import mcp_tool_manager
     from skills.manager import skill_manager
@@ -26,6 +27,19 @@ async def lifespan(app: FastAPI):
     await skill_manager.reload_all()
     yield
     # Shutdown — nothing to clean up yet
+
+
+async def _clear_stale_streaming() -> None:
+    """
+    On startup any in-flight LLM tasks from the previous process are gone.
+    Reset all streaming flags so the frontend doesn't wait for a stream that
+    will never arrive.
+    """
+    from db.base import AsyncSessionLocal
+    from db.repos.chat import ChatRepo
+
+    async with AsyncSessionLocal() as db:
+        await ChatRepo(db).clear_all_streaming()
 
 
 async def _init_db() -> None:
@@ -66,6 +80,8 @@ async def _migrate(conn) -> None:
         # v9 — persist tool calls and skill prefix with each chat message
         "ALTER TABLE chat_messages ADD COLUMN tool_calls_json TEXT",
         "ALTER TABLE chat_messages ADD COLUMN skill_prefix TEXT",
+        # v10 — track in-flight LLM response per session (cleared at startup)
+        "ALTER TABLE chat_sessions ADD COLUMN streaming BOOLEAN NOT NULL DEFAULT 0",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore

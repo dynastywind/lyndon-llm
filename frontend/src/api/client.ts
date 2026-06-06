@@ -276,6 +276,63 @@ export async function streamChat(
   }
 }
 
+// ── Stream status / resume ────────────────────────────────────────────────────
+
+/** Returns whether the backend has an active LLM task running for this session. */
+export async function getStreamStatus(sessionId: string): Promise<{ streaming: boolean }> {
+  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/stream/status`, {
+    headers: authHeader(),
+  })
+  if (!res.ok) return { streaming: false }
+  return res.json()
+}
+
+/**
+ * Re-attach to an in-progress LLM stream.
+ * Replays all accumulated events from the beginning, then continues live.
+ * Throws if no active stream exists (404).
+ */
+export async function resumeStream(
+  sessionId: string,
+  onEvent: (type: string, data: Record<string, unknown>) => void,
+): Promise<void> {
+  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/stream/resume`, {
+    headers: authHeader(),
+  })
+  if (!res.ok) throw new Error(`Resume stream failed: ${res.statusText}`)
+
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() ?? ''
+
+    for (const part of parts) {
+      if (!part.trim()) continue
+      let eventType = 'message'
+      let dataStr = ''
+      for (const line of part.split('\n')) {
+        if (line.startsWith('event: ')) eventType = line.slice(7).trim()
+        else if (line.startsWith('data: ')) dataStr = line.slice(6)
+      }
+      if (dataStr) {
+        try {
+          onEvent(eventType, JSON.parse(dataStr))
+        } catch {
+          // malformed JSON — skip
+        }
+      }
+    }
+  }
+}
+
 // ── Chat planner ──────────────────────────────────────────────────────────────
 
 export async function confirmChatPlan(

@@ -150,6 +150,7 @@ export interface ChatSession {
   title: string | null
   created_at: string
   updated_at: string
+  streaming?: boolean
 }
 
 export interface ChatSessionsResponse {

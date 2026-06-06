@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 import json
 
@@ -73,22 +74,52 @@ async def chat(
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
-    engine = ChatEngine(session, db=db, user_id=user.id if user else None)
+    from core.session.stream_registry import stream_registry
+
     attachments = [a.model_dump() for a in body.attachments] if body.attachments else None
+    user_id = user.id if user else None
+
+    # Create the in-memory event buffer and mark the session as streaming in DB
+    buf = stream_registry.start(session.session_id)
+    repo = ChatRepo(db)
+    await repo.set_streaming(session.session_id, True)
+
+    # Run the LLM as a background task so the stream survives client disconnects
+    async def _run_llm() -> None:
+        from db.base import AsyncSessionLocal
+
+        try:
+            async with AsyncSessionLocal() as task_db:
+                engine = ChatEngine(session, db=task_db, user_id=user_id)
+                async for event in engine.stream_response(
+                    body.message,
+                    attachments=attachments,
+                    custom_system_prompt=body.system_prompt or None,
+                    session_prompt=body.session_prompt or None,
+                    model=body.model or None,
+                    skill_id=body.skill_id or None,
+                    skill_prefix=body.skill_prefix or None,
+                ):
+                    await buf.push(event)
+            await buf.finish()
+        except Exception as exc:  # noqa: BLE001
+            await buf.finish(error=str(exc))
+        finally:
+            from db.base import AsyncSessionLocal as _ASL  # noqa: PLC0415
+
+            async with _ASL() as done_db:
+                await ChatRepo(done_db).set_streaming(session.session_id, False)
+            stream_registry.remove(session.session_id)
+
+    asyncio.create_task(_run_llm())
 
     async def _generate():
-        async for event in engine.stream_response(
-            body.message,
-            attachments=attachments,
-            custom_system_prompt=body.system_prompt or None,
-            session_prompt=body.session_prompt or None,
-            model=body.model or None,
-            skill_id=body.skill_id or None,
-            skill_prefix=body.skill_prefix or None,
-        ):
+        async for event in buf.subscribe(start_idx=0):
             evt_type = event["type"]
             payload = {k: v for k, v in event.items() if k != "type"}
             yield _sse(evt_type, payload)
+        if buf.error:
+            yield _sse("error", {"message": buf.error})
         yield _sse("done", {})
 
     return StreamingResponse(
@@ -223,6 +254,45 @@ async def search_chat_sessions(
         ],
         "total": total,
     }
+
+
+@router.get("/sessions/{session_id}/stream/status")
+async def stream_status(session_id: str):
+    """Return whether an LLM background task is currently active for this session."""
+    from core.session.stream_registry import stream_registry
+
+    return {"streaming": stream_registry.get(session_id) is not None}
+
+
+@router.get("/sessions/{session_id}/stream/resume")
+async def resume_stream(session_id: str):
+    """
+    Re-attach to an in-progress LLM stream.
+
+    Replays all accumulated events from the beginning then continues with new
+    ones until the task finishes.  Returns 404 when no active stream exists
+    (server restarted, or stream already completed).
+    """
+    from core.session.stream_registry import stream_registry
+
+    buf = stream_registry.get(session_id)
+    if buf is None:
+        raise HTTPException(404, "No active stream for this session")
+
+    async def _generate():
+        async for event in buf.subscribe(start_idx=0):
+            evt_type = event["type"]
+            payload = {k: v for k, v in event.items() if k != "type"}
+            yield _sse(evt_type, payload)
+        if buf.error:
+            yield _sse("error", {"message": buf.error})
+        yield _sse("done", {})
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 class RenameRequest(BaseModel):
@@ -368,4 +438,5 @@ def _session_dict(row) -> dict:
         "title": row.title,
         "created_at": _iso(row.created_at),
         "updated_at": _iso(row.updated_at),
+        "streaming": getattr(row, "streaming", False),
     }
