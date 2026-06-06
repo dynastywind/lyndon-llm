@@ -44,6 +44,7 @@ function headers(sessionId: string, mode: string) {
     'Content-Type': 'application/json',
     'x-session-id': sessionId,
     'x-mode': mode,
+    'x-client': IS_TAURI ? 'desktop' : 'web',
     ...authHeader(),
   }
 }

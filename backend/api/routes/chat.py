@@ -69,9 +69,8 @@ def _sse(event_type: str, data: dict) -> str:
 
 
 def _service_name(request: Request) -> str:
-    """Derive Langfuse service name from the request Origin header."""
-    origin = request.headers.get("origin", "")
-    if "tauri" in origin:
+    """Derive Langfuse service name from the explicit x-client header."""
+    if request.headers.get("x-client") == "desktop":
         return "lyndon.llm.desktop"
     return "lyndon.llm.web"
 
