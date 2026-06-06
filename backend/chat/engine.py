@@ -242,7 +242,17 @@ class ChatEngine:
             )
 
         # 1. Route: direct | rag | tools | rag_and_tools
-        if settings.orchestrator_enabled:
+        if self.session.mode != Mode.CHAT:
+            # Cowork / Code — always grant all registered tools for this mode.
+            # The heuristic orchestrator only recognises chat signals (web_search,
+            # render_chart, run_code, …) and would return "direct" for any
+            # cowork/code task, preventing tools from ever being called.
+            decision = RouteDecision(
+                "tools",
+                frozenset(tool_registry.list_tool_names(self.session.mode)),
+                f"{self.session.mode.value} mode: all tools enabled",
+            )
+        elif settings.orchestrator_enabled:
             has_kb = await kb_has_sources(user_id=self.user_id)
             decision = await get_orchestrator().route(
                 user_message,
@@ -254,7 +264,6 @@ class ChatEngine:
         # Slash-command override: if a specific skill_id was provided (e.g. from
         # the frontend's "/" picker), force routing to that skill's tools only —
         # bypassing the orchestrator's heuristic entirely.
-        from core.tools.registry import tool_registry
 
         skill_pinned = False
         skill_prompt_body: str | None = None  # body of a prompt-only skill (no scripts)
