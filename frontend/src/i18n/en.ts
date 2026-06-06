@@ -226,6 +226,7 @@ export const en = {
   chat: {
     copy: 'Copy',
     copied: 'Copied!',
+    rerun: 'Rerun',
     chartError: 'Chart could not be rendered: {message}',
     invalidChartSpec: 'invalid chart spec',
     toolCode: 'code',

@@ -142,6 +142,23 @@ interface AppState {
    */
   sessionEffortModes: Record<string, 'low' | 'medium' | 'high'>
   setSessionEffortMode: (sessionId: string, mode: 'low' | 'medium' | 'high') => void
+  /**
+   * Per-session working directory selections (cowork/code) — keyed by sessionId.
+   * Restored when re-entering a thread so the chosen directory survives navigation
+   * and reload. The '__new__' key holds the selection for a thread that has not
+   * been created yet (picked on the home screen); it is migrated onto the real
+   * session id when the first message creates the session.
+   */
+  sessionDirectories: Record<string, string | null>
+  setSessionDirectory: (key: string, directory: string | null) => void
+  /**
+   * Per-session acting mode (cowork/code) — 'ask' requires tool approval before
+   * each action, 'auto' acts autonomously. Keyed by sessionId, with the '__new__'
+   * key holding the selection for a thread not yet created. Persisted so the
+   * choice survives navigation and reload.
+   */
+  sessionActingModes: Record<string, 'ask' | 'auto'>
+  setSessionActingMode: (key: string, mode: 'ask' | 'auto') => void
 
   // Pinned session IDs — order-preserving; persisted to localStorage
   pinnedSessionIds: string[]
@@ -349,6 +366,12 @@ export const useAppStore = create<AppState>()(
       sessionEffortModes: {},
       setSessionEffortMode: (sessionId, mode) =>
         set((s) => ({ sessionEffortModes: { ...s.sessionEffortModes, [sessionId]: mode } })),
+      sessionDirectories: {},
+      setSessionDirectory: (key, directory) =>
+        set((s) => ({ sessionDirectories: { ...s.sessionDirectories, [key]: directory } })),
+      sessionActingModes: {},
+      setSessionActingMode: (key, mode) =>
+        set((s) => ({ sessionActingModes: { ...s.sessionActingModes, [key]: mode } })),
 
       // ── Pinned sessions ───────────────────────────────────────────────────────
       pinnedSessionIds: [],
@@ -411,6 +434,8 @@ export const useAppStore = create<AppState>()(
         selectedModel: s.selectedModel,
         effortMode: s.effortMode,
         sessionEffortModes: s.sessionEffortModes,
+        sessionDirectories: s.sessionDirectories,
+        sessionActingModes: s.sessionActingModes,
         pinnedSessionIds: s.pinnedSessionIds,
         projectSort: s.projectSort,
         pinnedProjectIds: s.pinnedProjectIds,

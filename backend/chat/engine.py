@@ -43,6 +43,7 @@ from core.llm.gateway import LLMUsage, llm_gateway
 from core.permissions.gate import Mode, PermissionGate
 from core.session.manager import Session
 from core.tools.registry import tool_registry
+from core.tools.working_dir import apply_working_directory
 
 if settings.langfuse_secret_key and settings.langfuse_public_key:
     from contextlib import contextmanager
@@ -681,6 +682,14 @@ class ChatEngine:
                         fn_args = json.loads(tc.function.arguments or "{}")
                     except json.JSONDecodeError:
                         fn_args = {}
+
+                    # Default shell cwd / resolve file paths against the per-thread
+                    # work directory the user pinned, when the model omitted one.
+                    # Applied before tool_start so the UI (and the approval dialog)
+                    # show the effective directory.
+                    fn_args = apply_working_directory(
+                        fn_name, fn_args, self.session.metadata.get("working_directory")
+                    )
 
                     # ── Permission gate ("ask before acting" mode) ─────────────────
                     if self.session.metadata.get("require_tool_approval"):

@@ -31,6 +31,8 @@ export function useStream() {
     effortMode,
     mode,
     setSessionEffortMode,
+    setSessionDirectory,
+    setSessionActingMode,
     setChatPendingPlan,
     setChatPlanStatus,
     setPendingProjectId,
@@ -63,6 +65,15 @@ export function useStream() {
           // Record the effort mode chosen for this brand-new session so it
           // can be restored if the user navigates away and comes back.
           setSessionEffortMode(activeSessionId, effortMode)
+          // Carry over the working directory picked on the home screen (stored
+          // under the '__new__' key) onto the real session, then clear the draft.
+          const draftDir = useAppStore.getState().sessionDirectories['__new__']
+          if (draftDir) setSessionDirectory(activeSessionId, draftDir)
+          setSessionDirectory('__new__', null)
+          // Same for the acting mode picked on the home screen.
+          const draftActing = useAppStore.getState().sessionActingModes['__new__']
+          if (draftActing) setSessionActingMode(activeSessionId, draftActing)
+          setSessionActingMode('__new__', 'ask')
           bumpSessionVersion()
         } catch {
           return
@@ -135,6 +146,12 @@ export function useStream() {
         ? `The user is a ${profession}. Tailor your responses to suit their background and expertise level.`
         : ''
       const effectiveSystemPrompt = [professionLine, systemPrompt].filter(Boolean).join('\n\n')
+
+      // Resolve the per-thread work directory (cowork/code). Read fresh from the
+      // store: for a brand-new session it was just migrated from the '__new__'
+      // draft key above, so the closure's snapshot would be stale.
+      const workingDirectory =
+        useAppStore.getState().sessionDirectories[activeSessionId] ?? undefined
 
       // Convert MessageAttachment → AttachmentPayload
       const apiAttachments: AttachmentPayload[] | undefined = attachments?.length
@@ -265,6 +282,7 @@ export function useStream() {
           effortMode,
           mode,
           options?.requireToolApproval ?? false,
+          workingDirectory,
         )
       } finally {
         // Clear any lingering approval dialog when the stream ends
@@ -291,6 +309,8 @@ export function useStream() {
       effortMode,
       mode,
       setSessionEffortMode,
+      setSessionDirectory,
+      setSessionActingMode,
       setChatPendingPlan,
       setChatPlanStatus,
       setPendingProjectId,

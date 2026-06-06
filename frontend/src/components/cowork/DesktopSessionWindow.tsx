@@ -5,7 +5,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Send, ChevronDown, Folder, FolderOpen, Check, Loader2, ShieldAlert } from 'lucide-react'
+import {
+  Send,
+  ChevronDown,
+  Folder,
+  FolderOpen,
+  Check,
+  Copy,
+  RotateCcw,
+  Loader2,
+  ShieldAlert,
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
 import { getAllChatMessages, getModels, approveToolCall, rejectToolCall } from '@/api/client'
@@ -162,44 +172,147 @@ function ToolCallCard({ tc }: { tc: ToolCallRecord }) {
   )
 }
 
+// ── Copy button (hover action on message bubbles) ─────────────────────────────
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const [hover, setHover] = useState(false)
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).catch(() => {})
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <button
+      onClick={handleCopy}
+      title={copied ? 'Copied' : 'Copy'}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+        padding: 4,
+        lineHeight: 0,
+        display: 'flex',
+        alignItems: 'center',
+        color: copied ? LV.gold : hover ? LV.ink : LV.mute,
+        transition: 'color 0.2s var(--ease-snap)',
+      }}
+    >
+      {copied ? <Check size={13} /> : <Copy size={13} />}
+    </button>
+  )
+}
+
+// ── Rerun button (re-sends the bubble content as a fresh message) ──────────────
+function RerunButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  const [hover, setHover] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title="Rerun"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        cursor: disabled ? 'default' : 'pointer',
+        padding: 4,
+        lineHeight: 0,
+        display: 'flex',
+        alignItems: 'center',
+        opacity: disabled ? 0.4 : 1,
+        color: !disabled && hover ? LV.ink : LV.mute,
+        transition: 'color 0.2s var(--ease-snap)',
+      }}
+    >
+      <RotateCcw size={13} />
+    </button>
+  )
+}
+
+// ── User message bubble (hover reveals rerun + copy actions) ──────────────────
+function UserBubble({
+  content,
+  onRerun,
+  rerunDisabled,
+}: {
+  content: string
+  onRerun: (content: string) => void
+  rerunDisabled: boolean
+}) {
+  const [hover, setHover] = useState(false)
+  return (
+    <div
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <div
+        style={{
+          fontFamily: LV.font.mono,
+          fontSize: 10,
+          color: LV.mute,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase' as const,
+        }}
+      >
+        You
+      </div>
+      <div
+        style={{
+          fontFamily: LV.font.sans,
+          fontSize: 14.5,
+          lineHeight: 1.65,
+          color: LV.ink,
+          maxWidth: 560,
+          background: LV.wash,
+          border: `1px solid ${LV.rule}`,
+          padding: '12px 16px',
+          borderRadius: 4,
+          textAlign: 'left' as const,
+          whiteSpace: 'pre-wrap' as const,
+          wordBreak: 'break-word' as const,
+        }}
+      >
+        {content}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'flex-end',
+          marginTop: -2,
+          marginRight: -4,
+          opacity: hover ? 1 : 0,
+          transform: hover ? 'translateY(0)' : 'translateY(-3px)',
+          pointerEvents: hover ? 'auto' : 'none',
+          transition: 'opacity 0.2s var(--ease-snap), transform 0.2s var(--ease-snap)',
+        }}
+      >
+        <RerunButton onClick={() => onRerun(content)} disabled={rerunDisabled} />
+        <CopyButton text={content} />
+      </div>
+    </div>
+  )
+}
+
 // ── Message row ───────────────────────────────────────────────────────────────
-function MessageRow({ msg, isLast }: { msg: Message; isLast: boolean }) {
+function MessageRow({
+  msg,
+  isLast,
+  onRerun,
+  rerunDisabled,
+}: {
+  msg: Message
+  isLast: boolean
+  onRerun: (content: string) => void
+  rerunDisabled: boolean
+}) {
   if (msg.role === 'tool') return null
 
   if (msg.role === 'user') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-        <div
-          style={{
-            fontFamily: LV.font.mono,
-            fontSize: 10,
-            color: LV.mute,
-            letterSpacing: '0.06em',
-            textTransform: 'uppercase' as const,
-          }}
-        >
-          You
-        </div>
-        <div
-          style={{
-            fontFamily: LV.font.sans,
-            fontSize: 14.5,
-            lineHeight: 1.65,
-            color: LV.ink,
-            maxWidth: 560,
-            background: LV.wash,
-            border: `1px solid ${LV.rule}`,
-            padding: '12px 16px',
-            borderRadius: 4,
-            textAlign: 'left' as const,
-            whiteSpace: 'pre-wrap' as const,
-            wordBreak: 'break-word' as const,
-          }}
-        >
-          {msg.content}
-        </div>
-      </div>
-    )
+    return <UserBubble content={msg.content} onRerun={onRerun} rerunDisabled={rerunDisabled} />
   }
 
   // assistant
@@ -807,6 +920,10 @@ export function DesktopSessionWindow({ mode }: Props) {
     setEffortMode,
     sessionEffortModes,
     setSessionEffortMode,
+    sessionDirectories,
+    setSessionDirectory,
+    sessionActingModes,
+    setSessionActingMode,
     setSessionPrompt,
     pendingToolApproval,
     setPendingToolApproval,
@@ -815,8 +932,6 @@ export function DesktopSessionWindow({ mode }: Props) {
   const { send } = useStream()
 
   const [inputText, setInputText] = useState('')
-  const [directory, setDirectory] = useState<string | null>(null)
-  const [actingMode, setActingMode] = useState<'ask' | 'auto'>('ask')
   const [models, setModels] = useState<string[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
 
@@ -827,6 +942,13 @@ export function DesktopSessionWindow({ mode }: Props) {
   const messages = sessionId ? (sessionMessages[sessionId] ?? []) : []
   const isHome = !sessionId
   const canSend = inputText.trim().length > 0 && !isStreaming
+
+  // Working directory and acting mode are remembered per thread: keyed by
+  // sessionId once the thread exists, or under '__new__' while still on the home
+  // screen (carried onto the real session by useStream when the first message
+  // creates it).
+  const directory = sessionDirectories[sessionId ?? '__new__'] ?? null
+  const actingMode = sessionActingModes[sessionId ?? '__new__'] ?? 'ask'
 
   // Load models once
   useEffect(() => {
@@ -864,6 +986,22 @@ export function DesktopSessionWindow({ mode }: Props) {
     [sessionId, setEffortMode, setSessionEffortMode],
   )
 
+  /** Pick a working directory and remember it for this thread. */
+  const handleSelectDirectory = useCallback(
+    (d: string | null) => {
+      setSessionDirectory(sessionId ?? '__new__', d)
+    },
+    [sessionId, setSessionDirectory],
+  )
+
+  /** Pick an acting mode and remember it for this thread. */
+  const handleSelectActingMode = useCallback(
+    (m: 'ask' | 'auto') => {
+      setSessionActingMode(sessionId ?? '__new__', m)
+    },
+    [sessionId, setSessionActingMode],
+  )
+
   // Scroll to bottom on streaming ticks and new messages
   useEffect(() => {
     if (scrollRef.current) {
@@ -871,26 +1009,35 @@ export function DesktopSessionWindow({ mode }: Props) {
     }
   }, [messages.length, scrollToBottomTick])
 
+  // Send a message — same path whether typed into the input or re-run from a bubble.
+  const submitMessage = useCallback(
+    async (text: string) => {
+      if (!text.trim() || isStreaming) return
+
+      // For auto acting mode: inject directive into the session prompt so the model
+      // knows to act without asking for confirmation at the language level.
+      if (actingMode === 'auto') {
+        const key = sessionId ?? '__new__'
+        setSessionPrompt(
+          key,
+          'Act autonomously and execute changes directly without asking for confirmation. ' +
+            'Do not pause to request approval before making file edits or running commands.',
+        )
+      }
+
+      await send(text, undefined, undefined, undefined, undefined, {
+        requireToolApproval: actingMode === 'ask',
+      })
+    },
+    [isStreaming, actingMode, sessionId, send, setSessionPrompt],
+  )
+
   const handleSend = useCallback(async () => {
     if (!inputText.trim() || isStreaming) return
     const text = inputText
     setInputText('')
-
-    // For auto acting mode: inject directive into the session prompt so the model
-    // knows to act without asking for confirmation at the language level.
-    if (actingMode === 'auto') {
-      const key = sessionId ?? '__new__'
-      setSessionPrompt(
-        key,
-        'Act autonomously and execute changes directly without asking for confirmation. ' +
-          'Do not pause to request approval before making file edits or running commands.',
-      )
-    }
-
-    await send(text, undefined, undefined, undefined, undefined, {
-      requireToolApproval: actingMode === 'ask',
-    })
-  }, [inputText, isStreaming, actingMode, sessionId, send, setSessionPrompt])
+    await submitMessage(text)
+  }, [inputText, isStreaming, submitMessage])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
@@ -1034,8 +1181,8 @@ export function DesktopSessionWindow({ mode }: Props) {
                 gap: 8,
               }}
             >
-              <DirectoryChip directory={directory} onChange={setDirectory} />
-              <ActingModeChip actingMode={actingMode} onChange={setActingMode} />
+              <DirectoryChip directory={directory} onChange={handleSelectDirectory} />
+              <ActingModeChip actingMode={actingMode} onChange={handleSelectActingMode} />
               <span style={{ flex: 1 }} />
               <ModelDropdown
                 models={models}
@@ -1304,7 +1451,13 @@ export function DesktopSessionWindow({ mode }: Props) {
           {messages
             .filter((m) => m.role !== 'tool')
             .map((m, i, arr) => (
-              <MessageRow key={m.id} msg={m} isLast={i === arr.length - 1 && isStreaming} />
+              <MessageRow
+                key={m.id}
+                msg={m}
+                isLast={i === arr.length - 1 && isStreaming}
+                onRerun={(text) => void submitMessage(text)}
+                rerunDisabled={isStreaming}
+              />
             ))}
         </div>
       </div>
@@ -1386,8 +1539,8 @@ export function DesktopSessionWindow({ mode }: Props) {
               padding: '8px 0 14px',
             }}
           >
-            <DirectoryChip directory={directory} onChange={setDirectory} />
-            <ActingModeChip actingMode={actingMode} onChange={setActingMode} />
+            <DirectoryChip directory={directory} onChange={handleSelectDirectory} />
+            <ActingModeChip actingMode={actingMode} onChange={handleSelectActingMode} />
             <span style={{ fontFamily: LV.font.mono, fontSize: 9.5, color: LV.mute }}>⌘↵ send</span>
             <span style={{ fontFamily: LV.font.mono, fontSize: 9.5, color: LV.mute }}>
               @ reference

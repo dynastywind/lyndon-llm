@@ -230,6 +230,7 @@ export async function streamChat(
   effortMode?: 'low' | 'medium' | 'high',
   mode: string = 'chat',
   requireToolApproval: boolean = false,
+  workingDirectory?: string,
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/`, {
     method: 'POST',
@@ -244,6 +245,7 @@ export async function streamChat(
       ...(skillPrefix ? { skill_prefix: skillPrefix } : {}),
       ...(effortMode ? { effort_mode: effortMode } : {}),
       ...(requireToolApproval ? { require_tool_approval: true } : {}),
+      ...(workingDirectory ? { working_directory: workingDirectory } : {}),
     }),
   })
   if (!res.ok) throw new Error(`Chat error: ${res.statusText}`)

@@ -40,6 +40,9 @@ class ChatRequest(BaseModel):
     skill_prefix: str | None = None  # "/skill-name" prefix to persist with user message
     effort_mode: str | None = None  # "low" | "medium" | "high" — controls response verbosity
     require_tool_approval: bool = False  # pause before each tool call and wait for user approval
+    working_directory: str | None = (
+        None  # Cowork/Code: pin shell cwd & file paths to this per-thread directory
+    )
 
 
 class IngestRequest(BaseModel):
@@ -92,6 +95,14 @@ async def chat(
 
     # Store acting-mode flag so the engine can pause before each tool call
     session.metadata["require_tool_approval"] = body.require_tool_approval
+
+    # Pin the per-thread work directory so shell/file tools default their cwd
+    # and resolve relative paths there. Validated (expanded ~, must exist) here;
+    # an invalid selection is ignored. Re-sent each request, so no DB column is
+    # needed — the frontend persists the choice in localStorage.
+    from core.tools.working_dir import normalize_working_directory
+
+    session.metadata["working_directory"] = normalize_working_directory(body.working_directory)
 
     # Create the in-memory event buffer and mark the session as streaming in DB
     buf = stream_registry.start(session.session_id)

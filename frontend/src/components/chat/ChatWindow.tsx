@@ -16,6 +16,7 @@ import {
   Check,
   AlertCircle,
   Copy,
+  RotateCcw,
   Plus,
   Puzzle,
   X,
@@ -1486,27 +1487,31 @@ function MsgActionBtn({
   onClick,
   title,
   children,
+  disabled = false,
 }: {
   onClick: () => void
   title: string
   children: React.ReactNode
+  disabled?: boolean
 }) {
   const [h, setH] = useState(false)
   return (
     <button
       onClick={onClick}
       title={title}
+      disabled={disabled}
       onMouseEnter={() => setH(true)}
       onMouseLeave={() => setH(false)}
       style={{
         background: 'transparent',
         border: 'none',
-        cursor: 'pointer',
+        cursor: disabled ? 'default' : 'pointer',
         padding: 4,
         lineHeight: 0,
         display: 'flex',
         alignItems: 'center',
-        color: h ? 'var(--lv-ink)' : 'var(--lv-mute)',
+        opacity: disabled ? 0.4 : 1,
+        color: !disabled && h ? 'var(--lv-ink)' : 'var(--lv-mute)',
         transition: 'color 0.2s var(--ease-snap)',
       }}
     >
@@ -1650,10 +1655,14 @@ function MessageBubble({
   msg,
   isLive = false,
   skillNames = {},
+  onRerun,
+  rerunDisabled = false,
 }: {
   msg: Message
   isLive?: boolean
   skillNames?: Record<string, string>
+  onRerun?: (content: string) => void
+  rerunDisabled?: boolean
 }) {
   const { t } = useT()
   const [hover, setHover] = useState(false)
@@ -1784,6 +1793,15 @@ function MessageBubble({
               transition: 'opacity 0.2s var(--ease-snap), transform 0.2s var(--ease-snap)',
             }}
           >
+            {onRerun && (
+              <MsgActionBtn
+                onClick={() => onRerun(msg.content)}
+                title={t('chat.rerun')}
+                disabled={rerunDisabled}
+              >
+                <RotateCcw size={13} />
+              </MsgActionBtn>
+            )}
             <MsgActionBtn
               onClick={() => {
                 navigator.clipboard.writeText(msg.content).catch(() => {})
@@ -2299,6 +2317,15 @@ export function ChatWindow() {
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
     await send(msg, msgAttachments, activeSkill?.id, displayContent, skillPrefix)
   }
+
+  // Re-send a bubble's content as a fresh message — same as typing it and pressing enter.
+  const handleRerun = useCallback(
+    (content: string) => {
+      if (!content.trim() || isStreaming) return
+      void send(content)
+    },
+    [isStreaming, send],
+  )
 
   // ─── render ───────────────────────────────────────────────────────────────
 
@@ -2870,6 +2897,8 @@ export function ChatWindow() {
                   msg={msg}
                   isLive={isStreaming && i === messages.length - 1 && msg.role === 'assistant'}
                   skillNames={skillNameMap}
+                  onRerun={handleRerun}
+                  rerunDisabled={isStreaming}
                 />
               ))}
             </div>
