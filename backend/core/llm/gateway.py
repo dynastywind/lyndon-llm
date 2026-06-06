@@ -17,8 +17,15 @@ logger = logging.getLogger(__name__)
 # Use Langfuse's drop-in OpenAI wrapper when credentials are configured;
 # fall back to the plain openai client when they are not set.
 if settings.langfuse_secret_key and settings.langfuse_public_key:
+    import os
+
     from langfuse import Langfuse
     from langfuse.openai import AsyncOpenAI  # type: ignore[assignment]
+
+    # OTEL reads OTEL_SERVICE_NAME once when the tracer provider is created.
+    # Set it before instantiating Langfuse so it appears as
+    # resourceAttributes.service.name in every exported span.
+    os.environ.setdefault("OTEL_SERVICE_NAME", settings.langfuse_service_name)
 
     # v4 requires explicit instantiation to register the OTEL tracer provider.
     # Store as module-level singleton so other modules (e.g. engine.py) can
@@ -29,7 +36,11 @@ if settings.langfuse_secret_key and settings.langfuse_public_key:
         host=settings.langfuse_host,
         environment="dev" if settings.environment.value == "development" else "prod",
     )
-    logger.info("Langfuse observability enabled (host: %s)", settings.langfuse_host)
+    logger.info(
+        "Langfuse observability enabled (host: %s, service: %s)",
+        settings.langfuse_host,
+        settings.langfuse_service_name,
+    )
 else:
     from openai import AsyncOpenAI
 

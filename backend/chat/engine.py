@@ -59,11 +59,11 @@ if settings.langfuse_secret_key and settings.langfuse_public_key:
         # Open a root span using the same Langfuse instance (and thus the same
         # tracer provider) that the OpenAI wrapper uses — so all nested LLM
         # generations are correctly parented to this span.
-        metadata = {"service.name": service_name} if service_name else None
+        tags = [service_name] if service_name else None
         # Two separate `with` statements are required because start_as_current_observation
         # is a sync context manager that must wrap propagate_attributes.
         with _langfuse_client.start_as_current_observation(name="chat", as_type="span"):  # noqa: SIM117
-            with _propagate_attributes(session_id=session_id, user_id=user_id, metadata=metadata):
+            with _propagate_attributes(session_id=session_id, user_id=user_id, tags=tags):
                 yield
 else:
     from contextlib import contextmanager

@@ -126,6 +126,7 @@ class Settings(BaseSettings):
     langfuse_secret_key: str = ""
     langfuse_public_key: str = ""
     langfuse_host: str = "https://jp.cloud.langfuse.com"
+    langfuse_service_name: str = "lyndon.llm.web"  # sets resourceAttributes.service.name
 
 
 settings = Settings()
