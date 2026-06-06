@@ -11,6 +11,8 @@ import type {
   ChatSession,
   ChatSessionsResponse,
   ChatSessionMessage,
+  Project,
+  ProjectFile,
   ToolRegistry,
   McpServer,
   McpServerCreate,
@@ -227,6 +229,7 @@ export async function streamChat(
   skillPrefix?: string,
   effortMode?: 'low' | 'medium' | 'high',
   mode: string = 'chat',
+  requireToolApproval: boolean = false,
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/`, {
     method: 'POST',
@@ -240,6 +243,7 @@ export async function streamChat(
       ...(skillId ? { skill_id: skillId } : {}),
       ...(skillPrefix ? { skill_prefix: skillPrefix } : {}),
       ...(effortMode ? { effort_mode: effortMode } : {}),
+      ...(requireToolApproval ? { require_tool_approval: true } : {}),
     }),
   })
   if (!res.ok) throw new Error(`Chat error: ${res.statusText}`)
@@ -389,15 +393,57 @@ export async function cancelChatPlan(planId: string, sessionId: string): Promise
   })
 }
 
+// ── Tool approval (ask-before-acting) ────────────────────────────────────────
+
+export async function approveToolCall(sessionId: string, callId: string): Promise<void> {
+  await fetch(`${BASE}/chat/tool/approve`, {
+    method: 'POST',
+    headers: headers(sessionId, 'chat'),
+    body: JSON.stringify({ call_id: callId }),
+  })
+}
+
+export async function rejectToolCall(sessionId: string, callId: string): Promise<void> {
+  await fetch(`${BASE}/chat/tool/reject`, {
+    method: 'POST',
+    headers: headers(sessionId, 'chat'),
+    body: JSON.stringify({ call_id: callId }),
+  })
+}
+
 // ── Chat sessions ─────────────────────────────────────────────────────────────
 
-export async function createChatSession(mode = 'chat'): Promise<ChatSession> {
+export async function createChatSession(
+  mode = 'chat',
+  projectId: string | null = null,
+): Promise<ChatSession> {
   const res = await fetch(`${BASE}/chat/sessions`, {
     method: 'POST',
     headers: { ...authHeader(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode }),
+    body: JSON.stringify({ mode, project_id: projectId }),
   })
   if (!res.ok) throw new Error(`Failed to create session: ${res.statusText}`)
+  return res.json()
+}
+
+export async function moveSessionToProject(
+  sessionId: string,
+  projectId: string | null,
+): Promise<ChatSession> {
+  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/project`, {
+    method: 'PATCH',
+    headers: jsonHeaders(),
+    body: JSON.stringify({ project_id: projectId }),
+  })
+  if (!res.ok) throw new Error(`Failed to move session: ${res.statusText}`)
+  return res.json()
+}
+
+export async function getChatSession(
+  sessionId: string,
+): Promise<ChatSession & { project_name: string | null }> {
+  const res = await fetch(`${BASE}/chat/sessions/${sessionId}`, { headers: authHeader() })
+  if (!res.ok) throw new Error(`Failed to load session: ${res.statusText}`)
   return res.json()
 }
 
@@ -460,6 +506,101 @@ export async function renameChatSession(sessionId: string, title: string): Promi
   })
   if (!res.ok) throw new Error(`Failed to rename session: ${res.statusText}`)
   return res.json()
+}
+
+// ── Projects ──────────────────────────────────────────────────────────────────
+
+export async function listProjects(mode = 'chat'): Promise<{ projects: Project[] }> {
+  const res = await fetch(`${BASE}/projects/?mode=${mode}`, { headers: authHeader() })
+  if (!res.ok) throw new Error(`Failed to list projects: ${res.statusText}`)
+  return res.json()
+}
+
+export async function searchProjects(mode = 'chat', q: string): Promise<{ projects: Project[] }> {
+  const params = new URLSearchParams({ mode, q })
+  const res = await fetch(`${BASE}/projects/search?${params}`, { headers: authHeader() })
+  if (!res.ok) throw new Error(`Project search failed: ${res.statusText}`)
+  return res.json()
+}
+
+export async function createProject(
+  mode: string,
+  name: string,
+  instructions?: string,
+): Promise<Project> {
+  const res = await fetch(`${BASE}/projects/`, {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify({ mode, name, instructions: instructions ?? null }),
+  })
+  if (!res.ok) throw new Error(`Failed to create project: ${res.statusText}`)
+  return res.json()
+}
+
+export async function getProject(id: string): Promise<Project> {
+  const res = await fetch(`${BASE}/projects/${id}`, { headers: authHeader() })
+  if (!res.ok) throw new Error(`Failed to load project: ${res.statusText}`)
+  return res.json()
+}
+
+export async function updateProject(
+  id: string,
+  patch: { name?: string; instructions?: string; folders?: { path: string; name: string }[] },
+): Promise<Project> {
+  const res = await fetch(`${BASE}/projects/${id}`, {
+    method: 'PATCH',
+    headers: jsonHeaders(),
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) throw new Error(`Failed to update project: ${res.statusText}`)
+  return res.json()
+}
+
+export async function deleteProject(id: string): Promise<void> {
+  const res = await fetch(`${BASE}/projects/${id}`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  })
+  if (!res.ok) throw new Error(`Failed to delete project: ${res.statusText}`)
+}
+
+export async function listProjectSessions(id: string): Promise<{ sessions: ChatSession[] }> {
+  const res = await fetch(`${BASE}/projects/${id}/sessions`, { headers: authHeader() })
+  if (!res.ok) throw new Error(`Failed to load project chats: ${res.statusText}`)
+  return res.json()
+}
+
+export async function listProjectFiles(id: string): Promise<{ files: ProjectFile[] }> {
+  const res = await fetch(`${BASE}/projects/${id}/files`, { headers: authHeader() })
+  if (!res.ok) throw new Error(`Failed to load project files: ${res.statusText}`)
+  return res.json()
+}
+
+export async function uploadProjectFile(
+  id: string,
+  file: File,
+): Promise<{ filename: string; path: string; chunks_stored: number }> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(`${BASE}/projects/${id}/files`, {
+    method: 'POST',
+    body: form,
+    headers: authHeader(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export async function deleteProjectFile(id: string, source: string): Promise<void> {
+  const params = new URLSearchParams({ source })
+  const res = await fetch(`${BASE}/projects/${id}/files?${params}`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  })
+  if (!res.ok) throw new Error(`Failed to delete file: ${res.statusText}`)
 }
 
 export async function ingestDocument(source: string): Promise<{ chunks_stored: number }> {

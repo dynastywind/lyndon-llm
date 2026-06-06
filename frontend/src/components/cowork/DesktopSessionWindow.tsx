@@ -5,10 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Send, ChevronDown, Folder, FolderOpen, Check, Loader2 } from 'lucide-react'
+import { Send, ChevronDown, Folder, FolderOpen, Check, Loader2, ShieldAlert } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
-import { getAllChatMessages, getModels } from '@/api/client'
+import { getAllChatMessages, getModels, approveToolCall, rejectToolCall } from '@/api/client'
 import type { Message, ChatSessionMessage, ToolCallRecord } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -808,6 +808,8 @@ export function DesktopSessionWindow({ mode }: Props) {
     sessionEffortModes,
     setSessionEffortMode,
     setSessionPrompt,
+    pendingToolApproval,
+    setPendingToolApproval,
   } = useAppStore()
 
   const { send } = useStream()
@@ -875,7 +877,7 @@ export function DesktopSessionWindow({ mode }: Props) {
     setInputText('')
 
     // For auto acting mode: inject directive into the session prompt so the model
-    // knows to act without asking.
+    // knows to act without asking for confirmation at the language level.
     if (actingMode === 'auto') {
       const key = sessionId ?? '__new__'
       setSessionPrompt(
@@ -885,7 +887,9 @@ export function DesktopSessionWindow({ mode }: Props) {
       )
     }
 
-    await send(text)
+    await send(text, undefined, undefined, undefined, undefined, {
+      requireToolApproval: actingMode === 'ask',
+    })
   }, [inputText, isStreaming, actingMode, sessionId, send, setSessionPrompt])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -898,6 +902,22 @@ export function DesktopSessionWindow({ mode }: Props) {
   const greeting = getGreeting()
   const username = user?.username ?? 'there'
   const modeLabel = mode === 'cowork' ? 'Cowork' : 'Code'
+
+  // ── Tool approval handlers ────────────────────────────────────────────────
+  const approval =
+    pendingToolApproval && pendingToolApproval.sessionId === sessionId ? pendingToolApproval : null
+
+  const handleApprove = useCallback(async () => {
+    if (!approval) return
+    setPendingToolApproval(null)
+    await approveToolCall(approval.sessionId, approval.callId)
+  }, [approval, setPendingToolApproval])
+
+  const handleReject = useCallback(async () => {
+    if (!approval) return
+    setPendingToolApproval(null)
+    await rejectToolCall(approval.sessionId, approval.callId)
+  }, [approval, setPendingToolApproval])
 
   // ── Home screen ──────────────────────────────────────────────────────────
   if (isHome) {
@@ -1072,8 +1092,144 @@ export function DesktopSessionWindow({ mode }: Props) {
         flex: 1,
         minHeight: 0,
         background: LV.bg,
+        position: 'relative',
       }}
     >
+      {/* ── Tool approval dialog ─────────────────────────────────────────── */}
+      {approval && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 300,
+            background: 'rgba(0,0,0,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--lv-card)',
+              border: `1px solid ${LV.ruleStrong}`,
+              borderRadius: 12,
+              padding: '28px 32px',
+              width: 480,
+              maxWidth: 'calc(100vw - 48px)',
+              boxShadow: LV.shadow,
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+              <ShieldAlert size={18} style={{ color: LV.gold, flexShrink: 0 }} />
+              <div>
+                <div
+                  style={{
+                    fontFamily: LV.font.mono,
+                    fontSize: 9,
+                    letterSpacing: '0.28em',
+                    textTransform: 'uppercase' as const,
+                    color: LV.gold,
+                    marginBottom: 3,
+                  }}
+                >
+                  Permission required
+                </div>
+                <div
+                  style={{
+                    fontFamily: LV.font.sans,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: LV.ink,
+                  }}
+                >
+                  Allow tool call?
+                </div>
+              </div>
+            </div>
+
+            {/* Tool info */}
+            <div
+              style={{
+                background: LV.washSoft,
+                border: `1px solid ${LV.rule}`,
+                borderRadius: 6,
+                padding: '12px 16px',
+                marginBottom: 20,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: LV.font.mono,
+                  fontSize: 10,
+                  letterSpacing: '0.18em',
+                  textTransform: 'uppercase' as const,
+                  color: LV.mute,
+                  marginBottom: 6,
+                }}
+              >
+                Tool · {approval.toolName}
+              </div>
+              {Object.keys(approval.args).length > 0 && (
+                <pre
+                  style={{
+                    fontFamily: LV.font.mono,
+                    fontSize: 11.5,
+                    color: LV.soft,
+                    whiteSpace: 'pre-wrap' as const,
+                    wordBreak: 'break-all' as const,
+                    margin: 0,
+                    maxHeight: 160,
+                    overflowY: 'auto',
+                  }}
+                >
+                  {JSON.stringify(approval.args, null, 2)}
+                </pre>
+              )}
+            </div>
+
+            {/* Buttons */}
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => void handleReject()}
+                style={{
+                  padding: '8px 20px',
+                  background: 'transparent',
+                  border: `1px solid ${LV.ruleStrong}`,
+                  borderRadius: 6,
+                  fontFamily: LV.font.sans,
+                  fontSize: 13,
+                  color: LV.soft,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleApprove()}
+                style={{
+                  padding: '8px 24px',
+                  background: LV.gold,
+                  border: 'none',
+                  borderRadius: 6,
+                  fontFamily: LV.font.sans,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: LV.bg,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Approve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Conversation */}
       <div
         ref={scrollRef}

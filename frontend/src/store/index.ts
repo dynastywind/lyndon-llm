@@ -9,6 +9,7 @@ import type {
   ChatPlan,
   ChatPlanStatus,
   ChatPlanStepStatus,
+  PendingToolApproval,
 } from '@/types'
 import { CODE_THEME_DEFAULT } from '@/config/codeThemes'
 import type { CodeThemeName } from '@/config/codeThemes'
@@ -37,6 +38,30 @@ interface AppState {
   setSessionTitle: (title: string | null) => void
   mode: Mode
   setMode: (mode: Mode) => void
+
+  // ── Projects navigation ───────────────────────────────────────────────
+  /** Which surface the main panel shows. 'main' = the mode's chat window. */
+  activeView: 'main' | 'projectsList' | 'projectDetail'
+  setActiveView: (view: 'main' | 'projectsList' | 'projectDetail') => void
+  /** Project shown in the detail view. */
+  activeProjectId: string | null
+  setActiveProjectId: (id: string | null) => void
+  /** Set when starting a chat from a project so the lazily-created session is filed under it. */
+  pendingProjectId: string | null
+  setPendingProjectId: (id: string | null) => void
+  /** Sort order for the projects list (persisted). */
+  projectSort: 'recent' | 'created' | 'alpha'
+  setProjectSort: (sort: 'recent' | 'created' | 'alpha') => void
+  /** Pinned project IDs — order-preserving; persisted. */
+  pinnedProjectIds: string[]
+  pinProject: (id: string) => void
+  unpinProject: (id: string) => void
+  /** Bumped when projects change (create/rename/delete/membership) to refresh lists. */
+  projectListVersion: number
+  bumpProjectVersion: () => void
+  /** Global search overlay visibility — opened from the sidebar or a projects view. */
+  searchOpen: boolean
+  setSearchOpen: (open: boolean) => void
 
   // Per-session messages — each session owns its own array.
   // ChatWindow derives its view as sessionMessages[sessionId ?? '__new__'] ?? []
@@ -78,6 +103,10 @@ interface AppState {
   // Cowork
   currentPlan: Plan | null
   setPlan: (plan: Plan | null) => void
+
+  // Tool approval (ask-before-acting)
+  pendingToolApproval: PendingToolApproval | null
+  setPendingToolApproval: (approval: PendingToolApproval | null) => void
 
   // Chat Planner
   chatPendingPlan: ChatPlan | null
@@ -168,6 +197,9 @@ export const useAppStore = create<AppState>()(
           drafts: {},
           streamingSet: {},
           isStreaming: false,
+          activeView: 'main',
+          activeProjectId: null,
+          pendingProjectId: null,
         }),
 
       // ── Session ──────────────────────────────────────────────────────
@@ -177,6 +209,27 @@ export const useAppStore = create<AppState>()(
       setSessionTitle: (title) => set({ sessionTitle: title }),
       mode: 'chat',
       setMode: (mode) => set({ mode }),
+
+      // ── Projects navigation ───────────────────────────────────────────
+      activeView: 'main',
+      setActiveView: (activeView) => set({ activeView }),
+      activeProjectId: null,
+      setActiveProjectId: (activeProjectId) => set({ activeProjectId }),
+      pendingProjectId: null,
+      setPendingProjectId: (pendingProjectId) => set({ pendingProjectId }),
+      projectSort: 'recent',
+      setProjectSort: (projectSort) => set({ projectSort }),
+      pinnedProjectIds: [],
+      pinProject: (id) =>
+        set((s) =>
+          s.pinnedProjectIds.includes(id) ? s : { pinnedProjectIds: [id, ...s.pinnedProjectIds] },
+        ),
+      unpinProject: (id) =>
+        set((s) => ({ pinnedProjectIds: s.pinnedProjectIds.filter((x) => x !== id) })),
+      projectListVersion: 0,
+      bumpProjectVersion: () => set((s) => ({ projectListVersion: s.projectListVersion + 1 })),
+      searchOpen: false,
+      setSearchOpen: (searchOpen) => set({ searchOpen }),
 
       // ── Per-session messages ──────────────────────────────────────────
       sessionMessages: {},
@@ -252,6 +305,10 @@ export const useAppStore = create<AppState>()(
       // ── Cowork ────────────────────────────────────────────────────────
       currentPlan: null,
       setPlan: (plan) => set({ currentPlan: plan }),
+
+      // ── Tool approval ────────────────────────────────────────────────
+      pendingToolApproval: null,
+      setPendingToolApproval: (approval) => set({ pendingToolApproval: approval }),
 
       // ── Chat Planner ──────────────────────────────────────────────────
       chatPendingPlan: null,
@@ -355,6 +412,8 @@ export const useAppStore = create<AppState>()(
         effortMode: s.effortMode,
         sessionEffortModes: s.sessionEffortModes,
         pinnedSessionIds: s.pinnedSessionIds,
+        projectSort: s.projectSort,
+        pinnedProjectIds: s.pinnedProjectIds,
         profession: s.profession,
         avatarVersion: s.avatarVersion,
       }),

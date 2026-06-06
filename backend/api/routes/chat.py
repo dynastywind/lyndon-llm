@@ -39,6 +39,7 @@ class ChatRequest(BaseModel):
     skill_id: str | None = None  # slash-command: force routing to this skill's tools only
     skill_prefix: str | None = None  # "/skill-name" prefix to persist with user message
     effort_mode: str | None = None  # "low" | "medium" | "high" — controls response verbosity
+    require_tool_approval: bool = False  # pause before each tool call and wait for user approval
 
 
 class IngestRequest(BaseModel):
@@ -88,6 +89,9 @@ async def chat(
     attachments = [a.model_dump() for a in body.attachments] if body.attachments else None
     user_id = user.id if user else None
     service_name = _service_name(request)
+
+    # Store acting-mode flag so the engine can pause before each tool call
+    session.metadata["require_tool_approval"] = body.require_tool_approval
 
     # Create the in-memory event buffer and mark the session as streaming in DB
     buf = stream_registry.start(session.session_id)
@@ -172,8 +176,14 @@ async def confirm_chat_plan(
     del session.metadata["pending_plan"]
 
     from chat.executor import ChatExecutor
+    from chat.project_context import build_project_block
 
-    executor = ChatExecutor(session)
+    project_block = await build_project_block(
+        db, session.session_id, pending.goal, user.id if user else None
+    )
+    executor = ChatExecutor(
+        session, user_id=user.id if user else None, project_context=project_block
+    )
     full_response_parts: list[str] = []
 
     async def _generate():
@@ -211,11 +221,43 @@ async def cancel_chat_plan(
     return {"status": "cancelled"}
 
 
+# ── Tool approval (ask-before-acting mode) ────────────────────────────────────
+
+
+class ToolApprovalRequest(BaseModel):
+    call_id: str
+
+
+@router.post("/tool/approve")
+async def approve_tool_call(
+    body: ToolApprovalRequest,
+    session: Session = Depends(get_session),
+):
+    """User approved a pending tool call — unblock the waiting engine coroutine."""
+    from core.session.tool_approval import tool_approval_gate
+
+    tool_approval_gate.resolve(session.session_id, body.call_id, approved=True)
+    return {"status": "approved"}
+
+
+@router.post("/tool/reject")
+async def reject_tool_call(
+    body: ToolApprovalRequest,
+    session: Session = Depends(get_session),
+):
+    """User rejected a pending tool call — the engine will cancel and stop."""
+    from core.session.tool_approval import tool_approval_gate
+
+    tool_approval_gate.resolve(session.session_id, body.call_id, approved=False)
+    return {"status": "rejected"}
+
+
 # ── Session management ────────────────────────────────────────────────────────
 
 
 class CreateSessionRequest(BaseModel):
     mode: str = "chat"  # "chat" | "cowork" | "code"
+    project_id: str | None = None  # file the new session under this project
 
 
 @router.post("/sessions")
@@ -233,7 +275,10 @@ async def create_chat_session(
     session = session_manager.create(mode=session_mode)
     repo = ChatRepo(db)
     row = await repo.create_session(
-        session.session_id, mode=body.mode, user_id=user.id if user else None
+        session.session_id,
+        mode=body.mode,
+        user_id=user.id if user else None,
+        project_id=body.project_id,
     )
     return _session_dict(row)
 
@@ -277,6 +322,27 @@ async def search_chat_sessions(
         ],
         "total": total,
     }
+
+
+@router.get("/sessions/{session_id}")
+async def get_chat_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a single session's metadata, including its project name (if any)."""
+    repo = ChatRepo(db)
+    row = await repo.get_session(session_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    data = _session_dict(row)
+    project_name = None
+    if row.project_id:
+        from db.repos.project import ProjectRepo
+
+        project = await ProjectRepo(db).get(row.project_id)
+        project_name = project.name if project else None
+    data["project_name"] = project_name
+    return data
 
 
 @router.get("/sessions/{session_id}/stream/status")
@@ -331,6 +397,25 @@ async def rename_chat_session(
     """Rename a session."""
     repo = ChatRepo(db)
     ok = await repo.rename_session(session_id, body.title)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Session not found")
+    row = await repo.get_session(session_id)
+    return _session_dict(row)
+
+
+class MoveToProjectRequest(BaseModel):
+    project_id: str | None = None  # null detaches the session (returns to Recents)
+
+
+@router.patch("/sessions/{session_id}/project", status_code=200)
+async def move_session_to_project(
+    session_id: str,
+    body: MoveToProjectRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add / move / remove a session to/from a project (null = remove)."""
+    repo = ChatRepo(db)
+    ok = await repo.set_project(session_id, body.project_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Session not found")
     row = await repo.get_session(session_id)
@@ -459,6 +544,7 @@ def _session_dict(row) -> dict:
         "session_id": row.id,
         "mode": row.mode,
         "title": row.title,
+        "project_id": getattr(row, "project_id", None),
         "created_at": _iso(row.created_at),
         "updated_at": _iso(row.updated_at),
         "streaming": getattr(row, "streaming", False),

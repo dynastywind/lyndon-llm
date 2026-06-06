@@ -5,6 +5,10 @@ import { generateId } from '@/lib/utils'
 import type { ToolCallRecord, ChartSpec, MessageAttachment, ChatPlan } from '@/types'
 import type { AttachmentPayload } from '@/api/client'
 
+export interface SendOptions {
+  requireToolApproval?: boolean
+}
+
 function chartSpecToMarkdown(spec: ChartSpec): string {
   return `\n\n\`\`\`chart\n${JSON.stringify(spec)}\n\`\`\`\n\n`
 }
@@ -29,6 +33,8 @@ export function useStream() {
     setSessionEffortMode,
     setChatPendingPlan,
     setChatPlanStatus,
+    setPendingProjectId,
+    setPendingToolApproval,
   } = useAppStore()
 
   const send = useCallback(
@@ -38,6 +44,7 @@ export function useStream() {
       skillId?: string,
       displayContent?: string,
       skillPrefix?: string,
+      options?: SendOptions,
     ) => {
       // Lazily create a session on the very first message.
       let activeSessionId = sessionId
@@ -45,7 +52,12 @@ export function useStream() {
         try {
           // Use the current app mode so cowork/code sessions get the right mode.
           const sessionMode = mode === 'sandbox' ? 'chat' : mode
-          const session = await createChatSession(sessionMode)
+          // If the chat was started from a project, file the new session under it.
+          // Read fresh from the store: the detail composer sets pendingProjectId
+          // immediately before calling send(), so the closure value may be stale.
+          const projectId = useAppStore.getState().pendingProjectId
+          const session = await createChatSession(sessionMode, projectId)
+          if (projectId) setPendingProjectId(null)
           activeSessionId = session.session_id
           setSessionId(activeSessionId)
           // Record the effort mode chosen for this brand-new session so it
@@ -225,6 +237,16 @@ export function useStream() {
                 break
               }
 
+              case 'tool_permission_request': {
+                setPendingToolApproval({
+                  sessionId: activeSessionId!,
+                  callId: data.id as string,
+                  toolName: data.name as string,
+                  args: data.args as Record<string, unknown>,
+                })
+                break
+              }
+
               case 'error': {
                 console.warn('[stream] backend error event:', data.message)
                 break
@@ -242,8 +264,11 @@ export function useStream() {
           skillPrefix,
           effortMode,
           mode,
+          options?.requireToolApproval ?? false,
         )
       } finally {
+        // Clear any lingering approval dialog when the stream ends
+        setPendingToolApproval(null)
         stopStreaming(activeSessionId)
         bumpScrollToBottom()
         bumpSessionVersion()
@@ -268,6 +293,8 @@ export function useStream() {
       setSessionEffortMode,
       setChatPendingPlan,
       setChatPlanStatus,
+      setPendingProjectId,
+      setPendingToolApproval,
     ],
   )
 

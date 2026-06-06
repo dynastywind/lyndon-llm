@@ -35,6 +35,7 @@ from chat.orchestrator import (
     kb_has_sources,
     legacy_route_decision,
 )
+from chat.project_context import build_project_block
 from chat.rag.retriever import HybridRetriever, RetrievedChunk
 from config.settings import settings
 from core.events.bus import Events, event_bus
@@ -331,6 +332,13 @@ class ChatEngine:
             yield {"type": "skill_activated", "skill_id": skill_id, "skill_name": getattr(_skill, "name", "")}
         if context_block:
             system_prompt = f"{system_prompt}\n\n{context_block}"
+        # Project context (brief + folders + project-scoped RAG) — applied every
+        # turn so the project's instructions and files always hold for its chats.
+        project_block = await build_project_block(
+            self._db, self.session.session_id, user_message, self.user_id
+        )
+        if project_block:
+            system_prompt = f"{system_prompt}\n\n{project_block}"
         await self.memory.build_system_prompt(system_prompt, user_message)
 
         # 4. Add user turn to short-term memory & compress if needed
@@ -537,9 +545,16 @@ class ChatEngine:
         """Generate a plan and yield a plan_preview event to end Phase 1."""
         from chat.planner import ChatPlanner
 
+        project_block = await build_project_block(
+            self._db, self.session.session_id, user_message, self.user_id
+        )
         planner = ChatPlanner()
         try:
-            plan = await planner.create_plan(user_message, session_id=self.session.session_id)
+            plan = await planner.create_plan(
+                user_message,
+                session_id=self.session.session_id,
+                project_context=project_block,
+            )
         except ValueError as e:
             yield {"type": "error", "message": f"Planner failed: {e}"}
             return
@@ -636,6 +651,24 @@ class ChatEngine:
                         fn_args = json.loads(tc.function.arguments or "{}")
                     except json.JSONDecodeError:
                         fn_args = {}
+
+                    # ── Permission gate ("ask before acting" mode) ─────────────────
+                    if self.session.metadata.get("require_tool_approval"):
+                        from core.session.tool_approval import tool_approval_gate
+
+                        yield {
+                            "type": "tool_permission_request",
+                            "id": tc.id,
+                            "name": fn_name,
+                            "args": fn_args,
+                        }
+                        approved = await tool_approval_gate.request_approval(
+                            self.session.session_id, tc.id
+                        )
+                        if not approved:
+                            yield {"type": "token", "text": "\n\nAction cancelled."}
+                            return
+                    # ───────────────────────────────────────────────────────────────
 
                     yield {"type": "tool_start", "id": tc.id, "name": fn_name, "args": fn_args}
 

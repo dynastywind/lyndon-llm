@@ -77,6 +77,16 @@ export type ChatPlanStatus = 'pending_confirm' | 'running' | 'done' | 'failed' |
 
 export type ChatPlanStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
 
+// ── Tool approval ─────────────────────────────────────────────────────────────
+
+/** Pending tool call waiting for user approval (ask-before-acting mode). */
+export interface PendingToolApproval {
+  sessionId: string
+  callId: string
+  toolName: string
+  args: Record<string, unknown>
+}
+
 // ── Cowork ────────────────────────────────────────────────────────────────────
 export type RiskLevel = 'low' | 'medium' | 'high'
 export type StepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
@@ -148,6 +158,7 @@ export interface ChatSession {
   session_id: string
   mode: string
   title: string | null
+  project_id?: string | null
   created_at: string
   updated_at: string
   streaming?: boolean
@@ -156,6 +167,29 @@ export interface ChatSession {
 export interface ChatSessionsResponse {
   sessions: ChatSession[]
   total: number
+}
+
+// ── Projects ──────────────────────────────────────────────────────────────────
+export interface ProjectFolder {
+  path: string
+  name: string
+}
+
+export interface Project {
+  id: string
+  mode: string
+  name: string
+  instructions: string | null
+  folders: ProjectFolder[]
+  created_at: string
+  updated_at: string
+  chat_count: number
+}
+
+export interface ProjectFile {
+  path: string
+  name: string
+  chunks: number
 }
 
 export interface ChatSessionMessage {
