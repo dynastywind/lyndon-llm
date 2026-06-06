@@ -193,6 +193,7 @@ export const zh: Dict = {
     tabMcp: 'MCP',
     tabSkills: '技能',
     tabAi: 'AI 与对话',
+    tabAppearance: '外观',
     settings: '设置',
     logout: '退出登录',
     deleteAccount: '删除账户',

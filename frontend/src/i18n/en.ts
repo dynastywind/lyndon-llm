@@ -198,6 +198,7 @@ export const en = {
     tabMcp: 'MCP',
     tabSkills: 'Skills',
     tabAi: 'AI & Chat',
+    tabAppearance: 'Appearance',
     settings: 'Settings',
     logout: 'Logout',
     deleteAccount: 'Delete account',

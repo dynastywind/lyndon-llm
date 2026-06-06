@@ -18,6 +18,7 @@ import {
   X,
   ListChecks,
   Code,
+  Palette,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -973,6 +974,11 @@ export function Sidebar() {
                       { tab: 'tools' as SettingsTab, icon: Server, label: t('sidebar.tabMcp') },
                       { tab: 'skills' as SettingsTab, icon: Puzzle, label: t('sidebar.tabSkills') },
                       { tab: 'ai' as SettingsTab, icon: MessageSquare, label: t('sidebar.tabAi') },
+                      {
+                        tab: 'appearance' as SettingsTab,
+                        icon: Palette,
+                        label: t('sidebar.tabAppearance'),
+                      },
                     ] as const
                   ).map(({ tab, icon: Icon, label }) => (
                     <DropdownMenu.Item
