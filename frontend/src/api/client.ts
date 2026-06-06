@@ -225,10 +225,11 @@ export async function streamChat(
   skillId?: string,
   skillPrefix?: string,
   effortMode?: 'low' | 'medium' | 'high',
+  mode: string = 'chat',
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/`, {
     method: 'POST',
-    headers: headers(sessionId, 'chat'),
+    headers: headers(sessionId, mode),
     body: JSON.stringify({
       message,
       ...(attachments?.length ? { attachments } : {}),

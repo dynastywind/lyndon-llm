@@ -149,8 +149,8 @@ class ChatEngine:
         self.memory = MemoryManager(session.session_id, user_id=user_id)
         self._retriever = HybridRetriever()
         self._db = db
-        # Build a permissive gate for Chat mode — web_search is READ only
-        self._gate = PermissionGate(Mode.CHAT)
+        # Build a permission gate scoped to the session's mode (chat/cowork/code)
+        self._gate = PermissionGate(session.mode)
 
     # ------------------------------------------------------------------ #
     #  Main entry point                                                    #
@@ -206,7 +206,7 @@ class ChatEngine:
             from db.repos.chat import ChatRepo
 
             _repo = ChatRepo(self._db)
-            await _repo.ensure_session(self.session.session_id, "chat")
+            await _repo.ensure_session(self.session.session_id, self.session.mode.value)
             await _repo.add_message(
                 self.session.session_id,
                 "user",
@@ -228,7 +228,6 @@ class ChatEngine:
         # Slash-command override: if a specific skill_id was provided (e.g. from
         # the frontend's "/" picker), force routing to that skill's tools only —
         # bypassing the orchestrator's heuristic entirely.
-        from core.permissions.gate import Mode
         from core.tools.registry import tool_registry
 
         skill_pinned = False
@@ -236,7 +235,7 @@ class ChatEngine:
         if skill_id:
             pinned = frozenset(
                 qname
-                for qname, meta in tool_registry._skill_registry[Mode.CHAT].items()
+                for qname, meta in tool_registry._skill_registry[self.session.mode].items()
                 # _tool_meta lives on skill_manager, but _skill_registry values are
                 # classes whose `name` encodes the skill_id after the first "__".
                 if qname.startswith(f"skill__{skill_id}__")
@@ -255,7 +254,7 @@ class ChatEngine:
 
         # Expand the generic skill sentinel emitted by the heuristic orchestrator.
         if SKILL_SIGNAL in decision.tools:
-            skill_names = frozenset(tool_registry._skill_registry[Mode.CHAT].keys())
+            skill_names = frozenset(tool_registry._skill_registry[self.session.mode].keys())
             expanded = (decision.tools - {SKILL_SIGNAL}) | skill_names
             decision = RouteDecision(decision.route, expanded, decision.reason)
 
@@ -550,8 +549,8 @@ class ChatEngine:
             messages_override if messages_override is not None else self.memory.get_messages()
         )
         messages: list[dict] = list(original_messages)
-        tool_schemas = tool_registry.get_openai_schemas(Mode.CHAT)
-        tools = tool_registry.get_tools(Mode.CHAT, self._gate, user_id=self.user_id)
+        tool_schemas = tool_registry.get_openai_schemas(self.session.mode)
+        tools = tool_registry.get_tools(self.session.mode, self._gate, user_id=self.user_id)
 
         if allowed_tools is not None:
             tool_schemas = [s for s in tool_schemas if s["function"]["name"] in allowed_tools]

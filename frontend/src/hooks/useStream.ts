@@ -232,6 +232,7 @@ export function useStream() {
           skillId,
           skillPrefix,
           effortMode,
+          mode,
         )
       } finally {
         stopStreaming(activeSessionId)
