@@ -70,6 +70,27 @@ export function CoworkWindow() {
     }
   }
 
+  const handleGoalKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== 'Enter') return
+    if (e.metaKey) {
+      // Cmd+Enter → insert a newline at the cursor
+      e.preventDefault()
+      const el = e.currentTarget
+      const start = el.selectionStart
+      const end = el.selectionEnd
+      const next = goal.slice(0, start) + '\n' + goal.slice(end)
+      setGoal(next)
+      requestAnimationFrame(() => {
+        el.selectionStart = start + 1
+        el.selectionEnd = start + 1
+      })
+    } else {
+      // Enter → submit
+      e.preventDefault()
+      void handlePlan()
+    }
+  }
+
   const handleExecute = async () => {
     if (!currentPlan) return
     setExecuting(true)
@@ -95,21 +116,25 @@ export function CoworkWindow() {
       </div>
 
       {/* Goal input */}
-      <div className="flex gap-2">
-        <textarea
-          value={goal}
-          onChange={(e) => setGoal(e.target.value)}
-          placeholder="e.g. Set up a Next.js project with Tailwind and deploy it to Vercel"
-          rows={2}
-          className="flex-1 resize-none bg-input rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-        />
-        <button
-          onClick={handlePlan}
-          disabled={loading || !goal.trim()}
-          className="px-4 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40"
-        >
-          {loading ? <Loader2 size={14} className="animate-spin" /> : 'Plan'}
-        </button>
+      <div className="flex flex-col gap-1">
+        <div className="flex gap-2">
+          <textarea
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            onKeyDown={handleGoalKeyDown}
+            placeholder="e.g. Set up a Next.js project with Tailwind and deploy it to Vercel"
+            rows={2}
+            className="flex-1 resize-none bg-input rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <button
+            onClick={handlePlan}
+            disabled={loading || !goal.trim()}
+            className="px-4 rounded-xl bg-primary text-primary-foreground text-sm font-medium disabled:opacity-40"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : 'Plan'}
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground/50 pl-1">↵ send &nbsp;·&nbsp; ⌘↵ new line</p>
       </div>
 
       {/* Plan display */}
