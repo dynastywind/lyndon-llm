@@ -283,3 +283,102 @@ describe('useStream — lazy session creation', () => {
     expect(streamChat).not.toHaveBeenCalled()
   })
 })
+
+// ── plan_preview event ────────────────────────────────────────────────────────
+
+describe('useStream — plan_preview event', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStore()
+  })
+
+  it('stores the plan and sets chatPlanStatus to pending_confirm', async () => {
+    const fakePlan = { plan_id: 'p1', steps: [{ step_id: 's1', description: 'do it' }] }
+    stubStreamChat([['plan_preview', fakePlan as Record<string, unknown>]])
+
+    const { result } = renderHook(() => useStream())
+    await act(async () => {
+      await result.current.send('plan something')
+    })
+
+    expect(useAppStore.getState().chatPendingPlan).toMatchObject({ plan_id: 'p1' })
+    expect(useAppStore.getState().chatPlanStatus).toBe('pending_confirm')
+  })
+
+  it('removes the empty assistant bubble when plan_preview arrives', async () => {
+    const fakePlan = { plan_id: 'p1', steps: [] }
+    stubStreamChat([['plan_preview', fakePlan as Record<string, unknown>]])
+
+    const { result } = renderHook(() => useStream())
+    await act(async () => {
+      await result.current.send('plan')
+    })
+
+    // The hook creates a placeholder assistant bubble then removes it on plan_preview
+    const msgs = useAppStore.getState().sessionMessages['existing-session'] ?? []
+    const assistants = msgs.filter((m) => m.role === 'assistant')
+    expect(assistants).toHaveLength(0)
+  })
+})
+
+// ── chart event ───────────────────────────────────────────────────────────────
+
+describe('useStream — chart event', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStore()
+  })
+
+  it('appends chart markdown block to assistant content', async () => {
+    const spec = { type: 'bar', title: 'Revenue', x_key: 'q', data: [] }
+    stubStreamChat([['chart', { spec }]])
+
+    const { result } = renderHook(() => useStream())
+    await act(async () => {
+      await result.current.send('show chart')
+    })
+
+    const msgs = useAppStore.getState().sessionMessages['existing-session'] ?? []
+    const assistant = msgs.find((m) => m.role === 'assistant')
+    expect(assistant?.content).toContain('```chart')
+    expect(assistant?.content).toContain('"title"')
+  })
+})
+
+// ── error and metrics events ──────────────────────────────────────────────────
+
+describe('useStream — error and metrics events', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStore()
+  })
+
+  it('error event does not crash — store remains consistent', async () => {
+    stubStreamChat([['error', { message: 'backend exploded' }]])
+
+    const { result } = renderHook(() => useStream())
+    await act(async () => {
+      await result.current.send('go')
+    })
+
+    // Streaming should be cleaned up even after an error event
+    expect(useAppStore.getState().isStreaming).toBe(false)
+  })
+
+  it('metrics event does not affect store state', async () => {
+    stubStreamChat([
+      ['metrics', { total_ms: 1234, phases: { ttft: 100, stream: 1134 } }],
+      ['token', { text: 'done' }],
+    ])
+
+    const { result } = renderHook(() => useStream())
+    await act(async () => {
+      await result.current.send('go')
+    })
+
+    // Only the token should appear in content — metrics has no store effect
+    const msgs = useAppStore.getState().sessionMessages['existing-session'] ?? []
+    const assistant = msgs.find((m) => m.role === 'assistant')
+    expect(assistant?.content).toBe('done')
+  })
+})

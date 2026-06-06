@@ -181,3 +181,206 @@ describe('selectedModel', () => {
     expect(parsed?.state?.selectedModel).toBe('gemma2:9b')
   })
 })
+
+// ── auth & logout ─────────────────────────────────────────────────────────────
+
+describe('auth — setUser and logout', () => {
+  beforeEach(() => {
+    useAppStore.setState({
+      user: null,
+      sessionId: null,
+      sessionMessages: {},
+      drafts: {},
+      streamingSet: {},
+      isStreaming: false,
+    })
+  })
+
+  it('setUser stores the user object', () => {
+    const user = { id: 'u1', username: 'alice', email: null, token: 'tok' }
+    useAppStore.getState().setUser(user)
+    expect(useAppStore.getState().user).toEqual(user)
+  })
+
+  it('setUser(null) clears the user', () => {
+    useAppStore.setState({ user: { id: 'u1', username: 'a', email: null, token: 't' } })
+    useAppStore.getState().setUser(null)
+    expect(useAppStore.getState().user).toBeNull()
+  })
+
+  it('logout clears user, sessionId, messages, drafts, and streaming state', () => {
+    useAppStore.setState({
+      user: { id: 'u1', username: 'alice', email: null, token: 't' },
+      sessionId: 'sid-x',
+      sessionMessages: { 'sid-x': [] },
+      drafts: { 'sid-x': 'draft text' },
+      streamingSet: { 'sid-x': true },
+      isStreaming: true,
+    })
+
+    useAppStore.getState().logout()
+
+    const s = useAppStore.getState()
+    expect(s.user).toBeNull()
+    expect(s.sessionId).toBeNull()
+    expect(s.sessionMessages).toEqual({})
+    expect(s.drafts).toEqual({})
+    expect(s.streamingSet).toEqual({})
+    expect(s.isStreaming).toBe(false)
+  })
+})
+
+// ── drafts ────────────────────────────────────────────────────────────────────
+
+describe('drafts', () => {
+  beforeEach(() => useAppStore.setState({ drafts: {} }))
+
+  it('setDraft stores text for a session key', () => {
+    useAppStore.getState().setDraft('sess-1', 'hello world')
+    expect(useAppStore.getState().drafts['sess-1']).toBe('hello world')
+  })
+
+  it('clearDraft removes the key', () => {
+    useAppStore.setState({ drafts: { 'sess-1': 'hello', 'sess-2': 'bye' } })
+    useAppStore.getState().clearDraft('sess-1')
+    expect(useAppStore.getState().drafts['sess-1']).toBeUndefined()
+    expect(useAppStore.getState().drafts['sess-2']).toBe('bye')
+  })
+
+  it('multiple sessions have independent drafts', () => {
+    useAppStore.getState().setDraft('a', 'draft A')
+    useAppStore.getState().setDraft('b', 'draft B')
+    expect(useAppStore.getState().drafts['a']).toBe('draft A')
+    expect(useAppStore.getState().drafts['b']).toBe('draft B')
+  })
+})
+
+// ── pinned sessions ───────────────────────────────────────────────────────────
+
+describe('pinnedSessionIds', () => {
+  beforeEach(() => useAppStore.setState({ pinnedSessionIds: [] }))
+
+  it('pinSession prepends the id', () => {
+    useAppStore.getState().pinSession('sid-1')
+    useAppStore.getState().pinSession('sid-2')
+    expect(useAppStore.getState().pinnedSessionIds).toEqual(['sid-2', 'sid-1'])
+  })
+
+  it('pinSession is idempotent — no duplicates', () => {
+    useAppStore.getState().pinSession('sid-1')
+    useAppStore.getState().pinSession('sid-1')
+    expect(useAppStore.getState().pinnedSessionIds).toHaveLength(1)
+  })
+
+  it('unpinSession removes the id', () => {
+    useAppStore.setState({ pinnedSessionIds: ['sid-1', 'sid-2'] })
+    useAppStore.getState().unpinSession('sid-1')
+    expect(useAppStore.getState().pinnedSessionIds).toEqual(['sid-2'])
+  })
+
+  it('unpinSession on unknown id is a no-op', () => {
+    useAppStore.setState({ pinnedSessionIds: ['sid-1'] })
+    useAppStore.getState().unpinSession('ghost')
+    expect(useAppStore.getState().pinnedSessionIds).toEqual(['sid-1'])
+  })
+})
+
+// ── system & session prompts ───────────────────────────────────────────────────
+
+describe('prompts', () => {
+  beforeEach(() =>
+    useAppStore.setState({ systemPrompt: '', sessionPrompts: {}, appliedSessionPrompts: {} }),
+  )
+
+  it('setSystemPrompt updates the global prompt', () => {
+    useAppStore.getState().setSystemPrompt('Always respond in French.')
+    expect(useAppStore.getState().systemPrompt).toBe('Always respond in French.')
+  })
+
+  it('setSessionPrompt stores a per-session prompt', () => {
+    useAppStore.getState().setSessionPrompt('sess-1', 'Translate everything to Spanish.')
+    expect(useAppStore.getState().sessionPrompts['sess-1']).toBe(
+      'Translate everything to Spanish.',
+    )
+  })
+
+  it('clearSessionPrompt removes the key without affecting others', () => {
+    useAppStore.setState({ sessionPrompts: { a: 'prompt A', b: 'prompt B' } })
+    useAppStore.getState().clearSessionPrompt('a')
+    expect(useAppStore.getState().sessionPrompts['a']).toBeUndefined()
+    expect(useAppStore.getState().sessionPrompts['b']).toBe('prompt B')
+  })
+
+  it('setAppliedSessionPrompt records which prompt was applied', () => {
+    useAppStore.getState().setAppliedSessionPrompt('sess-1', 'the prompt that was used')
+    expect(useAppStore.getState().appliedSessionPrompts['sess-1']).toBe('the prompt that was used')
+  })
+})
+
+// ── effort mode ───────────────────────────────────────────────────────────────
+
+describe('effortMode', () => {
+  beforeEach(() => useAppStore.setState({ effortMode: 'medium', sessionEffortModes: {} }))
+
+  it('defaults to medium', () => {
+    expect(useAppStore.getState().effortMode).toBe('medium')
+  })
+
+  it('setEffortMode updates the global effort', () => {
+    useAppStore.getState().setEffortMode('high')
+    expect(useAppStore.getState().effortMode).toBe('high')
+  })
+
+  it('setSessionEffortMode stores a per-session override', () => {
+    useAppStore.getState().setSessionEffortMode('s1', 'low')
+    expect(useAppStore.getState().sessionEffortModes['s1']).toBe('low')
+  })
+
+  it('per-session overrides are independent', () => {
+    useAppStore.getState().setSessionEffortMode('s1', 'low')
+    useAppStore.getState().setSessionEffortMode('s2', 'high')
+    expect(useAppStore.getState().sessionEffortModes['s1']).toBe('low')
+    expect(useAppStore.getState().sessionEffortModes['s2']).toBe('high')
+  })
+})
+
+// ── chat planner ──────────────────────────────────────────────────────────────
+
+describe('chatPlanner', () => {
+  beforeEach(() =>
+    useAppStore.setState({
+      chatPendingPlan: null,
+      chatPlanStatus: null,
+      chatPlanStepStatuses: {},
+    }),
+  )
+
+  const fakePlan = {
+    plan_id: 'p1',
+    steps: [{ step_id: 's1', description: 'step one' }],
+  } as never
+
+  it('setChatPendingPlan stores the plan and resets step statuses', () => {
+    useAppStore.setState({ chatPlanStepStatuses: { 's1': 'done' as never } })
+    useAppStore.getState().setChatPendingPlan(fakePlan)
+    expect(useAppStore.getState().chatPendingPlan).toEqual(fakePlan)
+    expect(useAppStore.getState().chatPlanStepStatuses).toEqual({})
+  })
+
+  it('updateChatPlanStepStatus updates a single step', () => {
+    useAppStore.getState().updateChatPlanStepStatus('s1', 'running' as never)
+    expect(useAppStore.getState().chatPlanStepStatuses['s1']).toBe('running')
+  })
+
+  it('clearChatPlan resets everything', () => {
+    useAppStore.setState({
+      chatPendingPlan: fakePlan,
+      chatPlanStatus: 'running' as never,
+      chatPlanStepStatuses: { s1: 'done' as never },
+    })
+    useAppStore.getState().clearChatPlan()
+    expect(useAppStore.getState().chatPendingPlan).toBeNull()
+    expect(useAppStore.getState().chatPlanStatus).toBeNull()
+    expect(useAppStore.getState().chatPlanStepStatuses).toEqual({})
+  })
+})
