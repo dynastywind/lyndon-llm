@@ -14,6 +14,7 @@ import {
   type RagSource,
 } from '@/api/client'
 import { useAppStore } from '@/store'
+import { useT } from '@/i18n'
 import { CODE_THEME_OPTIONS } from '@/config/codeThemes'
 import { FileViewerModal } from './FileViewerModal'
 import { PdfPageThumbnail } from './PdfPageThumbnail'
@@ -76,14 +77,14 @@ function fileTypeLabel(path: string): string {
   return map[ext] ?? (ext.toUpperCase() || 'FILE')
 }
 
-// NAV SECTIONS
-const NAV_SECTIONS: { id: SettingsTab; no: string; label: string }[] = [
-  { id: 'profile', no: '01', label: 'Profile' },
-  { id: 'ai', no: '02', label: 'AI & Chat' },
-  { id: 'knowledge', no: '03', label: 'Knowledge' },
-  { id: 'tools', no: '04', label: 'MCP & Tools' },
-  { id: 'skills', no: '05', label: 'Skills' },
-  { id: 'appearance', no: '06', label: 'Appearance' },
+// NAV SECTIONS — labels are resolved via t('settings.nav.<id>') at render time
+const NAV_SECTIONS: { id: SettingsTab; no: string }[] = [
+  { id: 'profile', no: '01' },
+  { id: 'ai', no: '02' },
+  { id: 'knowledge', no: '03' },
+  { id: 'tools', no: '04' },
+  { id: 'skills', no: '05' },
+  { id: 'appearance', no: '06' },
 ]
 
 // CSS helpers (inline style objects keep us independent of Tailwind here)
@@ -150,6 +151,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
     setSystemPrompt,
     uiTheme,
     setUiTheme,
+    language,
+    setLanguage,
     codeTheme,
     setCodeTheme,
     profession,
@@ -157,6 +160,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
     avatarVersion,
     setAvatarVersion,
   } = useAppStore()
+  const { t, tn } = useT()
 
   // ── active section scroll-spy ─────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<SettingsTab>(initialTab)
@@ -189,7 +193,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
       await uploadAvatar(dataUrl)
       setAvatarVersion(Date.now()) // cache-bust the img src
     } catch (e) {
-      setAvatarError(e instanceof Error ? e.message : 'Upload failed')
+      setAvatarError(e instanceof Error ? e.message : t('settings.profile.avatar.uploadFailed'))
     } finally {
       setAvatarUploading(false)
     }
@@ -460,7 +464,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
               whiteSpace: 'nowrap',
             }}
           >
-            Settings
+            {t('settings.dialogTitle')}
           </Dialog.Title>
 
           {/* ── Content area (rail + scrollable main) ── */}
@@ -549,9 +553,9 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     paddingLeft: 2,
                   }}
                 >
-                  Settings
+                  {t('settings.nav.heading')}
                 </span>
-                {NAV_SECTIONS.map(({ id, no, label }) => {
+                {NAV_SECTIONS.map(({ id, no }) => {
                   const active = activeSection === id
                   return (
                     <button
@@ -598,7 +602,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                       >
                         {no}
                       </span>
-                      {label}
+                      {t('settings.nav.' + id)}
                     </button>
                   )
                 })}
@@ -616,7 +620,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
             >
               {/* Page header */}
               <header style={{ marginBottom: 40 }}>
-                <span style={S.eyebrow}>Account — Settings</span>
+                <span style={S.eyebrow}>{t('settings.header.eyebrow')}</span>
                 <h1
                   style={{
                     fontFamily: 'var(--font-display)',
@@ -628,7 +632,10 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     color: 'var(--lv-ink)',
                   }}
                 >
-                  Your <em style={{ fontStyle: 'italic', fontWeight: 500 }}>LLM.</em>
+                  {t('settings.header.titleLead')}{' '}
+                  <em style={{ fontStyle: 'italic', fontWeight: 500 }}>
+                    {t('settings.header.titleEm')}
+                  </em>
                 </h1>
                 <p
                   style={{
@@ -640,7 +647,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     margin: 0,
                   }}
                 >
-                  Manage how you appear and how LyndonLLM behaves for you.
+                  {t('settings.header.subtitle')}
                 </p>
               </header>
 
@@ -657,12 +664,15 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     marginBottom: 10,
                   }}
                 >
-                  <span style={S.eyebrowMute}>No. 01 — Identity</span>
-                  <h2 style={S.blockTitle}>Profile</h2>
+                  <span style={S.eyebrowMute}>{t('settings.profile.eyebrow')}</span>
+                  <h2 style={S.blockTitle}>{t('settings.profile.title')}</h2>
                 </div>
 
                 {/* Avatar */}
-                <SettingsRow label="Avatar" hint="PNG or JPG · square works best · up to 4 MB">
+                <SettingsRow
+                  label={t('settings.profile.avatar.label')}
+                  hint={t('settings.profile.avatar.hint')}
+                >
                   <input
                     ref={avatarInputRef}
                     type="file"
@@ -771,7 +781,9 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                               color: 'var(--lv-soft)',
                             }}
                           >
-                            {avatarDragging ? 'Drop here' : 'Upload'}
+                            {avatarDragging
+                              ? t('settings.profile.avatar.dropHere')
+                              : t('settings.profile.avatar.upload')}
                           </span>
                         </div>
                       )}
@@ -816,7 +828,9 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                             : 'var(--lv-ink)'
                         }}
                       >
-                        {avatarUploading ? 'Uploading…' : 'Change photo'}
+                        {avatarUploading
+                          ? t('settings.profile.avatar.uploading')
+                          : t('settings.profile.avatar.change')}
                       </button>
                       {avatarVersion > 0 && (
                         <button
@@ -841,7 +855,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                             e.currentTarget.style.color = 'var(--lv-mute)'
                           }}
                         >
-                          Remove
+                          {t('settings.profile.avatar.remove')}
                         </button>
                       )}
                       {avatarError && (
@@ -852,7 +866,10 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                 </SettingsRow>
 
                 {/* Username */}
-                <SettingsRow label="Username" hint="Permanent — cannot be changed">
+                <SettingsRow
+                  label={t('settings.profile.username.label')}
+                  hint={t('settings.profile.username.hint')}
+                >
                   <div
                     style={{
                       display: 'inline-flex',
@@ -872,7 +889,10 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     >
                       {user?.username ?? '—'}
                     </span>
-                    <span style={{ color: 'var(--lv-mute)', fontSize: 14 }} title="Locked">
+                    <span
+                      style={{ color: 'var(--lv-mute)', fontSize: 14 }}
+                      title={t('settings.profile.username.locked')}
+                    >
                       ⦿
                     </span>
                   </div>
@@ -880,18 +900,18 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
 
                 {/* Email */}
                 <SettingsRow
-                  label="Email address"
+                  label={t('settings.profile.email.label')}
                   hint={
                     user?.oauth_provider
-                      ? 'Bound from Google — updates automatically on sign-in'
-                      : 'Used for notifications and account recovery'
+                      ? t('settings.profile.email.hintOauth')
+                      : t('settings.profile.email.hint')
                   }
                 >
                   <input
                     type="email"
                     value={emailDraft}
                     onChange={(e) => setEmailDraft(e.target.value)}
-                    placeholder="e.g. you@example.com"
+                    placeholder={t('settings.profile.email.placeholder')}
                     style={fieldStyle()}
                     onFocus={(e) => {
                       e.currentTarget.style.borderBottomColor = 'var(--lv-gold)'
@@ -903,7 +923,10 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                 </SettingsRow>
 
                 {/* Profession */}
-                <SettingsRow label="Profession" hint="Helps tailor responses to your field">
+                <SettingsRow
+                  label={t('settings.profile.profession.label')}
+                  hint={t('settings.profile.profession.hint')}
+                >
                   <ProfessionPicker value={profDraft} onChange={setProfDraft} />
                 </SettingsRow>
               </section>
@@ -921,20 +944,20 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     marginBottom: 10,
                   }}
                 >
-                  <span style={S.eyebrowMute}>No. 02 — Behaviour</span>
-                  <h2 style={S.blockTitle}>AI &amp; Chat</h2>
+                  <span style={S.eyebrowMute}>{t('settings.ai.eyebrow')}</span>
+                  <h2 style={S.blockTitle}>{t('settings.ai.title')}</h2>
                 </div>
 
                 {/* System prompt */}
                 <SettingsRow
-                  label="System prompt"
-                  hint="Standing instructions added to the start of every conversation"
+                  label={t('settings.ai.systemPrompt.label')}
+                  hint={t('settings.ai.systemPrompt.hint')}
                 >
                   <textarea
                     value={promptDraft}
                     onChange={(e) => setPromptDraft(e.target.value)}
                     maxLength={MAX_PROMPT}
-                    placeholder="e.g. Be concise and prefer plain language. Cite sources when you can."
+                    placeholder={t('settings.ai.systemPrompt.placeholder')}
                     rows={6}
                     style={{
                       width: '100%',
@@ -976,7 +999,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                         color: 'var(--lv-mute)',
                       }}
                     >
-                      Markdown supported
+                      {t('settings.ai.systemPrompt.markdown')}
                     </span>
                     <span
                       style={{
@@ -996,7 +1019,10 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                 </SettingsRow>
 
                 {/* Chat font */}
-                <SettingsRow label="Chat font" hint="Typeface used for chat messages">
+                <SettingsRow
+                  label={t('settings.ai.chatFont.label')}
+                  hint={t('settings.ai.chatFont.hint')}
+                >
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     {/* Font card (Inter only) */}
                     <div
@@ -1030,7 +1056,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                         <span style={{ fontSize: 15, fontWeight: 500 }}>Inter</span>
                         <span style={{ fontSize: 12, color: 'var(--lv-mute)' }}>
-                          Grotesque sans · default
+                          {t('settings.ai.chatFont.interMeta')}
                         </span>
                       </div>
                       <span style={{ marginLeft: 'auto', color: 'var(--lv-gold)', fontSize: 15 }}>
@@ -1046,7 +1072,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                         maxWidth: '46ch',
                       }}
                     >
-                      More typefaces are on the way. Inter is the only chat font available for now.
+                      {t('settings.ai.chatFont.moreSoon')}
                     </p>
 
                     {/* Chat preview */}
@@ -1070,7 +1096,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                           marginBottom: 16,
                         }}
                       >
-                        Preview
+                        {t('settings.ai.preview.label')}
                       </span>
                       <div
                         style={{
@@ -1089,7 +1115,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                             color: 'var(--lv-mute)',
                           }}
                         >
-                          You
+                          {t('settings.ai.preview.you')}
                         </span>
                         <p
                           style={{
@@ -1101,8 +1127,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                           }}
                         >
                           {user?.username
-                            ? `What can you tell me about my work history?`
-                            : 'How do I set up a Python virtual environment?'}
+                            ? t('settings.ai.preview.userMsgKnown')
+                            : t('settings.ai.preview.userMsgGuest')}
                         </p>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -1127,8 +1153,10 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                           }}
                         >
                           {promptDraft.trim()
-                            ? `Got it — I'll follow your instructions: "${promptDraft.trim().slice(0, 60)}${promptDraft.length > 60 ? '…' : ''}"`
-                            : "I'm ready to help. Ask me anything about your work or the world."}
+                            ? t('settings.ai.preview.assistantMsg', {
+                                value: `${promptDraft.trim().slice(0, 60)}${promptDraft.length > 60 ? '…' : ''}`,
+                              })
+                            : t('settings.ai.preview.assistantMsgEmpty')}
                         </p>
                       </div>
                     </div>
@@ -1149,9 +1177,11 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     marginBottom: 26,
                   }}
                 >
-                  <span style={{ ...S.eyebrow, marginBottom: 14 }}>No. 03 — Knowledge Base</span>
+                  <span style={{ ...S.eyebrow, marginBottom: 14 }}>
+                    {t('settings.knowledge.eyebrow')}
+                  </span>
                   <h2 style={S.kbTitle}>
-                    Documents
+                    {t('settings.knowledge.title')}
                     <span
                       style={{
                         fontFamily: 'var(--font-mono)',
@@ -1161,7 +1191,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                         color: 'var(--lv-mute)',
                       }}
                     >
-                      {total} on file
+                      {t('settings.knowledge.onFile', { count: total })}
                     </span>
                   </h2>
                 </div>
@@ -1221,7 +1251,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search documents"
+                        placeholder={t('settings.knowledge.searchPlaceholder')}
                         autoComplete="off"
                         style={{
                           flex: 1,
@@ -1237,7 +1267,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     </label>
                     {/* Add document */}
                     <KbButton onClick={() => fileInputRef.current?.click()}>
-                      Add document →
+                      {t('settings.knowledge.addDocument')}
                     </KbButton>
                   </div>
 
@@ -1300,7 +1330,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                                   color: 'var(--lv-mute)',
                                 }}
                               >
-                                Already indexed
+                                {t('settings.knowledge.queue.alreadyIndexed')}
                               </div>
                             )}
                           </div>
@@ -1332,7 +1362,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                                 flexShrink: 0,
                               }}
                             >
-                              <CheckCircle2 size={13} /> {item.chunks} chunks
+                              <CheckCircle2 size={13} />{' '}
+                              {tn('settings.knowledge.queue.chunks', item.chunks ?? 0)}
                             </span>
                           )}
                           {item.status === 'error' && (
@@ -1363,7 +1394,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                                 flexShrink: 0,
                               }}
                             >
-                              Queued
+                              {t('settings.knowledge.queue.queued')}
                             </span>
                           )}
                           {item.status === 'conflict' && (
@@ -1372,13 +1403,13 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                                 onClick={() => uploadOne({ ...item, status: 'pending' })}
                                 style={smallBtn('gold')}
                               >
-                                Replace
+                                {t('settings.knowledge.queue.replace')}
                               </button>
                               <button
                                 onClick={() => setQueue((q) => q.filter((i) => i.id !== item.id))}
                                 style={smallBtn('mute')}
                               >
-                                Skip
+                                {t('settings.knowledge.queue.skip')}
                               </button>
                             </div>
                           )}
@@ -1401,7 +1432,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                         letterSpacing: '0.1em',
                       }}
                     >
-                      <Loader2 size={13} className="animate-spin" /> Loading…
+                      <Loader2 size={13} className="animate-spin" />{' '}
+                      {t('settings.knowledge.loading')}
                     </div>
                   ) : sources.length === 0 ? (
                     <p
@@ -1413,8 +1445,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                       }}
                     >
                       {debouncedQuery
-                        ? 'No documents match your search.'
-                        : 'No documents indexed yet.'}
+                        ? t('settings.knowledge.emptySearch')
+                        : t('settings.knowledge.empty')}
                     </p>
                   ) : (
                     <>
@@ -1446,7 +1478,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                             disabled={page === 0}
                             onClick={() => setPage((p) => Math.max(0, p - 1))}
                           >
-                            ← Prev
+                            {t('settings.knowledge.prev')}
                           </PagBtn>
                           <span
                             style={{
@@ -1463,7 +1495,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                             disabled={page >= totalPages - 1}
                             onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                           >
-                            Next →
+                            {t('settings.knowledge.next')}
                           </PagBtn>
                         </div>
                       )}
@@ -1486,9 +1518,9 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                   }}
                 >
                   <span style={{ ...S.eyebrow, marginBottom: 14 }}>
-                    No. 04 — Model Context Protocol
+                    {t('settings.mcp.eyebrow')}
                   </span>
-                  <h2 style={S.kbTitle}>MCP &amp; Tools</h2>
+                  <h2 style={S.kbTitle}>{t('settings.mcp.title')}</h2>
                 </div>
                 {/* Wrap existing ToolsRegistryPanel */}
                 <ToolsRegistryPanel active={open} />
@@ -1507,8 +1539,10 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     marginBottom: 26,
                   }}
                 >
-                  <span style={{ ...S.eyebrow, marginBottom: 14 }}>No. 05 — Skill Bundles</span>
-                  <h2 style={S.kbTitle}>Skills</h2>
+                  <span style={{ ...S.eyebrow, marginBottom: 14 }}>
+                    {t('settings.skills.eyebrow')}
+                  </span>
+                  <h2 style={S.kbTitle}>{t('settings.skills.title')}</h2>
                 </div>
                 <SkillsPanel />
               </section>
@@ -1526,17 +1560,61 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     marginBottom: 10,
                   }}
                 >
-                  <span style={S.eyebrowMute}>No. 06 — Surface</span>
-                  <h2 style={S.blockTitle}>Appearance</h2>
+                  <span style={S.eyebrowMute}>{t('settings.appearance.eyebrow')}</span>
+                  <h2 style={S.blockTitle}>{t('settings.appearance.title')}</h2>
                 </div>
 
+                {/* Language */}
+                <SettingsRow
+                  label={t('settings.language.label')}
+                  hint={t('settings.language.hint')}
+                >
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {[
+                      { value: 'en' as const, label: t('settings.language.en') },
+                      { value: 'zh' as const, label: t('settings.language.zh') },
+                    ].map(({ value, label }) => {
+                      const active = language === value
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setLanguage(value)}
+                          role="radio"
+                          aria-checked={active}
+                          style={{
+                            background: active ? 'rgba(200,168,106,0.12)' : 'transparent',
+                            border: `1px solid ${active ? 'var(--lv-gold)' : 'var(--lv-rule-strong)'}`,
+                            borderRadius: 5,
+                            padding: '9px 18px',
+                            minWidth: 120,
+                            cursor: 'pointer',
+                            fontSize: 14,
+                            fontWeight: 500,
+                            color: active ? 'var(--lv-gold)' : 'var(--lv-ink)',
+                            transition: 'border-color 0.2s, color 0.2s, background 0.2s',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!active) e.currentTarget.style.borderColor = 'var(--lv-soft)'
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!active) e.currentTarget.style.borderColor = 'var(--lv-rule-strong)'
+                          }}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </SettingsRow>
+
                 {/* Theme */}
-                <SettingsRow label="Theme" hint="Applies across the whole interface, instantly">
+                <SettingsRow label={t('settings.theme.label')} hint={t('settings.theme.hint')}>
                   <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap' }}>
                     {[
                       {
                         value: 'dark' as const,
-                        label: 'Dark',
+                        label: t('settings.theme.dark'),
                         barColor: '#c8a86a',
                         lineColor: '#2c2c2c',
                         bgColor: '#0a0a0a',
@@ -1544,7 +1622,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                       },
                       {
                         value: 'light' as const,
-                        label: 'Light',
+                        label: t('settings.theme.light'),
                         barColor: '#9a7a30',
                         lineColor: '#d8d1c1',
                         bgColor: '#f4f1ea',
@@ -1653,7 +1731,10 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                 </SettingsRow>
 
                 {/* Code theme */}
-                <SettingsRow label="Code theme" hint="Syntax highlighting style in code blocks">
+                <SettingsRow
+                  label={t('settings.appearance.codeTheme.label')}
+                  hint={t('settings.appearance.codeTheme.hint')}
+                >
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {CODE_THEME_OPTIONS.map(({ value, label }) => {
                       const active = codeTheme === value
@@ -1695,7 +1776,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                                 textTransform: 'uppercase',
                               }}
                             >
-                              Active
+                              {t('settings.appearance.codeTheme.active')}
                             </span>
                           )}
                         </button>
@@ -1751,7 +1832,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     color: 'var(--lv-soft)',
                   }}
                 >
-                  Unsaved changes
+                  {t('settings.save.unsaved')}
                 </span>
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
@@ -1777,7 +1858,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     e.currentTarget.style.color = 'var(--lv-mute)'
                   }}
                 >
-                  Discard
+                  {t('settings.save.discard')}
                 </button>
                 <button
                   type="button"
@@ -1810,7 +1891,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     e.currentTarget.style.transform = 'none'
                   }}
                 >
-                  Save changes →
+                  {t('settings.save.save')}
                 </button>
               </div>
             </div>
@@ -1868,6 +1949,7 @@ function SettingsRow({
 
 // ─── ProfessionPicker ─────────────────────────────────────────────────────────
 
+// Canonical profession values are stored in English; labels are localized for display.
 const PROFESSIONS = [
   'Photographer',
   'Software engineer',
@@ -1876,15 +1958,29 @@ const PROFESSIONS = [
   'Researcher',
   'Product manager',
   'Student',
-]
+] as const
+
+const PROFESSION_KEYS: Record<(typeof PROFESSIONS)[number], string> = {
+  Photographer: 'settings.profile.profession.options.photographer',
+  'Software engineer': 'settings.profile.profession.options.softwareEngineer',
+  Designer: 'settings.profile.profession.options.designer',
+  Writer: 'settings.profile.profession.options.writer',
+  Researcher: 'settings.profile.profession.options.researcher',
+  'Product manager': 'settings.profile.profession.options.productManager',
+  Student: 'settings.profile.profession.options.student',
+}
 
 function ProfessionPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { t } = useT()
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const filtered = PROFESSIONS.filter(
-    (p) => !value.trim() || p.toLowerCase().includes(value.toLowerCase()),
+    (p) =>
+      !value.trim() ||
+      p.toLowerCase().includes(value.toLowerCase()) ||
+      t(PROFESSION_KEYS[p]).toLowerCase().includes(value.toLowerCase()),
   )
 
   // Close on outside click
@@ -1914,7 +2010,7 @@ function ProfessionPicker({ value, onChange }: { value: string; onChange: (v: st
         onBlur={(e) => {
           e.currentTarget.style.borderBottomColor = 'var(--lv-rule-strong)'
         }}
-        placeholder="e.g. Software engineer"
+        placeholder={t('settings.profile.profession.placeholder')}
         style={fieldStyle()}
         autoComplete="off"
       />
@@ -1962,7 +2058,7 @@ function ProfessionPicker({ value, onChange }: { value: string; onChange: (v: st
                 e.currentTarget.style.background = 'none'
               }}
             >
-              {p}
+              {t(PROFESSION_KEYS[p])}
             </button>
           ))}
         </div>
@@ -1990,13 +2086,14 @@ function KnowledgeRow({
   onReindex: () => void
   onDelete: () => void
 }) {
+  const { t, tn } = useT()
   const [hov, setHov] = useState(false)
   const ext = fileExt(src.path)
   const typeLabel = fileTypeLabel(src.path)
   const meta = [
     typeLabel,
     src.size_bytes != null ? formatBytes(src.size_bytes) : null,
-    `${src.chunks} chunk${src.chunks !== 1 ? 's' : ''}`,
+    tn('settings.knowledge.row.chunks', src.chunks),
   ]
     .filter(Boolean)
     .join(' · ')
@@ -2085,7 +2182,7 @@ function KnowledgeRow({
       >
         <button
           onClick={onView}
-          title="View"
+          title={t('settings.knowledge.row.view')}
           style={{
             background: 'none',
             border: 'none',
@@ -2106,7 +2203,7 @@ function KnowledgeRow({
         <button
           onClick={onReindex}
           disabled={busy}
-          title="Re-index"
+          title={t('settings.knowledge.row.reindex')}
           style={{
             background: 'none',
             border: 'none',
@@ -2127,7 +2224,7 @@ function KnowledgeRow({
         <button
           onClick={onDelete}
           disabled={busy}
-          title="Remove"
+          title={t('settings.knowledge.row.remove')}
           style={{
             background: 'none',
             border: 'none',

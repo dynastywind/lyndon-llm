@@ -1,14 +1,16 @@
 import { Sun, Moon } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useT } from '@/i18n'
 
 export function ThemeToggle() {
+  const { t } = useT()
   const { uiTheme, setUiTheme } = useAppStore()
   const isLight = uiTheme === 'light'
 
   return (
     <button
       onClick={() => setUiTheme(isLight ? 'dark' : 'light')}
-      title={isLight ? 'Switch to dark theme' : 'Switch to light theme'}
+      title={isLight ? t('themeToggle.switchToDark') : t('themeToggle.switchToLight')}
       style={{
         background: 'none',
         border: 'none',

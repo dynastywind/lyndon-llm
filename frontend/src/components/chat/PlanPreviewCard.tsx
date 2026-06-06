@@ -1,12 +1,13 @@
 import { useAppStore } from '@/store'
 import { usePlanExecution } from '@/hooks/usePlanExecution'
+import { useT } from '@/i18n'
 import type { ChatPlanStep, ChatPlanStepStatus } from '@/types'
 
 const TOOL_LABEL: Record<string, string> = {
-  web_search: 'web search',
-  rag_query: 'knowledge base',
-  render_chart: 'chart',
-  run_code: 'code',
+  web_search: 'plan.tool.web_search',
+  rag_query: 'plan.tool.rag_query',
+  render_chart: 'plan.tool.render_chart',
+  run_code: 'plan.tool.run_code',
 }
 
 const STATUS_ICON: Record<ChatPlanStepStatus, string> = {
@@ -32,9 +33,11 @@ function StepRow({
   step: ChatPlanStep
   status?: ChatPlanStepStatus
 }) {
+  const { t } = useT()
   const icon = STATUS_ICON[status]
   const color = STATUS_COLOR[status]
-  const toolLabel = TOOL_LABEL[step.tool] ?? step.tool
+  const toolLabelKey = TOOL_LABEL[step.tool]
+  const toolLabel = toolLabelKey ? t(toolLabelKey) : step.tool
 
   return (
     <div
@@ -83,6 +86,7 @@ function StepRow({
 export function PlanPreviewCard() {
   const { chatPendingPlan, chatPlanStatus, chatPlanStepStatuses } = useAppStore()
   const { confirm, cancel } = usePlanExecution()
+  const { t, tn } = useT()
 
   if (!chatPendingPlan) return null
 
@@ -110,9 +114,9 @@ export function PlanPreviewCard() {
           marginBottom: 10,
         }}
       >
-        Plan · {chatPendingPlan.steps.length} step{chatPendingPlan.steps.length !== 1 ? 's' : ''}
-        {isDone && '  · done'}
-        {isFailed && '  · failed'}
+        {tn('plan.steps', chatPendingPlan.steps.length)}
+        {isDone && `  · ${t('plan.done')}`}
+        {isFailed && `  · ${t('plan.failed')}`}
       </div>
 
       {/* Goal */}
@@ -156,7 +160,7 @@ export function PlanPreviewCard() {
               cursor: 'pointer',
             }}
           >
-            Run Plan
+            {t('plan.runPlan')}
           </button>
           <button
             type="button"
@@ -173,7 +177,7 @@ export function PlanPreviewCard() {
               cursor: 'pointer',
             }}
           >
-            Dismiss
+            {t('plan.dismiss')}
           </button>
         </div>
       )}

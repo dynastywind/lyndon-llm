@@ -15,6 +15,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useT } from '@/i18n'
 import {
   createMcpServer,
   deleteMcpServer,
@@ -27,6 +28,7 @@ import type { McpServer, McpServerCreate, RegistryTool, ToolRegistry } from '@/t
 // ─── Internal tools (read-only) ───────────────────────────────────────────────
 
 function InternalToolsSection({ tools }: { tools: RegistryTool[] }) {
+  const { t } = useT()
   const byMode = tools.reduce<Record<string, RegistryTool[]>>((acc, t) => {
     const mode = t.mode ?? 'unknown'
     ;(acc[mode] ??= []).push(t)
@@ -35,10 +37,8 @@ function InternalToolsSection({ tools }: { tools: RegistryTool[] }) {
 
   return (
     <section>
-      <SectionLabel>Built-in tools</SectionLabel>
-      <p className="text-xs text-muted-foreground mb-3">
-        Shipped with LyndonLLM. These cannot be edited or removed.
-      </p>
+      <SectionLabel>{t('tools.builtInTitle')}</SectionLabel>
+      <p className="text-xs text-muted-foreground mb-3">{t('tools.builtInDescription')}</p>
       {Object.entries(byMode)
         .filter(([mode]) => mode !== 'cowork' && (IS_TAURI || mode !== 'code'))
         .map(([mode, modeTools]) => (
@@ -77,6 +77,7 @@ function InternalToolsSection({ tools }: { tools: RegistryTool[] }) {
 // ─── MCP server card ──────────────────────────────────────────────────────────
 
 function McpServerCard({ server, onChange }: { server: McpServer; onChange: () => void }) {
+  const { t } = useT()
   const [expanded, setExpanded] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -91,7 +92,7 @@ function McpServerCard({ server, onChange }: { server: McpServer; onChange: () =
   }
 
   const handleDelete = async () => {
-    if (!confirm(`Remove MCP server "${server.name}"?`)) return
+    if (!confirm(t('tools.removeServerConfirm', { name: server.name }))) return
     await deleteMcpServer(server.id)
     onChange()
   }
@@ -126,13 +127,13 @@ function McpServerCard({ server, onChange }: { server: McpServer; onChange: () =
             server.enabled ? 'bg-green-500/10 text-green-400' : 'bg-muted text-muted-foreground',
           )}
         >
-          {server.enabled ? 'on' : 'off'}
+          {server.enabled ? t('tools.statusOn') : t('tools.statusOff')}
         </span>
         <button
           type="button"
           onClick={handleRefresh}
           disabled={refreshing}
-          title="Refresh tools from server"
+          title={t('tools.refreshTools')}
           className="text-muted-foreground hover:text-foreground p-1"
         >
           <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
@@ -156,7 +157,7 @@ function McpServerCard({ server, onChange }: { server: McpServer; onChange: () =
       {expanded && (
         <ul className="border-t border-border px-3 py-2 space-y-1">
           {server.tools.length === 0 ? (
-            <li className="text-xs text-muted-foreground">No tools discovered yet.</li>
+            <li className="text-xs text-muted-foreground">{t('tools.noToolsDiscovered')}</li>
           ) : (
             server.tools.map((t) => (
               <li key={t.qualified_name} className="flex items-center gap-2 text-xs">
@@ -181,6 +182,7 @@ function McpServerCard({ server, onChange }: { server: McpServer; onChange: () =
 // ─── Add server form ──────────────────────────────────────────────────────────
 
 function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
+  const { t } = useT()
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -227,7 +229,7 @@ function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
       setArgsText('')
       onAdded()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add server')
+      setError(err instanceof Error ? err.message : t('tools.addServerError'))
     } finally {
       setSaving(false)
     }
@@ -241,7 +243,7 @@ function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
         className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
       >
         <Plus size={14} />
-        Add MCP server
+        {t('tools.addServer')}
       </button>
     )
   }
@@ -251,10 +253,10 @@ function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
       onSubmit={handleSubmit}
       className="bg-background rounded-lg border border-border p-4 space-y-3"
     >
-      <p className="text-sm font-medium">New MCP server</p>
+      <p className="text-sm font-medium">{t('tools.newServerTitle')}</p>
       <input
         required
-        placeholder="Display name"
+        placeholder={t('tools.displayNamePlaceholder')}
         value={form.name}
         onChange={(e) => setForm({ ...form, name: e.target.value })}
         className="w-full bg-card border border-border rounded px-3 py-1.5 text-sm"
@@ -264,20 +266,20 @@ function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
         onChange={(e) => setForm({ ...form, transport: e.target.value as 'stdio' | 'sse' })}
         className="w-full bg-card border border-border rounded px-3 py-1.5 text-sm"
       >
-        <option value="stdio">stdio (local process)</option>
-        <option value="sse">sse (remote URL)</option>
+        <option value="stdio">{t('tools.transportStdio')}</option>
+        <option value="sse">{t('tools.transportSse')}</option>
       </select>
       {form.transport === 'stdio' ? (
         <>
           <input
             required
-            placeholder="Command (e.g. npx, python, node)"
+            placeholder={t('tools.commandPlaceholder')}
             value={form.command ?? ''}
             onChange={(e) => setForm({ ...form, command: e.target.value })}
             className="w-full bg-card border border-border rounded px-3 py-1.5 text-sm font-mono"
           />
           <input
-            placeholder="Arguments (space-separated)"
+            placeholder={t('tools.argsPlaceholder')}
             value={argsText}
             onChange={(e) => setArgsText(e.target.value)}
             className="w-full bg-card border border-border rounded px-3 py-1.5 text-sm font-mono"
@@ -286,7 +288,7 @@ function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
       ) : (
         <input
           required
-          placeholder="Server URL (https://…)"
+          placeholder={t('tools.serverUrlPlaceholder')}
           value={form.url ?? ''}
           onChange={(e) => setForm({ ...form, url: e.target.value })}
           className="w-full bg-card border border-border rounded px-3 py-1.5 text-sm font-mono"
@@ -304,14 +306,14 @@ function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
           disabled={saving}
           className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded hover:opacity-90 disabled:opacity-50"
         >
-          {saving ? <Loader2 size={14} className="animate-spin" /> : 'Save & connect'}
+          {saving ? <Loader2 size={14} className="animate-spin" /> : t('tools.saveAndConnect')}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
           className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
         >
-          Cancel
+          {t('tools.cancel')}
         </button>
       </div>
     </form>
@@ -321,6 +323,7 @@ function AddMcpServerForm({ onAdded }: { onAdded: () => void }) {
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
 export function ToolsRegistryPanel({ active = true }: { active?: boolean }) {
+  const { t } = useT()
   const [registry, setRegistry] = useState<ToolRegistry | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -344,7 +347,7 @@ export function ToolsRegistryPanel({ active = true }: { active?: boolean }) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
         <Loader2 size={14} className="animate-spin" />
-        Loading tool registry…
+        {t('tools.loadingRegistry')}
       </div>
     )
   }
@@ -357,10 +360,8 @@ export function ToolsRegistryPanel({ active = true }: { active?: boolean }) {
       <InternalToolsSection tools={internal} />
 
       <section>
-        <SectionLabel>MCP servers</SectionLabel>
-        <p className="text-xs text-muted-foreground mb-3">
-          Connect external MCP servers. Tools are discovered on save and can be refreshed anytime.
-        </p>
+        <SectionLabel>{t('tools.mcpServersTitle')}</SectionLabel>
+        <p className="text-xs text-muted-foreground mb-3">{t('tools.mcpServersDescription')}</p>
         <AddMcpServerForm onAdded={load} />
         {servers.length > 0 && (
           <ul className="mt-4 space-y-2">

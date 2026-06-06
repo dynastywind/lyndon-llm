@@ -1,28 +1,31 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { getMemories, deleteMemory } from '@/api/client'
+import { useT } from '@/i18n'
 import type { MemoryRecord, MemoryType } from '@/types'
+
+type TFn = (key: string, vars?: Record<string, string | number>) => string
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function relativeTime(iso: string): string {
+function relativeTime(iso: string, t: TFn): string {
   if (!iso) return ''
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60_000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
+  if (mins < 1) return t('memory.timeJustNow')
+  if (mins < 60) return t('memory.timeMinutes', { count: mins })
   const h = Math.floor(mins / 60)
-  if (h < 24) return `${h}h ago`
+  if (h < 24) return t('memory.timeHours', { count: h })
   const d = Math.floor(h / 24)
-  if (d === 1) return 'yesterday'
-  if (d < 7) return `${d}d ago`
+  if (d === 1) return t('memory.timeYesterday')
+  if (d < 7) return t('memory.timeDays', { count: d })
   return new Date(iso).toLocaleDateString()
 }
 
 const TYPE_LABEL: Record<MemoryType, string> = {
-  episodic: 'episodic',
-  semantic: 'semantic',
-  procedural: 'procedural',
+  episodic: 'memory.type.episodic',
+  semantic: 'memory.type.semantic',
+  procedural: 'memory.type.procedural',
 }
 
 const TYPE_COLOR: Record<MemoryType, string> = {
@@ -34,6 +37,7 @@ const TYPE_COLOR: Record<MemoryType, string> = {
 // ── MemoryRow ─────────────────────────────────────────────────────────────────
 
 function MemoryRow({ record, onDelete }: { record: MemoryRecord; onDelete: (id: string) => void }) {
+  const { t } = useT()
   const [hov, setHov] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -78,7 +82,7 @@ function MemoryRow({ record, onDelete }: { record: MemoryRecord; onDelete: (id: 
             opacity: 0.85,
           }}
         >
-          {TYPE_LABEL[record.memory_type] ?? record.memory_type}
+          {TYPE_LABEL[record.memory_type] ? t(TYPE_LABEL[record.memory_type]) : record.memory_type}
         </span>
         <span
           style={{
@@ -88,7 +92,7 @@ function MemoryRow({ record, onDelete }: { record: MemoryRecord; onDelete: (id: 
             flex: 1,
           }}
         >
-          {relativeTime(record.created_at)}
+          {relativeTime(record.created_at, t)}
         </span>
         {/* Importance bar */}
         <div
@@ -149,6 +153,7 @@ function MemoryRow({ record, onDelete }: { record: MemoryRecord; onDelete: (id: 
 // ── Main panel ────────────────────────────────────────────────────────────────
 
 export function MemoryPanel({ active = true }: { active?: boolean }) {
+  const { t } = useT()
   const [records, setRecords] = useState<MemoryRecord[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -187,7 +192,7 @@ export function MemoryPanel({ active = true }: { active?: boolean }) {
         }}
       >
         <Loader2 size={13} className="animate-spin" />
-        Loading memories…
+        {t('memory.loading')}
       </div>
     )
   }

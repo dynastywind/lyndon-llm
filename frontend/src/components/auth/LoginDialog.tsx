@@ -10,6 +10,7 @@ import {
   completeOAuthLogin,
 } from '@/api/client'
 import { useAppStore } from '@/store'
+import { useT } from '@/i18n'
 
 interface Props {
   open: boolean
@@ -20,6 +21,7 @@ interface Props {
 
 export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
   const { setUser, bumpSessionVersion } = useAppStore()
+  const { t } = useT()
   const [mode, setMode] = useState<'login' | 'register' | 'reset' | 'oauth-username'>('login')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -67,7 +69,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
     if (mode !== 'oauth-username' && !password) return
     if (mode === 'register' && usernameTaken) return
     if (needsConfirm && password !== confirm) {
-      setError('Passwords do not match')
+      setError(t('authLogin.passwordsDoNotMatch'))
       return
     }
     setError('')
@@ -105,7 +107,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
       bumpSessionVersion()
       onOpenChange(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      setError(err instanceof Error ? err.message : t('authLogin.genericError'))
     } finally {
       setLoading(false)
     }
@@ -116,7 +118,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
       const { url } = await getGoogleAuthUrl()
       window.location.href = url
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Google login unavailable')
+      setError(err instanceof Error ? err.message : t('authLogin.googleUnavailable'))
     }
   }
 
@@ -169,16 +171,16 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
   )
 
   const titleMap = {
-    login: 'Sign in',
-    register: 'Create account',
-    reset: 'Reset password',
-    'oauth-username': 'Choose a username',
+    login: t('authLogin.title.login'),
+    register: t('authLogin.title.register'),
+    reset: t('authLogin.title.reset'),
+    'oauth-username': t('authLogin.title.oauth-username'),
   }
   const submitMap = {
-    login: 'Sign in',
-    register: 'Create account',
-    reset: 'Reset password',
-    'oauth-username': 'Continue',
+    login: t('authLogin.submit.login'),
+    register: t('authLogin.submit.register'),
+    reset: t('authLogin.submit.reset'),
+    'oauth-username': t('authLogin.submit.oauth-username'),
   }
 
   return (
@@ -211,7 +213,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
           {/* oauth-username subtitle */}
           {mode === 'oauth-username' && (
             <p style={{ margin: '-12px 0 16px', fontSize: 13, color: 'var(--lv-ink-muted)' }}>
-              Your Google account isn&apos;t linked to a user yet. Choose a username to continue.
+              {t('authLogin.oauthSubtitle')}
             </p>
           )}
 
@@ -227,7 +229,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
                 borderRadius: 6,
               }}
             >
-              Password updated. Please sign in with your new password.
+              {t('authLogin.resetSuccess')}
             </p>
           )}
 
@@ -238,7 +240,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
             {/* Username */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <label style={{ fontSize: 12, color: 'var(--lv-ink-muted)', fontWeight: 500 }}>
-                Username
+                {t('authLogin.username')}
               </label>
               <input
                 type="text"
@@ -253,11 +255,13 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
                 style={inputStyle(usernameInvalid)}
               />
               {checkingUsername && (
-                <span style={{ fontSize: 11, color: 'var(--lv-ink-muted)' }}>Checking…</span>
+                <span style={{ fontSize: 11, color: 'var(--lv-ink-muted)' }}>
+                  {t('authLogin.checking')}
+                </span>
               )}
               {usernameInvalid && (
                 <span style={{ fontSize: 11, color: 'var(--lv-error, #e55)' }}>
-                  Username already taken
+                  {t('authLogin.usernameTaken')}
                 </span>
               )}
             </div>
@@ -269,7 +273,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                 >
                   <label style={{ fontSize: 12, color: 'var(--lv-ink-muted)', fontWeight: 500 }}>
-                    {mode === 'reset' ? 'New password' : 'Password'}
+                    {mode === 'reset' ? t('authLogin.newPassword') : t('authLogin.password')}
                   </label>
                   <button
                     type="button"
@@ -298,7 +302,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
                 {/* Forgot password — login mode only */}
                 {mode === 'login' && (
                   <div style={{ textAlign: 'right' }}>
-                    {linkBtn('Forgot password?', () => switchMode('reset'))}
+                    {linkBtn(t('authLogin.forgotPassword'), () => switchMode('reset'))}
                   </div>
                 )}
               </div>
@@ -308,7 +312,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
             {needsConfirm && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 12, color: 'var(--lv-ink-muted)', fontWeight: 500 }}>
-                  Confirm password
+                  {t('authLogin.confirmPassword')}
                 </label>
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -319,7 +323,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
                 />
                 {confirmMismatch && (
                   <span style={{ fontSize: 11, color: 'var(--lv-error, #e55)' }}>
-                    Passwords do not match
+                    {t('authLogin.passwordsDoNotMatch')}
                   </span>
                 )}
               </div>
@@ -354,7 +358,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
                 opacity: submitDisabled ? 0.6 : 1,
               }}
             >
-              {loading ? 'Please wait…' : submitMap[mode]}
+              {loading ? t('authLogin.pleaseWait') : submitMap[mode]}
             </button>
 
             {/* Google login button — shown in login and register modes */}
@@ -364,7 +368,9 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
                   <hr
                     style={{ flex: 1, border: 'none', borderTop: '1px solid var(--lv-border)' }}
                   />
-                  <span style={{ fontSize: 11, color: 'var(--lv-ink-muted)' }}>or</span>
+                  <span style={{ fontSize: 11, color: 'var(--lv-ink-muted)' }}>
+                    {t('authLogin.or')}
+                  </span>
                   <hr
                     style={{ flex: 1, border: 'none', borderTop: '1px solid var(--lv-border)' }}
                   />
@@ -407,7 +413,7 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
                     />
                     <path fill="none" d="M0 0h48v48H0z" />
                   </svg>
-                  Continue with Google
+                  {t('authLogin.continueWithGoogle')}
                 </button>
               </>
             )}
@@ -424,20 +430,20 @@ export function LoginDialog({ open, onOpenChange, pendingOAuthToken }: Props) {
           >
             {mode === 'login' && (
               <p style={{ margin: 0 }}>
-                {"Don't have an account? "}
-                {linkBtn('Register', () => switchMode('register'))}
+                {`${t('authLogin.noAccount')} `}
+                {linkBtn(t('authLogin.register'), () => switchMode('register'))}
               </p>
             )}
             {mode === 'register' && (
               <p style={{ margin: 0 }}>
-                {'Already have an account? '}
-                {linkBtn('Sign in', () => switchMode('login'))}
+                {`${t('authLogin.haveAccount')} `}
+                {linkBtn(t('authLogin.signIn'), () => switchMode('login'))}
               </p>
             )}
             {mode === 'reset' && (
               <p style={{ margin: 0 }}>
-                {'Remember it? '}
-                {linkBtn('Back to sign in', () => switchMode('login'))}
+                {`${t('authLogin.rememberIt')} `}
+                {linkBtn(t('authLogin.backToSignIn'), () => switchMode('login'))}
               </p>
             )}
           </div>
