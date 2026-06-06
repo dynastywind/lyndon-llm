@@ -1922,6 +1922,8 @@ export function ChatWindow() {
     setSelectedModel,
     effortMode,
     setEffortMode,
+    sessionEffortModes,
+    setSessionEffortMode,
   } = useAppStore()
 
   const draftKey = sessionId ?? '__new__'
@@ -1940,6 +1942,16 @@ export function ChatWindow() {
         if (models.length > 0 && !selectedModel) setSelectedModel(models[0])
       })
       .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Restore per-session effort on mount ───────────────────────────────
+  // ChatWindow is keyed by sessionId (see App.tsx), so it remounts each time
+  // the active session changes.  Restoring here means switching back to any
+  // thread immediately applies its saved effort mode.
+  useEffect(() => {
+    if (sessionId && sessionEffortModes[sessionId]) {
+      setEffortMode(sessionEffortModes[sessionId])
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { send, resume } = useStream()
@@ -2779,7 +2791,10 @@ export function ChatWindow() {
                   <button
                     key={m}
                     type="button"
-                    onClick={() => setEffortMode(m)}
+                    onClick={() => {
+                      setEffortMode(m)
+                      if (sessionId) setSessionEffortMode(sessionId, m)
+                    }}
                     style={{
                       marginLeft: m === 'low' ? 10 : 2,
                       padding: '1px 7px',

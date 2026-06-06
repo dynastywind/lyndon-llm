@@ -804,6 +804,8 @@ export function DesktopSessionWindow({ mode }: Props) {
     setSelectedModel,
     effortMode,
     setEffortMode,
+    sessionEffortModes,
+    setSessionEffortMode,
     setSessionPrompt,
   } = useAppStore()
 
@@ -842,6 +844,22 @@ export function DesktopSessionWindow({ mode }: Props) {
       .catch(() => {})
       .finally(() => setHistoryLoading(false))
   }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Restore per-session effort mode when the active session changes
+  useEffect(() => {
+    if (sessionId && sessionEffortModes[sessionId]) {
+      setEffortMode(sessionEffortModes[sessionId])
+    }
+  }, [sessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Change effort and persist it to the current session (if one is active). */
+  const handleSelectEffort = useCallback(
+    (e: 'low' | 'medium' | 'high') => {
+      setEffortMode(e)
+      if (sessionId) setSessionEffortMode(sessionId, e)
+    },
+    [sessionId, setEffortMode, setSessionEffortMode],
+  )
 
   // Scroll to bottom on streaming ticks and new messages
   useEffect(() => {
@@ -1001,7 +1019,7 @@ export function DesktopSessionWindow({ mode }: Props) {
                 selectedModel={selectedModel}
                 effortMode={effortMode}
                 onSelectModel={setSelectedModel}
-                onSelectEffort={setEffortMode}
+                onSelectEffort={handleSelectEffort}
               />
               <button
                 type="button"
@@ -1220,7 +1238,7 @@ export function DesktopSessionWindow({ mode }: Props) {
               selectedModel={selectedModel}
               effortMode={effortMode}
               onSelectModel={setSelectedModel}
-              onSelectEffort={setEffortMode}
+              onSelectEffort={handleSelectEffort}
             />
           </div>
         </div>

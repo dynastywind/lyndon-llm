@@ -101,6 +101,13 @@ interface AppState {
   // Effort mode — controls how verbose/thorough the model's responses are
   effortMode: 'low' | 'medium' | 'high'
   setEffortMode: (mode: 'low' | 'medium' | 'high') => void
+  /**
+   * Per-session effort overrides — keyed by sessionId.
+   * When entering a session that has a saved effort, it is restored as the
+   * active effortMode so that thread-specific settings survive navigation.
+   */
+  sessionEffortModes: Record<string, 'low' | 'medium' | 'high'>
+  setSessionEffortMode: (sessionId: string, mode: 'low' | 'medium' | 'high') => void
 
   // Prompts
   /** Global system prompt — appended to BASE_SYSTEM_PROMPT on every request. Persisted. */
@@ -267,6 +274,9 @@ export const useAppStore = create<AppState>()(
       // ── Effort mode ───────────────────────────────────────────────────
       effortMode: 'medium',
       setEffortMode: (effortMode) => set({ effortMode }),
+      sessionEffortModes: {},
+      setSessionEffortMode: (sessionId, mode) =>
+        set((s) => ({ sessionEffortModes: { ...s.sessionEffortModes, [sessionId]: mode } })),
 
       // ── Prompts ───────────────────────────────────────────────────────
       systemPrompt: '',
@@ -313,6 +323,7 @@ export const useAppStore = create<AppState>()(
         appliedSessionPrompts: s.appliedSessionPrompts,
         selectedModel: s.selectedModel,
         effortMode: s.effortMode,
+        sessionEffortModes: s.sessionEffortModes,
         profession: s.profession,
         avatarVersion: s.avatarVersion,
       }),

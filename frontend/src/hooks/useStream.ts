@@ -25,6 +25,7 @@ export function useStream() {
     selectedModel,
     effortMode,
     mode,
+    setSessionEffortMode,
     setChatPendingPlan,
     setChatPlanStatus,
   } = useAppStore()
@@ -46,6 +47,9 @@ export function useStream() {
           const session = await createChatSession(sessionMode)
           activeSessionId = session.session_id
           setSessionId(activeSessionId)
+          // Record the effort mode chosen for this brand-new session so it
+          // can be restored if the user navigates away and comes back.
+          setSessionEffortMode(activeSessionId, effortMode)
           bumpSessionVersion()
         } catch {
           return
@@ -250,6 +254,7 @@ export function useStream() {
       selectedModel,
       effortMode,
       mode,
+      setSessionEffortMode,
       setChatPendingPlan,
       setChatPlanStatus,
     ],
