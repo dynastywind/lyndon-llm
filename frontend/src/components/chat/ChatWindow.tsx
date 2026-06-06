@@ -2540,6 +2540,10 @@ export function ChatWindow() {
                         }}
                       />
                       {selectedModel ?? '—'}
+                      <span style={{ color: 'var(--lv-mute)' }}>·</span>
+                      <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {t(`chat.effort_${effortMode}`)}
+                      </span>
                       <ChevronDown size={10} style={{ color: 'var(--lv-mute)' }} />
                     </button>
                   </DropdownMenu.Trigger>
@@ -3191,6 +3195,10 @@ export function ChatWindow() {
                         }}
                       />
                       {selectedModel ?? '—'}
+                      <span style={{ color: 'var(--lv-mute)' }}>·</span>
+                      <span style={{ textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {t(`chat.effort_${effortMode}`)}
+                      </span>
                       <ChevronDown size={10} style={{ color: 'var(--lv-mute)' }} />
                     </button>
                   </DropdownMenu.Trigger>

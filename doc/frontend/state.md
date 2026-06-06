@@ -14,7 +14,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'lyndon-llm-store',      // localStorage key
       partialize: (s) => ({          // only persist these fields
-        user, sessionId, repoPath, codeTheme, uiTheme,
+        user, sessionId, repoPath, codeTheme, uiTheme, language,
         systemPrompt, profession, selectedModel, effortMode,
         sessionEffortModes, appliedSessionPrompts,
         avatarVersion,
@@ -77,6 +77,7 @@ Fields not in `partialize` are **ephemeral** — reset on page load.
 | `effortMode` | `"low" \| "medium" \| "high"` | Yes | Default effort mode |
 | `sessionEffortModes` | `Record<string, string>` | Yes | Per-session effort mode overrides |
 | `uiTheme` | `"light" \| "dark"` | Yes | UI theme |
+| `language` | `"en" \| "zh"` | Yes | UI language (English / Simplified Chinese) — see `doc/frontend/i18n.md` |
 | `codeTheme` | `string` | Yes | Monaco / syntax highlight theme |
 | `repoPath` | `string` | Yes | Default repo path for Code mode |
 | `avatarVersion` | `number` | Yes | Incremented to bust avatar cache |
@@ -118,6 +119,7 @@ setSelectedModel(model)
 setEffortMode(mode)
 setSessionEffortMode(sessionId, mode)
 setUiTheme(theme)
+setLanguage(language)        // 'en' | 'zh' — also writes localStorage 'lv-lang'
 setCodeTheme(theme)
 ```
 
