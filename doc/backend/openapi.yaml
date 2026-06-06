@@ -1,0 +1,2481 @@
+openapi: 3.1.0
+
+info:
+  title: LyndonLLM API
+  version: 0.1.0
+  description: |
+    Personal AI assistant backend serving Chat, Cowork, and Code modes over
+    REST and Server-Sent Events (SSE).
+
+    ## Authentication
+    Most endpoints require a JWT Bearer token obtained from `/api/auth/login`
+    or `/api/auth/register`. Pass it as:
+    ```
+    Authorization: Bearer <token>
+    ```
+
+    Chat, RAG, and Memory endpoints accept **optional** authentication —
+    unauthenticated requests are served in anonymous mode.
+
+    ## Session Headers
+    Chat, Cowork, and Code requests require two additional headers:
+
+    | Header | Example | Description |
+    |--------|---------|-------------|
+    | `x-session-id` | `"550e8400-e29b-41d4-a716-446655440000"` | Active session UUID |
+    | `x-mode` | `"chat"` | Operational mode (`chat` / `cowork` / `code`) |
+
+    ## Streaming (SSE)
+    Endpoints marked **SSE** return `Content-Type: text/event-stream`.
+    Each event is a pair of lines followed by a blank line:
+    ```
+    event: <type>
+    data: <JSON>
+
+    ```
+    See the `SSEEvent` schema for the full event catalogue.
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+tags:
+  - name: Auth
+    description: User registration, login, Google OAuth, profile management
+  - name: Chat
+    description: Conversation sessions, SSE streaming, plan preview/execution
+  - name: Memory
+    description: Long-term and session memory management
+  - name: Cowork
+    description: Multi-step goal planning and automated execution
+  - name: Code
+    description: Git-aware file editing, code review, and test running
+  - name: RAG
+    description: Document ingestion and knowledge-base management
+  - name: Sandbox
+    description: Isolated code execution in 26+ languages
+  - name: Skills
+    description: User-uploaded custom skill tools
+  - name: Registry
+    description: Internal tool listing and MCP server management
+  - name: System
+    description: Health check and model discovery
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT obtained from `/api/auth/login` or `/api/auth/register`
+
+  schemas:
+
+    # ── Auth ──────────────────────────────────────────────────────────────
+
+    AuthRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: alice
+        password:
+          type: string
+          format: password
+          example: hunter2
+        device_id:
+          type: string
+          nullable: true
+          description: Stable device identifier for login history tracking
+          example: "device-abc123"
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: JWT (HS256, 30-day expiry by default)
+        token_type:
+          type: string
+          default: bearer
+        username:
+          type: string
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          nullable: true
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          nullable: true
+
+    ResetPasswordRequest:
+      type: object
+      required: [username, new_password]
+      properties:
+        username:
+          type: string
+        new_password:
+          type: string
+          format: password
+
+    OAuthCompleteRequest:
+      type: object
+      required: [pending_token, username]
+      properties:
+        pending_token:
+          type: string
+          description: Short-lived token issued after Google OAuth callback for new users
+        username:
+          type: string
+          description: Chosen username for the new account
+
+    LoginRecordOut:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        device_id:
+          type: string
+          nullable: true
+        os:
+          type: string
+        browser:
+          type: string
+        ip_address:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Chat ──────────────────────────────────────────────────────────────
+
+    AttachmentPayload:
+      type: object
+      required: [name, type, data]
+      properties:
+        name:
+          type: string
+          description: Filename
+          example: screenshot.png
+        type:
+          type: string
+          description: MIME type
+          example: image/png
+        data:
+          type: string
+          description: Raw Base64 string without `data:…;base64,` prefix
+
+    ChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          description: User message text
+          example: What's the weather like today?
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentPayload'
+          default: []
+        system_prompt:
+          type: string
+          nullable: true
+          description: Custom system prompt (injected on the first message of a session only)
+        session_prompt:
+          type: string
+          nullable: true
+          description: Additional context prompt for this session (first message only)
+        model:
+          type: string
+          nullable: true
+          description: Override the default LLM model name
+        skill_id:
+          type: string
+          nullable: true
+          description: UUID of a specific skill to activate for this message
+        skill_prefix:
+          type: string
+          nullable: true
+          description: Display label prefix for the skill slash-command
+        effort_mode:
+          type: string
+          nullable: true
+          enum: [low, medium, high]
+          description: Controls response verbosity
+
+    CreateSessionRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [chat, cowork, code]
+          default: chat
+
+    ChatSessionOut:
+      type: object
+      properties:
+        session_id:
+          type: string
+          format: uuid
+        mode:
+          type: string
+          enum: [chat, cowork, code]
+        title:
+          type: string
+          nullable: true
+        streaming:
+          type: boolean
+          description: True while an LLM background task is in-flight
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ChatMessageOut:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant, tool]
+        content:
+          type: string
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttachmentPayload'
+          nullable: true
+        tool_calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolCallRecord'
+          nullable: true
+        skill_prefix:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    ToolCallRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        args:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+          enum: [running, done, error, active]
+        preview:
+          type: string
+          nullable: true
+
+    RenameRequest:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 200
+
+    PlanConfirmRequest:
+      type: object
+      required: [plan_id]
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+
+    PlanCancelRequest:
+      type: object
+      required: [plan_id]
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+
+    StreamStatusResponse:
+      type: object
+      properties:
+        streaming:
+          type: boolean
+
+    # ── SSE Event types ───────────────────────────────────────────────────
+
+    SSEEvent:
+      description: |
+        All SSE streams emit events in the format:
+        ```
+        event: <type>
+        data: <JSON>
+
+        ```
+
+        **Event catalogue:**
+
+        | `type` | `data` fields | Description |
+        |--------|--------------|-------------|
+        | `token` | `text: str` | One LLM output chunk |
+        | `thinking_token` | `text: str` | Chain-of-thought token (inside `<think>`) |
+        | `tool_start` | `id, name, args` | Tool about to execute |
+        | `tool_result` | `id, name, success, preview` | Tool finished |
+        | `skill_activated` | `skill_id` | Prompt-based skill applied |
+        | `chart` | `spec` (ChartSpec JSON) | Chart data from `render_chart` |
+        | `metrics` | `total_ms, phases` | Request timing breakdown |
+        | `plan_preview` | ChatPlan JSON | Phase 1 plan generated |
+        | `plan_step_started` | `step_id` | Plan step began |
+        | `plan_step_done` | `step_id, output` | Plan step completed |
+        | `plan_step_failed` | `step_id, error` | Plan step failed |
+        | `plan_done` | `{}` | All plan steps finished |
+        | `error` | `message: str` | Recoverable backend error |
+        | `done` | `{}` | Stream complete |
+      type: object
+      properties:
+        type:
+          type: string
+        data:
+          type: object
+          additionalProperties: true
+
+    # ── Memory ────────────────────────────────────────────────────────────
+
+    MemoryOut:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        memory_type:
+          type: string
+          enum: [episodic, semantic]
+        content:
+          type: string
+        importance:
+          type: number
+          minimum: 0
+          maximum: 1
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Cowork ────────────────────────────────────────────────────────────
+
+    GoalRequest:
+      type: object
+      required: [goal]
+      properties:
+        goal:
+          type: string
+          description: Natural language description of what to accomplish
+          example: "Research the top 5 Python web frameworks and create a comparison table"
+
+    ApproveRequest:
+      type: object
+      required: [plan_id]
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+
+    PlanStep:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        order:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        tool:
+          type: string
+          nullable: true
+        args:
+          type: object
+          additionalProperties: true
+          nullable: true
+        risk:
+          type: string
+          enum: [low, medium, high]
+        depends_on:
+          type: array
+          items:
+            type: string
+            format: uuid
+
+    PlanOut:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          format: uuid
+        goal:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlanStep'
+        approved:
+          type: boolean
+        session_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    # ── Code ─────────────────────────────────────────────────────────────
+
+    EditRequest:
+      type: object
+      required: [file_path, instruction]
+      properties:
+        repo_path:
+          type: string
+          nullable: true
+          description: Absolute path to the git repository. Defaults to the session's repo path.
+        file_path:
+          type: string
+          description: Path to the file to edit (relative to repo_path or absolute)
+        instruction:
+          type: string
+          description: Natural language description of the edit to make
+        context_files:
+          type: array
+          items:
+            type: string
+          default: []
+          description: Additional files to provide as context to the LLM
+
+    CommitRequest:
+      type: object
+      required: [files, message]
+      properties:
+        repo_path:
+          type: string
+          nullable: true
+        files:
+          type: array
+          items:
+            type: string
+          description: Relative file paths to stage
+        message:
+          type: string
+          description: Commit message
+
+    ReviewRequest:
+      type: object
+      required: [diff]
+      properties:
+        diff:
+          type: string
+          description: Unified diff to review
+        context:
+          type: string
+          default: ""
+          description: Additional context about the change
+
+    TestRequest:
+      type: object
+      properties:
+        repo_path:
+          type: string
+          nullable: true
+        test_path:
+          type: string
+          nullable: true
+          description: Specific test file or directory to run
+
+    RepoStatusOut:
+      type: object
+      properties:
+        branch:
+          type: string
+        modified:
+          type: array
+          items:
+            type: string
+        staged:
+          type: array
+          items:
+            type: string
+        untracked:
+          type: array
+          items:
+            type: string
+        recent_commits:
+          type: array
+          items:
+            type: object
+            properties:
+              hash:
+                type: string
+              message:
+                type: string
+              author:
+                type: string
+              date:
+                type: string
+                format: date-time
+
+    # ── RAG ──────────────────────────────────────────────────────────────
+
+    SourceOut:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Source filename or URL
+        chunk_count:
+          type: integer
+        file_size:
+          type: integer
+          description: File size in bytes (0 for URLs)
+        user_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    # ── Sandbox ───────────────────────────────────────────────────────────
+
+    RunRequest:
+      type: object
+      required: [language, code]
+      properties:
+        language:
+          type: string
+          description: Language key from the `/api/sandbox/languages` list
+          example: python
+        code:
+          type: string
+          description: Source code to execute
+          example: "print('Hello, world!')"
+        timeout:
+          type: integer
+          minimum: 1
+          maximum: 60
+          default: 10
+          description: Execution timeout in seconds
+
+    RunResult:
+      type: object
+      properties:
+        stdout:
+          type: string
+          description: Standard output (capped at 20 000 chars)
+        stderr:
+          type: string
+          description: Standard error (capped at 20 000 chars)
+        exit_code:
+          type: integer
+          nullable: true
+          description: Process exit code. Null on timeout.
+        duration_ms:
+          type: integer
+          description: Wall-clock execution time in milliseconds
+        timed_out:
+          type: boolean
+        runtime:
+          type: string
+          enum: [docker, process, error]
+          description: Execution backend used
+
+    LanguageOut:
+      type: object
+      properties:
+        id:
+          type: string
+          example: python
+        label:
+          type: string
+          example: Python
+        available:
+          type: boolean
+          description: True if Docker or a local interpreter is available
+        runtime:
+          type: string
+          enum: [docker, process, unavailable]
+
+    # ── Skills ────────────────────────────────────────────────────────────
+
+    SkillToolOut:
+      type: object
+      properties:
+        tool_name:
+          type: string
+        language:
+          type: string
+          enum: [python, javascript, typescript, bash, shell]
+        parameters_schema:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    SkillOut:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        version:
+          type: string
+        enabled:
+          type: boolean
+        skill_md:
+          type: string
+          description: Raw SKILL.md file content
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/SkillToolOut'
+        created_at:
+          type: string
+          format: date-time
+
+    ToggleBody:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+
+    # ── Registry ─────────────────────────────────────────────────────────
+
+    RegistryToolOut:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        permission:
+          type: string
+          nullable: true
+          enum: [read, write, exec]
+        mode:
+          type: string
+          nullable: true
+          enum: [chat, cowork, code]
+        source:
+          type: string
+          enum: [internal, mcp]
+        editable:
+          type: boolean
+        server_id:
+          type: string
+          nullable: true
+        server_name:
+          type: string
+          nullable: true
+        mcp_name:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+          nullable: true
+
+    McpServerToolOut:
+      type: object
+      properties:
+        qualified_name:
+          type: string
+          description: Namespaced tool name (serverid__toolname)
+        mcp_name:
+          type: string
+          description: Original tool name as reported by the MCP server
+        description:
+          type: string
+        enabled:
+          type: boolean
+
+    McpServerOut:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        transport:
+          type: string
+          enum: [stdio, sse]
+        command:
+          type: string
+          nullable: true
+        args:
+          type: array
+          items:
+            type: string
+        env:
+          type: object
+          additionalProperties:
+            type: string
+        url:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+        last_error:
+          type: string
+          nullable: true
+        tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/McpServerToolOut'
+
+    RegistryOut:
+      type: object
+      properties:
+        internal_tools:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegistryToolOut'
+        mcp_servers:
+          type: array
+          items:
+            $ref: '#/components/schemas/McpServerOut'
+
+    McpServerCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          nullable: true
+        transport:
+          type: string
+          enum: [stdio, sse]
+          default: stdio
+        command:
+          type: string
+          nullable: true
+          description: Executable path for stdio transport
+        args:
+          type: array
+          items:
+            type: string
+          default: []
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          default: {}
+        url:
+          type: string
+          nullable: true
+          description: URL for SSE transport
+        enabled:
+          type: boolean
+          default: true
+
+    McpServerUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        transport:
+          type: string
+          enum: [stdio, sse]
+          nullable: true
+        command:
+          type: string
+          nullable: true
+        args:
+          type: array
+          items:
+            type: string
+          nullable: true
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        url:
+          type: string
+          nullable: true
+        enabled:
+          type: boolean
+          nullable: true
+
+    McpToolToggle:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+
+    # ── Common ────────────────────────────────────────────────────────────
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message
+
+    OkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          default: true
+
+# =============================================================================
+# Paths
+# =============================================================================
+
+paths:
+
+  # ── System ────────────────────────────────────────────────────────────
+
+  /health:
+    get:
+      tags: [System]
+      summary: Health check
+      operationId: healthCheck
+      security: []
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  app:
+                    type: string
+
+  /api/models:
+    get:
+      tags: [System]
+      summary: List loaded LLM models
+      description: Returns models currently running in-memory on the local LLM server (EXO / Ollama).
+      operationId: listModels
+      security: []
+      responses:
+        "200":
+          description: Model list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  models:
+                    type: array
+                    items:
+                      type: string
+
+  # ── Auth ──────────────────────────────────────────────────────────────
+
+  /api/auth/check-username:
+    get:
+      tags: [Auth]
+      summary: Check username availability
+      operationId: checkUsername
+      security: []
+      parameters:
+        - name: username
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Availability result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available:
+                    type: boolean
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      description: |
+        Create a new account. The **first** user to register claims all existing
+        anonymous data (RAG sources, chat sessions, memories).
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        "200":
+          description: JWT token and user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        "400":
+          description: Username already taken
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with username and password
+      description: Validates credentials, creates a login record, and returns a JWT.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        "200":
+          description: JWT token and user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login-history:
+    get:
+      tags: [Auth]
+      summary: Get login history
+      description: Returns the authenticated user's recent login records, newest first.
+      operationId: loginHistory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Login records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LoginRecordOut'
+
+  /api/auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Reset password
+      description: Reset a user's password without requiring the old one.
+      operationId: resetPassword
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /api/auth/google/authorize:
+    get:
+      tags: [Auth]
+      summary: Get Google OAuth URL
+      description: Returns the Google consent screen URL. Frontend redirects the user to this URL.
+      operationId: googleAuthorize
+      security: []
+      responses:
+        "200":
+          description: Authorization URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    format: uri
+
+  /api/auth/google/callback:
+    get:
+      tags: [Auth]
+      summary: Google OAuth callback
+      description: |
+        Exchanges the Google auth code for tokens.
+        - Existing user → redirects to frontend with `#token=<jwt>` hash
+        - New user → redirects to frontend with `?oauth_pending=<token>` query param
+      operationId: googleCallback
+      security: []
+      parameters:
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to frontend
+
+  /api/auth/oauth/complete:
+    post:
+      tags: [Auth]
+      summary: Complete OAuth sign-up
+      description: |
+        Called after a new Google OAuth user chooses a username.
+        Validates the pending token, creates the account, and returns a JWT.
+      operationId: oauthComplete
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OAuthCompleteRequest'
+      responses:
+        "200":
+          description: JWT and user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        "400":
+          description: Invalid or expired pending token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/me:
+    patch:
+      tags: [Auth]
+      summary: Update profile
+      description: Update mutable profile fields (currently email).
+      operationId: updateProfile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+      responses:
+        "200":
+          description: Updated user info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+    delete:
+      tags: [Auth]
+      summary: Delete account
+      description: Permanently delete the authenticated user and all associated data (sessions, memories, skills, MCP servers, RAG sources).
+      operationId: deleteAccount
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /api/auth/avatar:
+    post:
+      tags: [Auth]
+      summary: Upload avatar
+      description: Upload a profile image (JPEG or PNG). Stored as a BLOB in the database.
+      operationId: uploadAvatar
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Upload confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+    delete:
+      tags: [Auth]
+      summary: Delete avatar
+      operationId: deleteAvatar
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Avatar removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /api/auth/avatar/{user_id}:
+    get:
+      tags: [Auth]
+      summary: Get avatar image
+      description: Serve a user's avatar directly (public — no auth required).
+      operationId: getAvatar
+      security: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Image data
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: No avatar set
+
+  # ── Chat ──────────────────────────────────────────────────────────────
+
+  /api/chat/:
+    post:
+      tags: [Chat]
+      summary: Send a chat message (SSE)
+      description: |
+        Stream a chat response as Server-Sent Events. The LLM task runs in the
+        background; the HTTP connection delivers events until the stream closes.
+
+        Requires `x-session-id` and `x-mode` headers.
+        Authentication is optional — anonymous sessions are supported.
+      operationId: chat
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-mode
+          in: header
+          required: true
+          schema:
+            type: string
+            enum: [chat, cowork, code]
+            default: chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+      responses:
+        "200":
+          description: SSE stream of chat events
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/SSEEvent'
+
+  /api/chat/plan/confirm:
+    post:
+      tags: [Chat]
+      summary: Execute a pending chat plan (SSE)
+      description: |
+        Phase 2 of the chat planner. Executes the plan generated by a prior
+        `/api/chat/` call and streams step progress as SSE events.
+      operationId: confirmChatPlan
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-mode
+          in: header
+          schema:
+            type: string
+            default: chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanConfirmRequest'
+      responses:
+        "200":
+          description: SSE stream of plan execution events
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/SSEEvent'
+
+  /api/chat/plan/cancel:
+    post:
+      tags: [Chat]
+      summary: Cancel a pending chat plan
+      description: Discard the pending plan without executing it.
+      operationId: cancelChatPlan
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanCancelRequest'
+      responses:
+        "200":
+          description: Plan cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /api/chat/sessions:
+    post:
+      tags: [Chat]
+      summary: Create a new session
+      operationId: createChatSession
+      security:
+        - BearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        "200":
+          description: New session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionOut'
+    get:
+      tags: [Chat]
+      summary: List sessions
+      description: Paginated list of sessions ordered by most recently active.
+      operationId: listChatSessions
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: mode
+          in: query
+          schema:
+            type: string
+            enum: [chat, cowork, code]
+            default: chat
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Session list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatSessionOut'
+
+  /api/chat/sessions/search:
+    get:
+      tags: [Chat]
+      summary: Search sessions
+      description: Search sessions by title or message content (case-insensitive).
+      operationId: searchChatSessions
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: mode
+          in: query
+          schema:
+            type: string
+            default: chat
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Matching sessions with context snippets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatSessionOut'
+
+  /api/chat/sessions/{session_id}:
+    patch:
+      tags: [Chat]
+      summary: Rename a session
+      operationId: renameChatSession
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameRequest'
+      responses:
+        "200":
+          description: Updated session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSessionOut'
+    delete:
+      tags: [Chat]
+      summary: Delete a session
+      description: Permanently delete a session and all its messages.
+      operationId: deleteChatSession
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Session deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /api/chat/sessions/{session_id}/stream/status:
+    get:
+      tags: [Chat]
+      summary: Get stream status
+      description: Returns whether an LLM background task is currently active for this session.
+      operationId: streamStatus
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Streaming status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamStatusResponse'
+
+  /api/chat/sessions/{session_id}/stream/resume:
+    get:
+      tags: [Chat]
+      summary: Resume an in-progress stream (SSE)
+      description: |
+        Re-attach to an in-progress LLM stream. Replays all accumulated events
+        from the beginning (`start_idx=0`), then continues live until the
+        background task finishes.
+
+        Use this after a page refresh when `streaming=true` on the session.
+      operationId: resumeStream
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: SSE stream (replayed + live)
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/SSEEvent'
+        "404":
+          description: No active stream for this session
+
+  /api/chat/sessions/{session_id}/messages:
+    get:
+      tags: [Chat]
+      summary: Get messages (paginated)
+      description: Returns up to `limit` messages before the cursor, in chronological order.
+      operationId: getSessionMessages
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5
+        - name: before
+          in: query
+          description: Cursor — return messages with id < before
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Message page
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessageOut'
+
+  /api/chat/sessions/{session_id}/messages/all:
+    get:
+      tags: [Chat]
+      summary: Get all messages
+      description: Returns every message for a session in chronological order (no pagination).
+      operationId: getAllSessionMessages
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: All messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChatMessageOut'
+
+  /api/chat/ingest:
+    post:
+      tags: [Chat]
+      summary: Ingest a document (shortcut)
+      description: Convenience shortcut — delegates to the RAG ingestion pipeline.
+      operationId: chatIngest
+      security:
+        - BearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source]
+              properties:
+                source:
+                  type: string
+                  description: File path or URL to ingest
+      responses:
+        "200":
+          description: Ingest result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chunk_count:
+                    type: integer
+
+  # ── Memory ────────────────────────────────────────────────────────────
+
+  /api/chat/memory:
+    get:
+      tags: [Memory]
+      summary: Retrieve memories by query
+      description: Semantic search over long-term memories using the user message as a query.
+      operationId: getMemories
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Matching memories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemoryOut'
+
+  /api/chat/memories:
+    get:
+      tags: [Memory]
+      summary: List all long-term memories
+      description: Returns all memories for the authenticated user, newest first.
+      operationId: listMemories
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Memory list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemoryOut'
+
+  /api/chat/memories/{memory_id}:
+    delete:
+      tags: [Memory]
+      summary: Delete a memory
+      operationId: deleteMemory
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: memory_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Memory deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+        "404":
+          description: Memory not found
+
+  # ── Cowork ────────────────────────────────────────────────────────────
+
+  /api/cowork/plan:
+    post:
+      tags: [Cowork]
+      summary: Create a multi-step plan
+      description: |
+        Decomposes the goal into a structured plan with ordered steps, risk
+        levels, and tool assignments. The plan is persisted and returned for
+        user review before execution.
+      operationId: createPlan
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-mode
+          in: header
+          schema:
+            type: string
+            default: cowork
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalRequest'
+      responses:
+        "200":
+          description: Generated plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanOut'
+
+  /api/cowork/execute:
+    post:
+      tags: [Cowork]
+      summary: Execute an approved plan
+      description: |
+        Runs the plan step-by-step. Each step calls its assigned tool
+        (shell, file_io, mac_control) and records the output.
+        Returns the full execution result after all steps complete.
+      operationId: executePlan
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-mode
+          in: header
+          schema:
+            type: string
+            default: cowork
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveRequest'
+      responses:
+        "200":
+          description: Execution results per step
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        step_id:
+                          type: string
+                          format: uuid
+                        status:
+                          type: string
+                          enum: [done, failed, skipped]
+                        output:
+                          type: string
+                          nullable: true
+                        error:
+                          type: string
+                          nullable: true
+
+  # ── Code ─────────────────────────────────────────────────────────────
+
+  /api/code/edit:
+    post:
+      tags: [Code]
+      summary: Edit a file with AI assistance
+      description: Applies a natural-language instruction to a file and returns the diff.
+      operationId: editFile
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-mode
+          in: header
+          schema:
+            type: string
+            default: code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EditRequest'
+      responses:
+        "200":
+          description: Edit result with diff
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  file_path:
+                    type: string
+                  diff:
+                    type: string
+
+  /api/code/commit:
+    post:
+      tags: [Code]
+      summary: Commit staged files
+      description: Stages the specified files and creates a git commit.
+      operationId: commitFiles
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-mode
+          in: header
+          schema:
+            type: string
+            default: code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommitRequest'
+      responses:
+        "200":
+          description: Commit result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  commit_hash:
+                    type: string
+                  message:
+                    type: string
+
+  /api/code/review:
+    post:
+      tags: [Code]
+      summary: Review a code diff
+      description: Sends a diff to the LLM for quality and correctness review.
+      operationId: reviewDiff
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-mode
+          in: header
+          schema:
+            type: string
+            default: code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+      responses:
+        "200":
+          description: Review comments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comments:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        file:
+                          type: string
+                        line:
+                          type: integer
+                          nullable: true
+                        severity:
+                          type: string
+                          enum: [info, warning, error]
+                        message:
+                          type: string
+                        suggestion:
+                          type: string
+                          nullable: true
+
+  /api/code/test:
+    post:
+      tags: [Code]
+      summary: Run test suite
+      description: Detects the test framework and runs the project's test suite.
+      operationId: runTests
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-mode
+          in: header
+          schema:
+            type: string
+            default: code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TestRequest'
+      responses:
+        "200":
+          description: Test results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  passed:
+                    type: boolean
+                  output:
+                    type: string
+
+  /api/code/status:
+    get:
+      tags: [Code]
+      summary: Repository status
+      description: Returns current branch, modified/staged/untracked files, and recent commits.
+      operationId: repoStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: repo_path
+          in: query
+          schema:
+            type: string
+        - name: x-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: x-mode
+          in: header
+          schema:
+            type: string
+            default: code
+      responses:
+        "200":
+          description: Repository status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RepoStatusOut'
+
+  # ── RAG ──────────────────────────────────────────────────────────────
+
+  /api/rag/upload:
+    post:
+      tags: [RAG]
+      summary: Upload and ingest a document
+      description: |
+        Accepts a file upload, persists it to disk, and ingests it into the
+        vector store. Supported formats: PDF, Markdown, HTML, plain text.
+
+        Re-uploading a file with the same name cleanly replaces the existing chunks.
+      operationId: uploadFile
+      security:
+        - BearerAuth: []
+        - {}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Ingest result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  source:
+                    type: string
+                  chunk_count:
+                    type: integer
+
+  /api/rag/sources/check:
+    get:
+      tags: [RAG]
+      summary: Check if a source exists
+      operationId: checkSourceName
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Existence check
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exists:
+                    type: boolean
+
+  /api/rag/sources/content:
+    get:
+      tags: [RAG]
+      summary: Fetch source content
+      description: |
+        Returns the content of an ingested source.
+        PDFs are returned as binary (`application/pdf`); other formats as JSON with a `content` string.
+      operationId: getSourceContent
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: source
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File content
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: string
+
+  /api/rag/sources:
+    get:
+      tags: [RAG]
+      summary: List ingested sources
+      description: Returns paginated sources for the authenticated user with chunk counts and file sizes.
+      operationId: listSources
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: query
+          in: query
+          description: Filter sources by name substring
+          schema:
+            type: string
+            default: ""
+      responses:
+        "200":
+          description: Source list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SourceOut'
+    delete:
+      tags: [RAG]
+      summary: Delete a source
+      description: Removes all vector store chunks for the source and optionally deletes the file from disk.
+      operationId: deleteSource
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: source
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: delete_file
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        "200":
+          description: Source deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /api/rag/reindex:
+    post:
+      tags: [RAG]
+      summary: Re-ingest a source
+      description: Re-reads and re-embeds an already-uploaded file from disk, replacing existing chunks.
+      operationId: reindexSource
+      security:
+        - BearerAuth: []
+        - {}
+      parameters:
+        - name: source
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Re-ingest result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chunk_count:
+                    type: integer
+
+  # ── Sandbox ───────────────────────────────────────────────────────────
+
+  /api/sandbox/run:
+    post:
+      tags: [Sandbox]
+      summary: Execute code
+      description: |
+        Executes code in an isolated environment.
+        Uses Docker when available (network-disabled, read-only, 256 MB RAM, 0.5 CPU);
+        falls back to a local subprocess.
+        Output is capped at 20 000 characters.
+      operationId: sandboxRun
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunRequest'
+      responses:
+        "200":
+          description: Execution result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunResult'
+
+  /api/sandbox/languages:
+    get:
+      tags: [Sandbox]
+      summary: List available languages
+      description: Returns all supported languages with their availability status and runtime type.
+      operationId: sandboxLanguages
+      security: []
+      responses:
+        "200":
+          description: Language list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LanguageOut'
+
+  # ── Skills ────────────────────────────────────────────────────────────
+
+  /api/skills/:
+    get:
+      tags: [Skills]
+      summary: List skills
+      description: Returns all skills (enabled and disabled) for the authenticated user.
+      operationId: listSkills
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Skill list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SkillOut'
+
+  /api/skills/upload:
+    post:
+      tags: [Skills]
+      summary: Upload a skill
+      description: |
+        Accept a skill package. Supports two upload modes:
+        - **Single ZIP** — one `.zip` containing a `SKILL.md` and optional script files
+        - **Folder upload** — multiple files (browser folder picker) — first `SKILL.md` found is the manifest
+
+        After upload, the skill's tools are immediately registered into the tool registry.
+      operationId: uploadSkill
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Single ZIP file
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Multiple files (folder upload)
+      responses:
+        "200":
+          description: Uploaded skill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillOut'
+        "400":
+          description: Invalid SKILL.md or missing manifest
+
+  /api/skills/{skill_id}:
+    patch:
+      tags: [Skills]
+      summary: Toggle skill enabled status
+      operationId: toggleSkill
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: skill_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ToggleBody'
+      responses:
+        "200":
+          description: Updated skill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillOut'
+    delete:
+      tags: [Skills]
+      summary: Delete a skill
+      description: Permanently removes the skill and unregisters all its tools.
+      operationId: deleteSkill
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: skill_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Skill deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  # ── Registry ─────────────────────────────────────────────────────────
+
+  /api/registry/:
+    get:
+      tags: [Registry]
+      summary: Get full tool registry
+      description: Returns all internal tools (by mode) and registered MCP servers with their discovered tools. Used by the Settings UI.
+      operationId: getRegistry
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Registry contents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegistryOut'
+
+  /api/registry/mcp/servers:
+    post:
+      tags: [Registry]
+      summary: Register a new MCP server
+      description: |
+        Creates a new MCP server entry. Immediately attempts to connect and
+        discover tools. Discovered tools are cached in the DB and registered
+        into the tool registry.
+      operationId: createMcpServer
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServerCreate'
+      responses:
+        "200":
+          description: Created server with discovered tools
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerOut'
+
+  /api/registry/mcp/servers/{server_id}:
+    put:
+      tags: [Registry]
+      summary: Update an MCP server
+      operationId: updateMcpServer
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: server_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpServerUpdate'
+      responses:
+        "200":
+          description: Updated server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerOut'
+    delete:
+      tags: [Registry]
+      summary: Delete an MCP server
+      description: Removes the server, its tool cache, and unregisters all its tools.
+      operationId: deleteMcpServer
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: server_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Server deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OkResponse'
+
+  /api/registry/mcp/servers/{server_id}/refresh:
+    post:
+      tags: [Registry]
+      summary: Refresh MCP server tools
+      description: Re-connects to the server and re-discovers its tool list, replacing the cached schemas.
+      operationId: refreshMcpServer
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: server_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Refreshed server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerOut'
+
+  /api/registry/mcp/servers/{server_id}/tools/{qualified_name}:
+    patch:
+      tags: [Registry]
+      summary: Toggle an MCP tool
+      description: Enable or disable a specific tool within an MCP server.
+      operationId: toggleMcpTool
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: server_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: qualified_name
+          in: path
+          required: true
+          schema:
+            type: string
+            description: Namespaced tool name (serverid__toolname)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/McpToolToggle'
+      responses:
+        "200":
+          description: Updated tool status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/McpServerToolOut'
