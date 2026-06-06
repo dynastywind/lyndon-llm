@@ -103,6 +103,30 @@ installed, wants to see their skills, or asks about available skill tools.
 - Otherwise answer from your general knowledge. Be concise and direct.
 """
 
+# Additional system prompt injected for Cowork and Code modes.
+# These modes have access to shell, file, and OS-level tools — the model
+# must use them rather than answering from training knowledge, because the
+# user wants real, live results from their machine.
+AGENTIC_SYSTEM_PROMPT = """\
+You are an autonomous agent with access to the user's computer.
+
+## Tool usage — MANDATORY
+You have shell, file-system, and OS-control tools available. \
+**Always use the appropriate tool** to answer the user's request rather \
+than guessing or recalling from training data.  \
+Real, live output from the user's machine is always preferred over \
+any knowledge you already have.
+
+Examples:
+- "list mac applications" → use shell_exec: `ls /Applications`
+- "what's in my Desktop?" → use file_read or shell_exec: `ls ~/Desktop`
+- "open Safari" → use mac_control
+- "create a file…" → use file_write
+
+If a task is ambiguous, pick the most appropriate tool and explain what \
+you ran and what the result means.
+"""
+
 logger = logging.getLogger(__name__)
 
 # Maximum characters of retrieved RAG context to inject into the system prompt
@@ -323,7 +347,13 @@ class ChatEngine:
         #    they are injected into the first user turn (see step 4b) so the
         #    model always sees them as immutable conversation-opening context
         #    while the DB and memory manager store only the clean user message.
-        system_prompt = BASE_SYSTEM_PROMPT
+        # Cowork / Code modes: replace the chat-oriented base prompt with an
+        # agentic prompt that mandates tool use so the model doesn't answer
+        # from training data when it should run a real command.
+        if self.session.mode != Mode.CHAT:
+            system_prompt = AGENTIC_SYSTEM_PROMPT
+        else:
+            system_prompt = BASE_SYSTEM_PROMPT
         if effort_mode and effort_mode in _EFFORT_DIRECTIVES:
             system_prompt = f"{system_prompt}\n\n{_EFFORT_DIRECTIVES[effort_mode]}"
         if skill_prompt_body:
@@ -656,6 +686,10 @@ class ChatEngine:
                     if self.session.metadata.get("require_tool_approval"):
                         from core.session.tool_approval import tool_approval_gate
 
+                        logger.info(
+                            "tool approval required  tool=%s id=%s session=%s",
+                            fn_name, tc.id, self.session.session_id,
+                        )
                         yield {
                             "type": "tool_permission_request",
                             "id": tc.id,
