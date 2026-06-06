@@ -189,7 +189,9 @@ export const en = {
     start: 'Start',
     loading: 'Loading…',
     noHistory: 'No history yet.',
+    moveToProject: 'Move to project',
     sectionPinned: 'Pinned',
+    sectionProjects: 'Projects',
     sectionSessions: 'Sessions',
     sectionWorkspaces: 'Workspaces',
     sectionRecent: 'Recent',
@@ -260,6 +262,7 @@ export const en = {
     effort_high: 'High',
     kbdHint: '↵ send · ⌥↵ newline',
     newChat: 'New chat',
+    openProject: 'Open project {name}',
     toggleContext: 'Toggle context panel',
   },
 

@@ -32,19 +32,35 @@ class HybridRetriever:
         return self._vector_store
 
     async def retrieve(
-        self, query: str, top_k: int | None = None, user_id: str | None = None
+        self,
+        query: str,
+        top_k: int | None = None,
+        user_id: str | None = None,
+        project_id: str | None = None,
     ) -> list[RetrievedChunk]:
         k = int(top_k or settings.rag_top_k)
-        dense = await self._dense_search(query, k=k * 2, user_id=user_id)
+        dense = await self._dense_search(query, k=k * 2, user_id=user_id, project_id=project_id)
         sparse = self._bm25_search(query, candidates=dense, k=k * 2)
         return self._reciprocal_rank_fusion(dense, sparse)[:k]
 
     async def _dense_search(
-        self, query: str, k: int, user_id: str | None = None
+        self, query: str, k: int, user_id: str | None = None, project_id: str | None = None
     ) -> list[RetrievedChunk]:
         embeddings = await llm_gateway.embed([query])
         vs = await self._get_vector_store()
-        where = {"user_id": user_id} if user_id else None
+        # Scope by user, and (when given) by project so a project's chats only
+        # see that project's uploaded files. Chroma needs $and for >1 clause.
+        clauses = []
+        if user_id:
+            clauses.append({"user_id": user_id})
+        if project_id:
+            clauses.append({"project_id": project_id})
+        if len(clauses) > 1:
+            where = {"$and": clauses}
+        elif clauses:
+            where = clauses[0]
+        else:
+            where = None
         results = await vs.query(
             query_embeddings=[embeddings[0]],
             n_results=k,

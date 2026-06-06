@@ -33,6 +33,12 @@ class ChatSession(Base):
     user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    # Project this session belongs to; null = ungrouped (shows in Recents).
+    # Sessions with a project_id are hidden from Recents/Pinned and live in the
+    # project's chat list instead.
+    project_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     # True while a background LLM task is producing a response for this session.
     # Cleared at startup (stale flags) and when the task finishes.
     streaming: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

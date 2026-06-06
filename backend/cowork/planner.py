@@ -68,10 +68,15 @@ Available tools: shell, file_write, file_read, http_request, scheduler
 
 
 class Planner:
-    async def create_plan(self, goal: str, session_id: str = "") -> Plan:
+    async def create_plan(
+        self, goal: str, session_id: str = "", project_context: str = ""
+    ) -> Plan:
+        system = PLANNER_SYSTEM
+        if project_context:
+            system = f"{system}\n\n{project_context}"
         text, _usage = await llm_gateway.complete(
             messages=[
-                LLMMessage("system", PLANNER_SYSTEM),
+                LLMMessage("system", system),
                 LLMMessage("user", f"Goal: {goal}"),
             ],
             temperature=0.2,

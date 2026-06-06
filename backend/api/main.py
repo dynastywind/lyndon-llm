@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import auth, chat, code, cowork, rag, registry, sandbox, skills
+from api.routes import auth, chat, code, cowork, projects, rag, registry, sandbox, skills
 from api.ws.stream import router as ws_router
 from config.settings import settings
 
@@ -82,6 +82,9 @@ async def _migrate(conn) -> None:
         "ALTER TABLE chat_messages ADD COLUMN skill_prefix TEXT",
         # v10 — track in-flight LLM response per session (cleared at startup)
         "ALTER TABLE chat_sessions ADD COLUMN streaming BOOLEAN NOT NULL DEFAULT 0",
+        # v11 — projects: group sessions under a shared brief + context.
+        # The `projects` table itself is created by create_all; this links sessions to it.
+        "ALTER TABLE chat_sessions ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore
@@ -142,6 +145,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(cowork.router, prefix="/api/cowork", tags=["cowork"])
 app.include_router(code.router, prefix="/api/code", tags=["code"])
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(rag.router, prefix="/api/rag", tags=["rag"])
 app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
 app.include_router(sandbox.router, prefix="/api/sandbox", tags=["sandbox"])

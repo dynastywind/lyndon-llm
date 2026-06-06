@@ -6,11 +6,14 @@ import { ChatWindow } from '@/components/chat/ChatWindow'
 import { CoworkWindow } from '@/components/cowork/CoworkWindow'
 import { CodeWindow } from '@/components/code/CodeWindow'
 import { SandboxWindow } from '@/components/sandbox/SandboxWindow'
+import { ProjectsWindow } from '@/components/projects/ProjectsWindow'
+import { ProjectDetailWindow } from '@/components/projects/ProjectDetailWindow'
 
 export default function App() {
   const {
     mode,
     sessionId,
+    activeView,
     homeVersion,
     uiTheme,
     language,
@@ -107,10 +110,18 @@ export default function App() {
           creation path, so the remounted component's effect correctly sees
           messages.length > 0 and skips the unnecessary DB fetch.
         */}
-        {mode === 'chat' && <ChatWindow key={sessionId ?? `home-${homeVersion}`} />}
-        {mode === 'cowork' && <CoworkWindow key={sessionId ?? `home-${homeVersion}`} />}
-        {mode === 'code' && <CodeWindow key={sessionId ?? `home-${homeVersion}`} />}
-        {mode === 'sandbox' && <SandboxWindow />}
+        {activeView === 'projectsList' ? (
+          <ProjectsWindow />
+        ) : activeView === 'projectDetail' ? (
+          <ProjectDetailWindow />
+        ) : (
+          <>
+            {mode === 'chat' && <ChatWindow key={sessionId ?? `home-${homeVersion}`} />}
+            {mode === 'cowork' && <CoworkWindow key={sessionId ?? `home-${homeVersion}`} />}
+            {mode === 'code' && <CodeWindow key={sessionId ?? `home-${homeVersion}`} />}
+            {mode === 'sandbox' && <SandboxWindow />}
+          </>
+        )}
       </main>
     </div>
   )

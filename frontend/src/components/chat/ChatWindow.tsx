@@ -54,7 +54,7 @@ import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
-import { getChatMessages, getModels, getStreamStatus } from '@/api/client'
+import { getChatMessages, getChatSession, getModels, getStreamStatus } from '@/api/client'
 import type {
   Message,
   Skill,
@@ -1951,6 +1951,8 @@ export function ChatWindow() {
     streamingSet,
     sessionId,
     sessionTitle,
+    setSessionTitle,
+    sessionListVersion,
     scrollToBottomTick,
     drafts,
     setDraft,
@@ -1963,6 +1965,8 @@ export function ChatWindow() {
     setEffortMode,
     sessionEffortModes,
     setSessionEffortMode,
+    setActiveView,
+    setActiveProjectId,
   } = useAppStore()
 
   const draftKey = sessionId ?? '__new__'
@@ -1992,6 +1996,27 @@ export function ChatWindow() {
       setEffortMode(sessionEffortModes[sessionId])
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Project this chat belongs to (drives the "project / chat" title) ──
+  // Fetched on mount so it survives reloads and works for any entry point.
+  // Re-fetched when the session list bumps (after a message completes) so the
+  // generated chat name appears live — project chats aren't in the sidebar list
+  // that normally syncs the title, so we sync it here from the backend.
+  const [chatProject, setChatProject] = useState<{ id: string; name: string } | null>(null)
+  useEffect(() => {
+    if (!sessionId) {
+      setChatProject(null)
+      return
+    }
+    getChatSession(sessionId)
+      .then((s) => {
+        setChatProject(
+          s.project_id && s.project_name ? { id: s.project_id, name: s.project_name } : null,
+        )
+        if (s.project_id) setSessionTitle(s.title)
+      })
+      .catch(() => setChatProject(null))
+  }, [sessionId, sessionListVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { send, resume } = useStream()
 
@@ -2760,6 +2785,25 @@ export function ChatWindow() {
             flex: 1,
           }}
         >
+          {chatProject && (
+            <>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  setActiveProjectId(chatProject.id)
+                  setActiveView('projectDetail')
+                }}
+                title={t('chat.openProject', { name: chatProject.name })}
+                style={{ cursor: 'pointer', transition: 'color 0.15s' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--lv-gold)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--lv-ink)')}
+              >
+                {chatProject.name}
+              </span>
+              <span style={{ color: 'var(--lv-mute)', margin: '0 6px' }}>/</span>
+            </>
+          )}
           {sessionTitle ?? t('chat.newChat')}
         </div>
         <button

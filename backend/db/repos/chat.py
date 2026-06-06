@@ -36,21 +36,29 @@ class ChatRepo:
     # ── Sessions ──────────────────────────────────────────────────────────────
 
     async def create_session(
-        self, session_id: str, mode: str = "chat", user_id: str | None = None
+        self,
+        session_id: str,
+        mode: str = "chat",
+        user_id: str | None = None,
+        project_id: str | None = None,
     ) -> ChatSession:
-        row = ChatSession(id=session_id, mode=mode, user_id=user_id)
+        row = ChatSession(id=session_id, mode=mode, user_id=user_id, project_id=project_id)
         self._db.add(row)
         await self._db.commit()
         await self._db.refresh(row)
         return row
 
     async def ensure_session(
-        self, session_id: str, mode: str = "chat", user_id: str | None = None
+        self,
+        session_id: str,
+        mode: str = "chat",
+        user_id: str | None = None,
+        project_id: str | None = None,
     ) -> ChatSession:
         """Return existing DB record or create it — idempotent."""
         row = await self.get_session(session_id)
         if row is None:
-            row = await self.create_session(session_id, mode, user_id=user_id)
+            row = await self.create_session(session_id, mode, user_id=user_id, project_id=project_id)
         return row
 
     async def get_session(self, session_id: str) -> ChatSession | None:
@@ -64,7 +72,10 @@ class ChatRepo:
         offset: int = 0,
         user_id: str | None = None,
     ) -> tuple[list[ChatSession], int]:
-        base_filter = [ChatSession.mode == mode]
+        # Exclude sessions filed under a project — those live in the project's
+        # chat list and must not appear in Recents (nor Pinned, which filters
+        # this same list on the frontend).
+        base_filter = [ChatSession.mode == mode, ChatSession.project_id.is_(None)]
         if user_id is not None:
             base_filter.append(ChatSession.user_id == user_id)
 
@@ -219,6 +230,22 @@ class ChatRepo:
             .values(updated_at=datetime.now(UTC))
         )
         await self._db.commit()
+
+    async def set_project(self, session_id: str, project_id: str | None) -> bool:
+        """Assign a session to a project (or detach with project_id=None).
+
+        Used for add / move / remove. Returns False if the session doesn't exist.
+        """
+        row = await self.get_session(session_id)
+        if row is None:
+            return False
+        await self._db.execute(
+            update(ChatSession)
+            .where(ChatSession.id == session_id)
+            .values(project_id=project_id)
+        )
+        await self._db.commit()
+        return True
 
     # ── Messages ──────────────────────────────────────────────────────────────
 

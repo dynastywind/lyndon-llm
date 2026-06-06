@@ -20,8 +20,15 @@ from cowork.planner import Plan, PlanStep
 
 
 class ChatExecutor:
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session,
+        user_id: str | None = None,
+        project_context: str = "",
+    ) -> None:
         self.session = session
+        self.user_id = user_id
+        self.project_context = project_context
         self._step_statuses: dict[str, StepStatus] = {}
 
     async def run(self, plan: Plan) -> AsyncGenerator[dict[str, Any], None]:
@@ -100,7 +107,7 @@ class ChatExecutor:
             from core.permissions.gate import Mode
             from core.tools.registry import tool_registry
 
-            tools = tool_registry.get_tools(Mode.CHAT, self.session.gate, user_id=None)
+            tools = tool_registry.get_tools(Mode.CHAT, self.session.gate, user_id=self.user_id)
 
             if step.tool not in tools:
                 return StepResult(
@@ -149,8 +156,18 @@ class ChatExecutor:
         from chat.engine import _ThinkingStreamParser
         cot_parser = _ThinkingStreamParser() if settings.cot_enabled else None
 
+        system_prompt = (
+            "You are a helpful assistant. Synthesize the tool results below into a "
+            "clear, accurate answer to the user's request. Be concise and factual."
+        )
+        if self.project_context:
+            system_prompt = f"{system_prompt}\n\n{self.project_context}"
+
         async for chunk in llm_gateway.stream(
-            [LLMMessage("user", synthesis_prompt)]
+            [
+                LLMMessage("system", system_prompt),
+                LLMMessage("user", synthesis_prompt),
+            ]
         ):
             if isinstance(chunk, LLMUsage):
                 if cot_parser:

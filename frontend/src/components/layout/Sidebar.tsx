@@ -19,23 +19,30 @@ import {
   ListChecks,
   Code,
   Palette,
+  Folder,
+  FolderInput,
+  ChevronRight,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
+import { useProjects } from '@/hooks/useProjects'
 import {
   deleteChatSession,
   getAvatarUrl,
+  moveSessionToProject,
   renameChatSession,
   searchChatSessions,
+  searchProjects,
 } from '@/api/client'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { LoginDialog } from '@/components/auth/LoginDialog'
 import { DeleteAccountDialog } from '@/components/auth/DeleteAccountDialog'
 import { ThemeToggle } from './ThemeToggle'
-import type { Mode, ChatSession } from '@/types'
+import { ContextMenu } from '@/components/projects/ui'
+import type { Mode, ChatSession, Project } from '@/types'
 
 // ── Lyndon Vision palette (local constants matching CSS vars) ─────────────────
 const LV = {
@@ -280,7 +287,27 @@ export function Sidebar() {
     pinnedSessionIds,
     pinSession,
     unpinSession,
+    pinnedProjectIds,
+    pinProject,
+    unpinProject,
+    setActiveView,
+    setActiveProjectId,
+    searchOpen,
+    setSearchOpen,
+    bumpProjectVersion,
   } = useAppStore()
+
+  const projectMode = mode === 'sandbox' ? 'chat' : mode
+  const { projects: sidebarProjects } = useProjects(projectMode)
+  // Favorited (pinned) projects float to the top of the sidebar list.
+  const orderedSidebarProjects = [
+    ...sidebarProjects.filter((p) => pinnedProjectIds.includes(p.id)),
+    ...sidebarProjects.filter((p) => !pinnedProjectIds.includes(p.id)),
+  ]
+  // Move-to-project menu: which session and where to anchor it.
+  const [moveMenu, setMoveMenu] = useState<{ x: number; y: number; session: ChatSession } | null>(
+    null,
+  )
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [loginOpen, setLoginOpen] = useState(false)
@@ -296,9 +323,6 @@ export function Sidebar() {
   const [promptOpen, setPromptOpen] = useState(false)
   const [promptDraft, setPromptDraft] = useState('')
   const promptInputRef = useRef<HTMLTextAreaElement>(null)
-
-  // Search dialog
-  const [searchOpen, setSearchOpen] = useState(false)
 
   // The key for the current session prompt slot
   const promptKey = sessionId ?? '__new__'
@@ -342,15 +366,16 @@ export function Sidebar() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        setSearchOpen((v) => !v)
+        setSearchOpen(!useAppStore.getState().searchOpen)
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  }, [setSearchOpen])
 
   const handleNewChat = () => {
-    if (!sessionId) return
+    setActiveView('main')
+    setActiveProjectId(null)
     setSessionId(null)
     setSessionTitle(null)
     bumpHomeVersion()
@@ -360,11 +385,14 @@ export function Sidebar() {
   const handleModeChange = (newMode: Mode) => {
     if (newMode === mode) return
     setMode(newMode)
+    setActiveView('main')
+    setActiveProjectId(null)
     setSessionId(null)
     setSessionTitle(null)
   }
 
   const handleResumeSession = (session: ChatSession) => {
+    setActiveView('main')
     setSessionId(session.session_id)
     setSessionTitle(session.title)
   }
@@ -378,6 +406,24 @@ export function Sidebar() {
     bumpHomeVersion()
     deleteChatSession(session.session_id)
       .then(() => bumpSessionVersion()) // refresh list + total from backend
+      .catch(() => {})
+  }
+
+  const openProject = (id: string) => {
+    setActiveProjectId(id)
+    setActiveView('projectDetail')
+  }
+
+  /** File a session under a project: it leaves Recents/Pinned and joins the project. */
+  const handleMoveToProject = (session: ChatSession, projectId: string) => {
+    setMoveMenu(null)
+    removeSession(session.session_id)
+    unpinSession(session.session_id)
+    moveSessionToProject(session.session_id, projectId)
+      .then(() => {
+        bumpSessionVersion()
+        bumpProjectVersion()
+      })
       .catch(() => {})
   }
 
@@ -744,6 +790,97 @@ export function Sidebar() {
       {/* Session list */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <div style={{ flex: 1, overflowY: 'auto' }}>
+          {/* ── Projects ── */}
+          {user && (
+            <div style={{ marginBottom: 4 }}>
+              <button
+                onClick={() => setActiveView('projectsList')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '6px 16px 2px',
+                  fontFamily: LV.font.mono,
+                  fontSize: 9.5,
+                  letterSpacing: '0.28em',
+                  textTransform: 'uppercase',
+                  color: LV.mute,
+                  fontWeight: 500,
+                }}
+                className="hover:!text-[var(--lv-soft)] transition-colors"
+              >
+                <span style={{ flex: 1, textAlign: 'left' }}>{t('sidebar.sectionProjects')}</span>
+                <ChevronRight size={11} />
+              </button>
+              {orderedSidebarProjects.slice(0, 6).map((p) => {
+                const fav = pinnedProjectIds.includes(p.id)
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => openProject(p.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      width: '100%',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '6px 16px',
+                      color: LV.soft,
+                      textAlign: 'left',
+                    }}
+                    className="hover:!bg-[var(--lv-elev)] transition-colors"
+                  >
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      title={fav ? t('sidebar.unpin') : t('sidebar.pin')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (fav) unpinProject(p.id)
+                        else pinProject(p.id)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation()
+                          e.preventDefault()
+                          if (fav) unpinProject(p.id)
+                          else pinProject(p.id)
+                        }
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        flexShrink: 0,
+                        cursor: 'pointer',
+                        lineHeight: 0,
+                        color: fav ? LV.gold : LV.mute,
+                      }}
+                      className={fav ? undefined : 'hover:!text-[var(--lv-ink)] transition-colors'}
+                    >
+                      <Pin size={12} style={{ fill: fav ? LV.gold : 'none' }} />
+                    </span>
+                    <span
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontFamily: LV.font.sans,
+                        fontSize: 12.5,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {p.name}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
           {loading ? (
             <div
               style={{
@@ -793,6 +930,10 @@ export function Sidebar() {
                         onSelect={handleResumeSession}
                         onDelete={handleDeleteSession}
                         onPin={() => unpinSession(s.session_id)}
+                        onMove={(e, sess) => {
+                          const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                          setMoveMenu({ x: r.right, y: r.bottom + 4, session: sess })
+                        }}
                         onRename={(newTitle) => {
                           if (sessionId === s.session_id) setSessionTitle(newTitle || null)
                           bumpSessionVersion()
@@ -822,6 +963,10 @@ export function Sidebar() {
                     onSelect={handleResumeSession}
                     onDelete={handleDeleteSession}
                     onPin={() => pinSession(s.session_id)}
+                    onMove={(e, sess) => {
+                      const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                      setMoveMenu({ x: r.right, y: r.bottom + 4, session: sess })
+                    }}
                     onRename={(newTitle) => {
                       if (sessionId === s.session_id) setSessionTitle(newTitle || null)
                       bumpSessionVersion()
@@ -1108,12 +1253,39 @@ export function Sidebar() {
         open={searchOpen}
         onClose={() => setSearchOpen(false)}
         onSelect={(session) => {
+          setActiveView('main')
           setSessionId(session.session_id)
           setSessionTitle(session.title)
           setSearchOpen(false)
         }}
+        onSelectProject={(projectId) => {
+          openProject(projectId)
+          setSearchOpen(false)
+        }}
         mode={mode}
       />
+
+      {/* Move-to-project menu */}
+      {moveMenu && (
+        <ContextMenu x={moveMenu.x} y={moveMenu.y} onClose={() => setMoveMenu(null)}>
+          <div className="p-context-sub">{t('sidebar.moveToProject')}</div>
+          {sidebarProjects.length > 0 ? (
+            sidebarProjects.map((p) => (
+              <button
+                key={p.id}
+                className="p-context-item"
+                onClick={() => handleMoveToProject(moveMenu.session, p.id)}
+              >
+                <Folder size={14} /> {p.name}
+              </button>
+            ))
+          ) : (
+            <div className="p-context-item" style={{ cursor: 'default', opacity: 0.6 }}>
+              No projects yet
+            </div>
+          )}
+        </ContextMenu>
+      )}
     </aside>
   )
 }
@@ -1128,6 +1300,7 @@ function SessionRow({
   onDelete,
   onPin,
   onRename,
+  onMove,
 }: {
   session: ChatSession
   active: boolean
@@ -1137,6 +1310,7 @@ function SessionRow({
   onDelete: (s: ChatSession) => void
   onPin: () => void
   onRename: (newTitle: string) => void
+  onMove: (e: React.MouseEvent, s: ChatSession) => void
 }) {
   const { t } = useT()
   const [confirming, setConfirming] = useState(false)
@@ -1218,7 +1392,7 @@ function SessionRow({
           alignItems: 'center',
           gap: 6,
           overflow: 'hidden',
-          paddingRight: 64,
+          paddingRight: 86,
         }}
       >
         {isStreaming && <SidebarAsteriskAnimated size={11} />}
@@ -1280,6 +1454,24 @@ function SessionRow({
         className="opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onMove(e, session)
+          }}
+          title={t('sidebar.moveToProject')}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 4,
+            color: 'var(--lv-mute)',
+            lineHeight: 0,
+          }}
+          className="hover:!text-[var(--lv-ink)] transition-colors"
+        >
+          <FolderInput size={11} />
+        </button>
         <button
           onClick={(e) => {
             e.stopPropagation()
@@ -1511,11 +1703,15 @@ function SessionRow({
 // ── SearchResultRow ───────────────────────────────────────────────────────────
 function SearchResultRow({
   session,
+  project,
+  badge,
   highlighted,
   onMouseEnter,
   onClick,
 }: {
-  session: ChatSession & { snippet?: string }
+  session?: ChatSession & { snippet?: string }
+  project?: Project
+  badge: 'chat' | 'project'
   highlighted: boolean
   onMouseEnter: () => void
   onClick: () => void
@@ -1523,6 +1719,8 @@ function SearchResultRow({
   const { t } = useT()
   const [hover, setHover] = useState(false)
   const isLit = highlighted || hover
+  const label = project ? project.name : session?.title || t('sidebar.untitled')
+  const time = project ? project.updated_at : session?.updated_at
   return (
     <div
       onMouseEnter={() => {
@@ -1543,15 +1741,27 @@ function SearchResultRow({
         transition: 'background 0.12s cubic-bezier(0.2,0.8,0.2,1)',
       }}
     >
-      <MessageSquare
-        size={20}
-        strokeWidth={1.4}
-        style={{
-          flexShrink: 0,
-          color: isLit ? 'var(--lv-soft)' : 'var(--lv-mute)',
-          transition: 'color 0.12s',
-        }}
-      />
+      {project ? (
+        <Folder
+          size={20}
+          strokeWidth={1.4}
+          style={{
+            flexShrink: 0,
+            color: isLit ? 'var(--lv-soft)' : 'var(--lv-mute)',
+            transition: 'color 0.12s',
+          }}
+        />
+      ) : (
+        <MessageSquare
+          size={20}
+          strokeWidth={1.4}
+          style={{
+            flexShrink: 0,
+            color: isLit ? 'var(--lv-soft)' : 'var(--lv-mute)',
+            transition: 'color 0.12s',
+          }}
+        />
+      )}
       <span
         style={{
           flex: 1,
@@ -1566,41 +1776,69 @@ function SearchResultRow({
           transition: 'color 0.12s',
         }}
       >
-        {session.title || t('sidebar.untitled')}
+        {label}
       </span>
       <span
         style={{
           fontFamily: 'var(--font-mono)',
-          fontSize: 11,
+          fontSize: 9,
+          letterSpacing: '0.16em',
+          textTransform: 'uppercase',
           color: 'var(--lv-mute)',
+          background: 'var(--lv-card)',
+          padding: '2px 7px',
+          borderRadius: 4,
           flexShrink: 0,
-          letterSpacing: '0.04em',
         }}
       >
-        {relativeTime(session.updated_at, t)}
+        {badge}
       </span>
+      {time && (
+        <span
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--lv-mute)',
+            flexShrink: 0,
+            letterSpacing: '0.04em',
+          }}
+        >
+          {relativeTime(time, t)}
+        </span>
+      )}
     </div>
   )
 }
 
 // ── SearchDialog ──────────────────────────────────────────────────────────────
+type SearchItem =
+  | { kind: 'project'; project: Project }
+  | { kind: 'chat'; session: ChatSession & { snippet?: string } }
+
 function SearchDialog({
   open,
   onClose,
   onSelect,
+  onSelectProject,
   mode,
 }: {
   open: boolean
   onClose: () => void
   onSelect: (session: ChatSession) => void
+  onSelectProject: (projectId: string) => void
   mode: string
 }) {
   const { t } = useT()
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<(ChatSession & { snippet?: string })[]>([])
+  const [results, setResults] = useState<SearchItem[]>([])
   const [loading, setLoading] = useState(false)
   const [highlightIdx, setHighlightIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const pickItem = (item: SearchItem) => {
+    if (item.kind === 'project') onSelectProject(item.project.id)
+    else onSelect(item.session)
+  }
 
   // Focus & reset on open
   useEffect(() => {
@@ -1630,10 +1868,18 @@ function SearchDialog({
       return
     }
     setLoading(true)
+    const searchMode = mode === 'sandbox' ? 'chat' : mode
     const t = setTimeout(async () => {
       try {
-        const data = await searchChatSessions(mode === 'chat' ? 'chat' : 'code', query.trim())
-        setResults(data.sessions)
+        const [chatData, projData] = await Promise.all([
+          searchChatSessions(searchMode, query.trim()),
+          searchProjects(searchMode, query.trim()).catch(() => ({ projects: [] })),
+        ])
+        const items: SearchItem[] = [
+          ...projData.projects.map((p) => ({ kind: 'project' as const, project: p })),
+          ...chatData.sessions.map((s) => ({ kind: 'chat' as const, session: s })),
+        ]
+        setResults(items)
         setHighlightIdx(0)
       } catch {
         /* ignore network errors */
@@ -1707,7 +1953,7 @@ function SearchDialog({
                 e.preventDefault()
                 setHighlightIdx((i) => Math.max(i - 1, 0))
               } else if (e.key === 'Enter' && results.length > 0) {
-                onSelect(results[highlightIdx])
+                pickItem(results[highlightIdx])
               }
             }}
             placeholder={t('sidebar.searchPlaceholder')}
@@ -1793,15 +2039,27 @@ function SearchDialog({
             </div>
           )}
           {!loading &&
-            results.map((session, idx) => (
-              <SearchResultRow
-                key={session.session_id}
-                session={session}
-                highlighted={idx === highlightIdx}
-                onMouseEnter={() => setHighlightIdx(idx)}
-                onClick={() => onSelect(session)}
-              />
-            ))}
+            results.map((item, idx) =>
+              item.kind === 'chat' ? (
+                <SearchResultRow
+                  key={`chat-${item.session.session_id}`}
+                  session={item.session}
+                  highlighted={idx === highlightIdx}
+                  onMouseEnter={() => setHighlightIdx(idx)}
+                  onClick={() => pickItem(item)}
+                  badge="chat"
+                />
+              ) : (
+                <SearchResultRow
+                  key={`project-${item.project.id}`}
+                  project={item.project}
+                  highlighted={idx === highlightIdx}
+                  onMouseEnter={() => setHighlightIdx(idx)}
+                  onClick={() => pickItem(item)}
+                  badge="project"
+                />
+              ),
+            )}
         </div>
 
         {/* Footer keyboard hints */}

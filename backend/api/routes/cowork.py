@@ -36,7 +36,14 @@ async def create_plan(
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
-    plan = await _planner.create_plan(body.goal, session_id=session.session_id)
+    from chat.project_context import build_project_block
+
+    project_block = await build_project_block(
+        db, session.session_id, body.goal, user.id if user else None
+    )
+    plan = await _planner.create_plan(
+        body.goal, session_id=session.session_id, project_context=project_block
+    )
     row = CoworkPlanRow(
         id=plan.plan_id,
         session_id=plan.session_id,

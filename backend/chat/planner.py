@@ -77,10 +77,15 @@ def _normalize_depends_on(steps: list[PlanStep]) -> list[PlanStep]:
 
 
 class ChatPlanner:
-    async def create_plan(self, user_message: str, session_id: str = "") -> Plan:
+    async def create_plan(
+        self, user_message: str, session_id: str = "", project_context: str = ""
+    ) -> Plan:
+        system = CHAT_PLANNER_SYSTEM
+        if project_context:
+            system = f"{system}\n\n{project_context}"
         text, _usage = await llm_gateway.complete(
             messages=[
-                LLMMessage("system", CHAT_PLANNER_SYSTEM),
+                LLMMessage("system", system),
                 LLMMessage("user", user_message),
             ],
             temperature=0.1,

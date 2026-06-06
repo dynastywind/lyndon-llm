@@ -184,7 +184,9 @@ export const zh: Dict = {
     start: '开始',
     loading: '加载中…',
     noHistory: '暂无历史记录。',
+    moveToProject: '移动到项目',
     sectionPinned: '已置顶',
+    sectionProjects: '项目',
     sectionSessions: '会话',
     sectionWorkspaces: '工作区',
     sectionRecent: '最近',
@@ -255,6 +257,7 @@ export const zh: Dict = {
     effort_high: '高',
     kbdHint: '↵ 发送 · ⌥↵ 换行',
     newChat: '新对话',
+    openProject: '打开项目 {name}',
     toggleContext: '切换上下文面板',
   },
 
