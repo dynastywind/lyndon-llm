@@ -37,9 +37,10 @@ const LV = {
 
 function getGreeting(): string {
   const h = new Date().getHours()
-  if (h < 12) return 'Good morning'
-  if (h < 18) return 'Good afternoon'
-  return 'Good evening'
+  if (h >= 5 && h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  if (h < 22) return 'Good evening'
+  return 'Night owl'
 }
 
 function relativeTime(d: Date): string {
@@ -962,6 +963,8 @@ export function DesktopSessionWindow({ mode }: Props) {
             style={{
               background: LV.elev,
               border: `1px solid rgba(200,168,106,0.15)`,
+              borderRadius: 12,
+              overflow: 'hidden',
               transition: 'border-color 0.2s',
             }}
           >
@@ -1066,7 +1069,8 @@ export function DesktopSessionWindow({ mode }: Props) {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
+        flex: 1,
+        minHeight: 0,
         background: LV.bg,
       }}
     >

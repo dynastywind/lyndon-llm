@@ -90,7 +90,7 @@ export default function App() {
       }}
     >
       <Sidebar />
-      <main style={{ flex: 1, overflow: 'hidden' }}>
+      <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {/*
           key=sessionId forces a full remount whenever the active session
           changes.  This guarantees all local state (scroll refs, pagination

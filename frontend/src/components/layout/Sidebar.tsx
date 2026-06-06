@@ -8,6 +8,7 @@ import {
   Trash2,
   Loader2,
   Pencil,
+  Pin,
   MessageSquare,
   MoreHorizontal,
   MessageSquarePlus,
@@ -228,6 +229,25 @@ const DESKTOP_MODES: { id: Mode; label: string }[] = [
   { id: 'code', label: 'Code' },
 ]
 
+// ── SectionLabel ──────────────────────────────────────────────────────────────
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        padding: '6px 16px 2px',
+        fontFamily: LV.font.mono,
+        fontSize: 9.5,
+        letterSpacing: '0.28em',
+        textTransform: 'uppercase',
+        color: LV.mute,
+        fontWeight: 500,
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
 // ── component ─────────────────────────────────────────────────────────────────
 export function Sidebar() {
   const {
@@ -246,6 +266,9 @@ export function Sidebar() {
     pendingOAuthToken,
     setPendingOAuthToken,
     avatarVersion,
+    pinnedSessionIds,
+    pinSession,
+    unpinSession,
   } = useAppStore()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -754,43 +777,13 @@ export function Sidebar() {
           document.body,
         )}
 
-      {/* Recents */}
+      {/* Session list */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {/* Section header */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '0 16px',
-            height: 28,
-            flexShrink: 0,
-          }}
-        >
-          <span
-            style={{
-              fontFamily: LV.font.mono,
-              fontSize: 9.5,
-              letterSpacing: '0.28em',
-              textTransform: 'uppercase',
-              color: LV.mute,
-              fontWeight: 500,
-            }}
-          >
-            {searchOpen && searchQuery.trim()
-              ? 'Results'
-              : mode === 'cowork'
-                ? 'Sessions'
-                : mode === 'code'
-                  ? 'Workspaces'
-                  : 'Recent'}
-          </span>
-        </div>
-
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {searchOpen && searchQuery.trim() ? (
             /* ── Search results ── */
             <>
+              <SectionLabel>Results</SectionLabel>
               {searchLoading && (
                 <div
                   style={{
@@ -901,21 +894,58 @@ export function Sidebar() {
                 </p>
               ) : (
                 <>
-                  {sessions.map((s) => (
-                    <SessionRow
-                      key={s.session_id}
-                      session={s}
-                      active={sessionId === s.session_id}
-                      isStreaming={streamingSet[s.session_id] === true}
-                      onSelect={handleResumeSession}
-                      onDelete={handleDeleteSession}
-                      onRename={(newTitle) => {
-                        // optimistically update sidebar + active title
-                        if (sessionId === s.session_id) setSessionTitle(newTitle || null)
-                        bumpSessionVersion()
-                      }}
-                    />
-                  ))}
+                  {/* ── Pinned ── */}
+                  {sessions.some((s) => pinnedSessionIds.includes(s.session_id)) && (
+                    <>
+                      <SectionLabel>Pinned</SectionLabel>
+                      {sessions
+                        .filter((s) => pinnedSessionIds.includes(s.session_id))
+                        .sort(
+                          (a, b) =>
+                            pinnedSessionIds.indexOf(a.session_id) -
+                            pinnedSessionIds.indexOf(b.session_id),
+                        )
+                        .map((s) => (
+                          <SessionRow
+                            key={s.session_id}
+                            session={s}
+                            active={sessionId === s.session_id}
+                            isStreaming={streamingSet[s.session_id] === true}
+                            isPinned
+                            onSelect={handleResumeSession}
+                            onDelete={handleDeleteSession}
+                            onPin={() => unpinSession(s.session_id)}
+                            onRename={(newTitle) => {
+                              if (sessionId === s.session_id) setSessionTitle(newTitle || null)
+                              bumpSessionVersion()
+                            }}
+                          />
+                        ))}
+                    </>
+                  )}
+
+                  {/* ── Recent ── */}
+                  <SectionLabel>
+                    {mode === 'cowork' ? 'Sessions' : mode === 'code' ? 'Workspaces' : 'Recent'}
+                  </SectionLabel>
+                  {sessions
+                    .filter((s) => !pinnedSessionIds.includes(s.session_id))
+                    .map((s) => (
+                      <SessionRow
+                        key={s.session_id}
+                        session={s}
+                        active={sessionId === s.session_id}
+                        isStreaming={streamingSet[s.session_id] === true}
+                        isPinned={false}
+                        onSelect={handleResumeSession}
+                        onDelete={handleDeleteSession}
+                        onPin={() => pinSession(s.session_id)}
+                        onRename={(newTitle) => {
+                          if (sessionId === s.session_id) setSessionTitle(newTitle || null)
+                          bumpSessionVersion()
+                        }}
+                      />
+                    ))}
                   {hasMore && (
                     <div
                       ref={sentinelRef}
@@ -1190,15 +1220,19 @@ function SessionRow({
   session,
   active,
   isStreaming,
+  isPinned,
   onSelect,
   onDelete,
+  onPin,
   onRename,
 }: {
   session: ChatSession
   active: boolean
   isStreaming: boolean
+  isPinned: boolean
   onSelect: (s: ChatSession) => void
   onDelete: (s: ChatSession) => void
+  onPin: () => void
   onRename: (newTitle: string) => void
 }) {
   const [confirming, setConfirming] = useState(false)
@@ -1280,7 +1314,7 @@ function SessionRow({
           alignItems: 'center',
           gap: 6,
           overflow: 'hidden',
-          paddingRight: 44,
+          paddingRight: 64,
         }}
       >
         {isStreaming && <SidebarAsteriskAnimated size={11} />}
@@ -1341,6 +1375,24 @@ function SessionRow({
         className="opacity-0 group-hover:opacity-100 transition-opacity"
         onClick={(e) => e.stopPropagation()}
       >
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onPin()
+          }}
+          title={isPinned ? 'Unpin' : 'Pin'}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 4,
+            color: isPinned ? 'var(--lv-gold)' : 'var(--lv-mute)',
+            lineHeight: 0,
+          }}
+          className={isPinned ? undefined : 'hover:!text-[var(--lv-ink)] transition-colors'}
+        >
+          <Pin size={11} />
+        </button>
         <button
           onClick={openRename}
           title="Rename"

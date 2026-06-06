@@ -19,6 +19,7 @@ export function useStream() {
     bumpSessionVersion,
     bumpScrollToBottom,
     systemPrompt,
+    profession,
     sessionPrompts,
     clearSessionPrompt,
     setAppliedSessionPrompt,
@@ -114,6 +115,14 @@ export function useStream() {
           return { sessionMessages: { ...s.sessionMessages, [activeSessionId!]: msgs } }
         })
       }
+
+      // Build effective system prompt: prepend profession context when set so the
+      // LLM can tailor responses to the user's background without the user having
+      // to repeat it in every custom prompt they write.
+      const professionLine = profession
+        ? `The user is a ${profession}. Tailor your responses to suit their background and expertise level.`
+        : ''
+      const effectiveSystemPrompt = [professionLine, systemPrompt].filter(Boolean).join('\n\n')
 
       // Convert MessageAttachment → AttachmentPayload
       const apiAttachments: AttachmentPayload[] | undefined = attachments?.length
@@ -226,7 +235,7 @@ export function useStream() {
             // prompt follows immediately after.
           },
           apiAttachments,
-          isFirstMessage ? systemPrompt || undefined : undefined,
+          isFirstMessage ? effectiveSystemPrompt || undefined : undefined,
           appliedSessionPrompt,
           selectedModel ?? undefined,
           skillId,
@@ -249,6 +258,7 @@ export function useStream() {
       bumpSessionVersion,
       bumpScrollToBottom,
       systemPrompt,
+      profession,
       sessionPrompts,
       clearSessionPrompt,
       setAppliedSessionPrompt,

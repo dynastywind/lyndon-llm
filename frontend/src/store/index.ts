@@ -109,6 +109,11 @@ interface AppState {
   sessionEffortModes: Record<string, 'low' | 'medium' | 'high'>
   setSessionEffortMode: (sessionId: string, mode: 'low' | 'medium' | 'high') => void
 
+  // Pinned session IDs — order-preserving; persisted to localStorage
+  pinnedSessionIds: string[]
+  pinSession: (id: string) => void
+  unpinSession: (id: string) => void
+
   // Prompts
   /** Global system prompt — appended to BASE_SYSTEM_PROMPT on every request. Persisted. */
   systemPrompt: string
@@ -278,6 +283,15 @@ export const useAppStore = create<AppState>()(
       setSessionEffortMode: (sessionId, mode) =>
         set((s) => ({ sessionEffortModes: { ...s.sessionEffortModes, [sessionId]: mode } })),
 
+      // ── Pinned sessions ───────────────────────────────────────────────────────
+      pinnedSessionIds: [],
+      pinSession: (id) =>
+        set((s) =>
+          s.pinnedSessionIds.includes(id) ? s : { pinnedSessionIds: [id, ...s.pinnedSessionIds] },
+        ),
+      unpinSession: (id) =>
+        set((s) => ({ pinnedSessionIds: s.pinnedSessionIds.filter((x) => x !== id) })),
+
       // ── Prompts ───────────────────────────────────────────────────────
       systemPrompt: '',
       setSystemPrompt: (text) => set({ systemPrompt: text }),
@@ -324,6 +338,7 @@ export const useAppStore = create<AppState>()(
         selectedModel: s.selectedModel,
         effortMode: s.effortMode,
         sessionEffortModes: s.sessionEffortModes,
+        pinnedSessionIds: s.pinnedSessionIds,
         profession: s.profession,
         avatarVersion: s.avatarVersion,
       }),

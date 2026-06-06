@@ -299,9 +299,7 @@ describe('prompts', () => {
 
   it('setSessionPrompt stores a per-session prompt', () => {
     useAppStore.getState().setSessionPrompt('sess-1', 'Translate everything to Spanish.')
-    expect(useAppStore.getState().sessionPrompts['sess-1']).toBe(
-      'Translate everything to Spanish.',
-    )
+    expect(useAppStore.getState().sessionPrompts['sess-1']).toBe('Translate everything to Spanish.')
   })
 
   it('clearSessionPrompt removes the key without affecting others', () => {
@@ -361,7 +359,7 @@ describe('chatPlanner', () => {
   } as never
 
   it('setChatPendingPlan stores the plan and resets step statuses', () => {
-    useAppStore.setState({ chatPlanStepStatuses: { 's1': 'done' as never } })
+    useAppStore.setState({ chatPlanStepStatuses: { s1: 'done' as never } })
     useAppStore.getState().setChatPendingPlan(fakePlan)
     expect(useAppStore.getState().chatPendingPlan).toEqual(fakePlan)
     expect(useAppStore.getState().chatPlanStepStatuses).toEqual({})

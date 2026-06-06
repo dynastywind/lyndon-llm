@@ -1902,10 +1902,21 @@ function toStoreMessage(m: ChatSessionMessage): Message {
   }
 }
 
+// ─── Greeting helper ─────────────────────────────────────────────────────────
+
+function getGreeting(): string {
+  const h = new Date().getHours()
+  if (h >= 5 && h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  if (h < 22) return 'Good evening'
+  return 'Night owl'
+}
+
 // ─── ChatWindow ───────────────────────────────────────────────────────────────
 
 export function ChatWindow() {
   const {
+    user,
     sessionMessages,
     setSessionMessages,
     prependSessionMessages,
@@ -2239,13 +2250,457 @@ export function ChatWindow() {
   // ─── render ───────────────────────────────────────────────────────────────
 
   const canSend = !isStreaming && (!!input.trim() || attachments.length > 0)
+  const isHome = !sessionId
+
+  // ── Home screen (no active session) ──────────────────────────────────────
+  if (isHome) {
+    return (
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '0 24px',
+          background: 'var(--lv-bg)',
+          backgroundImage: [
+            'radial-gradient(ellipse 80% 60% at 50% 48%, rgba(168,140,80,0.09) 0%, transparent 60%)',
+            'radial-gradient(ellipse 120% 80% at 50% 50%, rgba(140,118,72,0.05) 0%, transparent 70%)',
+            'radial-gradient(circle at 50% 46%, rgba(200,168,106,0.03) 0%, transparent 40%)',
+          ].join(', '),
+          minHeight: 0,
+        }}
+      >
+        {/* Greeting */}
+        <div
+          style={{
+            textAlign: 'center',
+            marginBottom: 44,
+            width: '100%',
+            maxWidth: 600,
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--lv-gold)' }}>
+            <AsteriskMark size={44} />
+          </div>
+          <div
+            style={{
+              marginTop: 22,
+              fontFamily: 'var(--font-display)',
+              fontStyle: 'italic',
+              fontWeight: 500,
+              fontSize: 38,
+              letterSpacing: '-0.02em',
+              color: 'var(--lv-ink)',
+              lineHeight: 1.25,
+            }}
+          >
+            {getGreeting()}
+            {user?.username ? `, ${user.username}` : ''}.
+          </div>
+          <div
+            style={{
+              marginTop: 14,
+              fontFamily: 'var(--font-sans)',
+              fontWeight: 300,
+              fontSize: 15.5,
+              color: 'var(--lv-soft)',
+            }}
+          >
+            What&apos;s on your mind?
+          </div>
+        </div>
+
+        {/* Input box */}
+        <div style={{ maxWidth: 680, width: '100%' }}>
+          <div
+            data-input-box
+            style={{
+              background: 'var(--lv-elev)',
+              border: '1px solid rgba(200,168,106,0.15)',
+              borderRadius: 12,
+              overflow: 'hidden',
+              transition: 'border-color 0.2s',
+            }}
+          >
+            <form onSubmit={handleSubmit}>
+              {/* Hidden file picker */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*,.pdf,.txt,.md,.csv,.json,.py,.ts,.tsx,.js,.jsx,.java,.cpp,.c,.go,.rs,.html,.css"
+                style={{ display: 'none' }}
+                onChange={handleFileSelect}
+              />
+
+              {/* Textarea zone */}
+              <div style={{ padding: '18px 20px 6px' }}>
+                {/* Attachment chips */}
+                {attachments.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                    {attachments.map((a) => (
+                      <AttachmentChip key={a.id} attachment={a} onRemove={removeAttachment} />
+                    ))}
+                  </div>
+                )}
+
+                {/* Textarea */}
+                <textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value)
+                    setDraft(draftKey, e.target.value)
+                    e.target.style.height = 'auto'
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 280)}px`
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      if (e.altKey) {
+                        e.preventDefault()
+                        const el = e.currentTarget
+                        const start = el.selectionStart ?? el.value.length
+                        const end = el.selectionEnd ?? el.value.length
+                        const next = el.value.slice(0, start) + '\n' + el.value.slice(end)
+                        flushSync(() => {
+                          setInput(next)
+                          setDraft(draftKey, next)
+                        })
+                        el.selectionStart = el.selectionEnd = start + 1
+                        el.style.height = 'auto'
+                        el.style.height = `${Math.min(el.scrollHeight, 280)}px`
+                      } else if (!e.shiftKey && !e.metaKey && !e.ctrlKey) {
+                        e.preventDefault()
+                        handleSubmit(e)
+                      }
+                    }
+                  }}
+                  onFocus={(e) => {
+                    const box = e.currentTarget.closest<HTMLElement>('div[data-input-box]')
+                    if (box) box.style.borderColor = 'rgba(200,168,106,0.28)'
+                  }}
+                  onBlur={(e) => {
+                    const box = e.currentTarget.closest<HTMLElement>('div[data-input-box]')
+                    if (box) box.style.borderColor = 'rgba(200,168,106,0.15)'
+                  }}
+                  placeholder="Ask anything…"
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    background: 'none',
+                    border: 'none',
+                    outline: 'none',
+                    resize: 'none',
+                    fontFamily: 'var(--font-sans)',
+                    fontSize: 15,
+                    lineHeight: 1.6,
+                    color: 'var(--lv-ink)',
+                    caretColor: 'var(--lv-gold)',
+                    minHeight: 56,
+                  }}
+                />
+              </div>
+
+              {/* Toolbar */}
+              <div
+                style={{
+                  borderTop: '1px solid var(--lv-rule)',
+                  padding: '9px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                {/* Attach button */}
+                <DropdownMenu.Root open={attachMenuOpen} onOpenChange={setAttachMenuOpen}>
+                  <DropdownMenu.Trigger asChild>
+                    <button
+                      type="button"
+                      title="Add attachment"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        flexShrink: 0,
+                        borderRadius: '50%',
+                        border: `1px solid ${attachMenuOpen || attachments.length > 0 ? 'var(--lv-gold)' : 'var(--lv-rule-strong)'}`,
+                        background: 'none',
+                        cursor: 'pointer',
+                        color:
+                          attachMenuOpen || attachments.length > 0
+                            ? 'var(--lv-gold)'
+                            : 'var(--lv-mute)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'border-color 0.15s, color 0.15s',
+                      }}
+                    >
+                      {attachMenuOpen ? <X size={13} /> : <Plus size={14} />}
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      sideOffset={10}
+                      align="start"
+                      style={{
+                        zIndex: 200,
+                        minWidth: 240,
+                        background: 'var(--lv-card)',
+                        border: '1px solid var(--lv-rule-strong)',
+                        borderRadius: 10,
+                        padding: '6px 0 8px',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+                      }}
+                      className={cn(
+                        'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+                        'data-[state=open]:slide-in-from-bottom-2',
+                      )}
+                    >
+                      <DropdownMenu.Item
+                        onSelect={() => fileInputRef.current?.click()}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          outline: 'none',
+                          fontFamily: 'var(--font-sans)',
+                          fontSize: 12.5,
+                          color: 'var(--lv-ink)',
+                        }}
+                        className="hover:bg-accent focus:bg-accent transition-colors"
+                      >
+                        <ImageIcon size={13} style={{ color: 'var(--lv-mute)' }} />
+                        Add files or photos
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+
+                <span style={{ flex: 1 }} />
+
+                {/* Model dropdown */}
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <button
+                      type="button"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 9.5,
+                        color: 'var(--lv-soft)',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: 'var(--lv-gold)',
+                          flexShrink: 0,
+                        }}
+                      />
+                      {selectedModel ?? '—'}
+                      <ChevronDown size={10} style={{ color: 'var(--lv-mute)' }} />
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      side="top"
+                      align="end"
+                      sideOffset={8}
+                      style={{
+                        zIndex: 200,
+                        minWidth: 220,
+                        background: 'var(--lv-card)',
+                        border: '1px solid var(--lv-rule-strong)',
+                        borderRadius: 8,
+                        padding: '4px 0',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+                      }}
+                      className={cn(
+                        'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                        'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+                        'data-[state=open]:slide-in-from-bottom-2',
+                      )}
+                    >
+                      {/* Model section */}
+                      <div
+                        style={{
+                          padding: '4px 10px 6px',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          letterSpacing: '0.28em',
+                          textTransform: 'uppercase',
+                          color: 'var(--lv-mute)',
+                        }}
+                      >
+                        Model
+                      </div>
+                      {availableModels.length === 0 ? (
+                        <div
+                          style={{
+                            padding: '8px 14px',
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            color: 'var(--lv-mute)',
+                          }}
+                        >
+                          No models found
+                        </div>
+                      ) : (
+                        availableModels.map((m) => (
+                          <DropdownMenu.Item
+                            key={m}
+                            onSelect={() => setSelectedModel(m)}
+                            style={{ outline: 'none', cursor: 'pointer' }}
+                            className="hover:bg-accent focus:bg-accent transition-colors"
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                padding: '7px 14px',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: 5,
+                                  height: 5,
+                                  borderRadius: '50%',
+                                  flexShrink: 0,
+                                  background:
+                                    m === selectedModel ? 'var(--lv-gold)' : 'transparent',
+                                  border: m === selectedModel ? 'none' : '1px solid var(--lv-mute)',
+                                }}
+                              />
+                              <span
+                                style={{
+                                  fontFamily: 'var(--font-mono)',
+                                  fontSize: 10.5,
+                                  color: m === selectedModel ? 'var(--lv-ink)' : 'var(--lv-soft)',
+                                }}
+                              >
+                                {m}
+                              </span>
+                            </div>
+                          </DropdownMenu.Item>
+                        ))
+                      )}
+
+                      {/* Effort section */}
+                      <div style={{ height: 1, background: 'var(--lv-rule)', margin: '4px 0' }} />
+                      <div
+                        style={{
+                          padding: '4px 10px 4px',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          letterSpacing: '0.28em',
+                          textTransform: 'uppercase',
+                          color: 'var(--lv-mute)',
+                        }}
+                      >
+                        Effort
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          border: '1px solid var(--lv-rule)',
+                          borderRadius: 999,
+                          margin: '4px 8px 8px',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {(['low', 'medium', 'high'] as const).map((e) => (
+                          <button
+                            key={e}
+                            type="button"
+                            onClick={() => setEffortMode(e)}
+                            style={{
+                              flex: 1,
+                              background: effortMode === e ? 'var(--lv-wash)' : 'transparent',
+                              color: effortMode === e ? 'var(--lv-ink)' : 'var(--lv-mute)',
+                              border: 'none',
+                              padding: '5px 0',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 10,
+                              fontWeight: effortMode === e ? 600 : 400,
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              borderRadius: 999,
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            {e === 'medium' ? 'Mid' : e.charAt(0).toUpperCase() + e.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+
+                {/* Send button */}
+                <button
+                  type="submit"
+                  disabled={!canSend}
+                  style={{
+                    marginLeft: 8,
+                    width: 34,
+                    height: 34,
+                    flexShrink: 0,
+                    background: canSend ? 'var(--lv-gold)' : 'var(--lv-rule-strong)',
+                    color: canSend ? 'var(--lv-bg)' : 'var(--lv-mute)',
+                    border: 'none',
+                    cursor: canSend ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'background 0.15s',
+                    borderRadius: 6,
+                  }}
+                >
+                  <Send size={16} />
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Keyboard hint */}
+          <p
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 9.5,
+              color: 'var(--lv-mute)',
+              marginTop: 12,
+            }}
+          >
+            ↵ send · ⌥↵ newline
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
+        flex: 1,
+        minHeight: 0,
         background: 'var(--lv-bg)',
       }}
     >
