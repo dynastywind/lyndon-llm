@@ -24,6 +24,7 @@ export function useStream() {
     setAppliedSessionPrompt,
     selectedModel,
     effortMode,
+    mode,
     setChatPendingPlan,
     setChatPlanStatus,
   } = useAppStore()
@@ -40,7 +41,9 @@ export function useStream() {
       let activeSessionId = sessionId
       if (!activeSessionId) {
         try {
-          const session = await createChatSession()
+          // Use the current app mode so cowork/code sessions get the right mode.
+          const sessionMode = mode === 'sandbox' ? 'chat' : mode
+          const session = await createChatSession(sessionMode)
           activeSessionId = session.session_id
           setSessionId(activeSessionId)
           bumpSessionVersion()
@@ -246,6 +249,7 @@ export function useStream() {
       setAppliedSessionPrompt,
       selectedModel,
       effortMode,
+      mode,
       setChatPendingPlan,
       setChatPlanStatus,
     ],

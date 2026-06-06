@@ -343,6 +343,14 @@ export function Sidebar() {
     setSessionTitle(null)
   }
 
+  /** Switch mode and reset the active session so the new mode shows its home screen. */
+  const handleModeChange = (newMode: Mode) => {
+    if (newMode === mode) return
+    setMode(newMode)
+    setSessionId(null)
+    setSessionTitle(null)
+  }
+
   const handleResumeSession = (session: ChatSession) => {
     setSessionId(session.session_id)
     setSessionTitle(session.title)
@@ -447,7 +455,13 @@ export function Sidebar() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Escape' && setSearchOpen(false)}
-              placeholder="Search messages…"
+              placeholder={
+                mode === 'cowork'
+                  ? 'Search sessions…'
+                  : mode === 'code'
+                    ? 'Search workspaces…'
+                    : 'Search messages…'
+              }
               style={{
                 flex: 1,
                 background: 'none',
@@ -483,7 +497,7 @@ export function Sidebar() {
           {DESKTOP_MODES.map(({ id, label }) => (
             <button
               key={id}
-              onClick={() => setMode(id)}
+              onClick={() => handleModeChange(id)}
               style={{
                 flex: 1,
                 padding: '11px 0 10px',
@@ -543,7 +557,7 @@ export function Sidebar() {
           >
             <path d="M5 12h14M12 5v14" />
           </svg>
-          New chat
+          {mode === 'chat' ? 'New chat' : 'New session'}
         </button>
 
         {/* More menu */}
@@ -763,7 +777,13 @@ export function Sidebar() {
               fontWeight: 500,
             }}
           >
-            {searchOpen && searchQuery.trim() ? 'Results' : 'Recent'}
+            {searchOpen && searchQuery.trim()
+              ? 'Results'
+              : mode === 'cowork'
+                ? 'Sessions'
+                : mode === 'code'
+                  ? 'Workspaces'
+                  : 'Recent'}
           </span>
         </div>
 

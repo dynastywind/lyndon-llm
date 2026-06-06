@@ -389,8 +389,12 @@ export async function cancelChatPlan(planId: string, sessionId: string): Promise
 
 // ── Chat sessions ─────────────────────────────────────────────────────────────
 
-export async function createChatSession(): Promise<ChatSession> {
-  const res = await fetch(`${BASE}/chat/sessions`, { method: 'POST', headers: authHeader() })
+export async function createChatSession(mode = 'chat'): Promise<ChatSession> {
+  const res = await fetch(`${BASE}/chat/sessions`, {
+    method: 'POST',
+    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  })
   if (!res.ok) throw new Error(`Failed to create session: ${res.statusText}`)
   return res.json()
 }

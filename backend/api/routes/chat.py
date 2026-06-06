@@ -205,15 +205,27 @@ async def cancel_chat_plan(
 # ── Session management ────────────────────────────────────────────────────────
 
 
+class CreateSessionRequest(BaseModel):
+    mode: str = "chat"  # "chat" | "cowork" | "code"
+
+
 @router.post("/sessions")
 async def create_chat_session(
+    body: CreateSessionRequest = CreateSessionRequest(),  # noqa: B008
     db: AsyncSession = Depends(get_db),
     user: User | None = Depends(get_optional_user),
 ):
     """Create a new in-memory + DB session and return its ID."""
-    session = session_manager.create(mode=Mode.CHAT)
+    _mode_map = {
+        "cowork": Mode.COWORK,
+        "code": Mode.CODE,
+    }
+    session_mode = _mode_map.get(body.mode, Mode.CHAT)
+    session = session_manager.create(mode=session_mode)
     repo = ChatRepo(db)
-    row = await repo.create_session(session.session_id, mode="chat", user_id=user.id if user else None)
+    row = await repo.create_session(
+        session.session_id, mode=body.mode, user_id=user.id if user else None
+    )
     return _session_dict(row)
 
 
