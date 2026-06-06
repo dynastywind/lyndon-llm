@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+import * as Tabs from '@radix-ui/react-tabs'
 import {
   BookOpen,
   Puzzle,
@@ -15,6 +16,9 @@ import {
   UserCircle,
   Search,
   X,
+  ListChecks,
+  Code,
+  type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useT } from '@/i18n'
@@ -227,10 +231,10 @@ const IS_TAURI =
   typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== 'undefined'
 
 // ── Modes (desktop-only — web is chat-only with no tab group) ─────────────────
-const DESKTOP_MODES: { id: Mode; label: string }[] = [
-  { id: 'chat', label: 'Chat' },
-  { id: 'cowork', label: 'Cowork' },
-  { id: 'code', label: 'Code' },
+const DESKTOP_MODES: { id: Mode; labelKey: string; Icon: LucideIcon }[] = [
+  { id: 'chat', labelKey: 'sidebar.modeChat', Icon: MessageSquare },
+  { id: 'cowork', labelKey: 'sidebar.modeCowork', Icon: ListChecks },
+  { id: 'code', labelKey: 'sidebar.modeCode', Icon: Code },
 ]
 
 // ── SectionLabel ──────────────────────────────────────────────────────────────
@@ -254,7 +258,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // ── component ─────────────────────────────────────────────────────────────────
 export function Sidebar() {
-  const { t } = useT()
+  const { t, language } = useT()
   const {
     mode,
     setMode,
@@ -437,32 +441,66 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Mode tabs — desktop only; web is chat-only */}
+      {/* Mode tabs — desktop only; web is chat-only.
+          Inactive = icon-only tab; active = icon + label pill. */}
       {IS_TAURI && (
-        <div style={{ display: 'flex', borderBottom: `1px solid ${LV.rule}`, flexShrink: 0 }}>
-          {DESKTOP_MODES.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => handleModeChange(id)}
-              style={{
-                flex: 1,
-                padding: '11px 0 10px',
-                textAlign: 'center',
-                fontFamily: LV.font.sans,
-                fontSize: 12.5,
-                background: 'none',
-                border: 'none',
-                fontWeight: mode === id ? 500 : 400,
-                color: mode === id ? LV.ink : LV.mute,
-                cursor: 'pointer',
-                borderBottom: `1px solid ${mode === id ? LV.gold : 'transparent'}`,
-                marginBottom: -1,
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <Tabs.Root
+          value={mode === 'sandbox' ? 'chat' : mode}
+          onValueChange={(v) => handleModeChange(v as Mode)}
+        >
+          <Tabs.List
+            style={{
+              display: 'flex',
+              gap: 6,
+              padding: '10px 12px',
+              flexShrink: 0,
+            }}
+          >
+            {DESKTOP_MODES.map(({ id, labelKey, Icon }) => {
+              const active = mode === id
+              const label = t(labelKey)
+              return (
+                <Tabs.Trigger
+                  key={id}
+                  value={id}
+                  title={label}
+                  aria-label={label}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: active ? 7 : 0,
+                    padding: active ? '7px 14px' : '7px 9px',
+                    borderRadius: 8,
+                    background: active ? LV.elev : 'transparent',
+                    border: 'none',
+                    fontFamily: LV.font.sans,
+                    fontSize: 12.5,
+                    fontWeight: active ? 500 : 400,
+                    color: active ? LV.ink : LV.mute,
+                    cursor: 'pointer',
+                    transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) e.currentTarget.style.color = LV.soft
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) e.currentTarget.style.color = LV.mute
+                  }}
+                >
+                  <Icon
+                    size={15}
+                    style={{ color: active ? LV.gold : 'currentColor', flexShrink: 0 }}
+                  />
+                  {active && (
+                    <span style={{ fontSize: language === 'zh' ? 11 : undefined }}>{label}</span>
+                  )}
+                </Tabs.Trigger>
+              )
+            })}
+          </Tabs.List>
+        </Tabs.Root>
       )}
 
       {/* New chat + more menu */}

@@ -164,6 +164,9 @@ export const en = {
   },
 
   sidebar: {
+    modeChat: 'Chat',
+    modeCowork: 'Cowork',
+    modeCode: 'Code',
     timeNow: 'now',
     timeMinutes: '{mins}m',
     timeHours: '{hours}h',

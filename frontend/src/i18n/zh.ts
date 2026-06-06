@@ -161,6 +161,9 @@ export const zh: Dict = {
   },
 
   sidebar: {
+    modeChat: '聊天',
+    modeCowork: '协作',
+    modeCode: '代码',
     timeNow: '刚刚',
     timeMinutes: '{mins} 分钟前',
     timeHours: '{hours} 小时前',
