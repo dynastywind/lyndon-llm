@@ -259,6 +259,7 @@ export function Sidebar() {
     clearSessionMessages,
     streamingSet,
     bumpSessionVersion,
+    bumpHomeVersion,
     sessionPrompts,
     setSessionPrompt,
     user,
@@ -364,6 +365,7 @@ export function Sidebar() {
     if (!sessionId) return
     setSessionId(null)
     setSessionTitle(null)
+    bumpHomeVersion()
   }
 
   /** Switch mode and reset the active session so the new mode shows its home screen. */
@@ -385,6 +387,7 @@ export function Sidebar() {
     // Always return to the home screen after deletion
     setSessionId(null)
     setSessionTitle(null)
+    bumpHomeVersion()
     deleteChatSession(session.session_id)
       .then(() => bumpSessionVersion()) // refresh list + total from backend
       .catch(() => {})
@@ -1532,6 +1535,7 @@ function SessionRow({
         createPortal(
           <div
             ref={bubbleRef}
+            onClick={(e) => e.stopPropagation()}
             style={{
               ...bubbleStyle(),
               zIndex: 200,

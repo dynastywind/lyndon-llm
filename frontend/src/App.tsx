@@ -11,6 +11,7 @@ export default function App() {
   const {
     mode,
     sessionId,
+    homeVersion,
     uiTheme,
     setUser,
     setPendingOAuthToken,
@@ -100,9 +101,9 @@ export default function App() {
           creation path, so the remounted component's effect correctly sees
           messages.length > 0 and skips the unnecessary DB fetch.
         */}
-        {mode === 'chat' && <ChatWindow key={sessionId ?? '__new__'} />}
-        {mode === 'cowork' && <CoworkWindow key={sessionId ?? '__new__'} />}
-        {mode === 'code' && <CodeWindow key={sessionId ?? '__new__'} />}
+        {mode === 'chat' && <ChatWindow key={sessionId ?? `home-${homeVersion}`} />}
+        {mode === 'cowork' && <CoworkWindow key={sessionId ?? `home-${homeVersion}`} />}
+        {mode === 'code' && <CodeWindow key={sessionId ?? `home-${homeVersion}`} />}
         {mode === 'sandbox' && <SandboxWindow />}
       </main>
     </div>

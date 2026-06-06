@@ -70,6 +70,11 @@ interface AppState {
   sessionListVersion: number
   bumpSessionVersion: () => void
 
+  // Incremented every time we navigate to the home screen (delete / new chat).
+  // Used as part of the window key in App.tsx to guarantee a full remount.
+  homeVersion: number
+  bumpHomeVersion: () => void
+
   // Cowork
   currentPlan: Plan | null
   setPlan: (plan: Plan | null) => void
@@ -238,6 +243,9 @@ export const useAppStore = create<AppState>()(
 
       sessionListVersion: 0,
       bumpSessionVersion: () => set((s) => ({ sessionListVersion: s.sessionListVersion + 1 })),
+
+      homeVersion: 0,
+      bumpHomeVersion: () => set((s) => ({ homeVersion: s.homeVersion + 1 })),
 
       // ── Cowork ────────────────────────────────────────────────────────
       currentPlan: null,
