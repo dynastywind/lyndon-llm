@@ -382,11 +382,9 @@ export function Sidebar() {
   const handleDeleteSession = (session: ChatSession) => {
     removeSession(session.session_id)
     clearSessionMessages(session.session_id)
-    // If the deleted session was active, immediately reset to new-chat state
-    if (session.session_id === sessionId) {
-      setSessionId(null)
-      setSessionTitle(null)
-    }
+    // Always return to the home screen after deletion
+    setSessionId(null)
+    setSessionTitle(null)
     deleteChatSession(session.session_id)
       .then(() => bumpSessionVersion()) // refresh list + total from backend
       .catch(() => {})

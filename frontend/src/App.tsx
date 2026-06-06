@@ -101,8 +101,8 @@ export default function App() {
           messages.length > 0 and skips the unnecessary DB fetch.
         */}
         {mode === 'chat' && <ChatWindow key={sessionId ?? '__new__'} />}
-        {mode === 'cowork' && <CoworkWindow />}
-        {mode === 'code' && <CodeWindow />}
+        {mode === 'cowork' && <CoworkWindow key={sessionId ?? '__new__'} />}
+        {mode === 'code' && <CodeWindow key={sessionId ?? '__new__'} />}
         {mode === 'sandbox' && <SandboxWindow />}
       </main>
     </div>

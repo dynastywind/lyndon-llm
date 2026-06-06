@@ -3237,37 +3237,61 @@ export function ChatWindow() {
                           </DropdownMenu.Item>
                         ))
                       )}
+
+                      {/* Effort section */}
+                      <div style={{ height: 1, background: 'var(--lv-rule)', margin: '4px 0' }} />
+                      <div
+                        style={{
+                          padding: '4px 10px 4px',
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 9,
+                          letterSpacing: '0.28em',
+                          textTransform: 'uppercase',
+                          color: 'var(--lv-mute)',
+                        }}
+                      >
+                        Effort
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          border: '1px solid var(--lv-rule)',
+                          borderRadius: 999,
+                          margin: '4px 8px 8px',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {(['low', 'medium', 'high'] as const).map((e) => (
+                          <button
+                            key={e}
+                            type="button"
+                            onClick={() => {
+                              setEffortMode(e)
+                              if (sessionId) setSessionEffortMode(sessionId, e)
+                            }}
+                            style={{
+                              flex: 1,
+                              background: effortMode === e ? 'var(--lv-wash)' : 'transparent',
+                              color: effortMode === e ? 'var(--lv-ink)' : 'var(--lv-mute)',
+                              border: 'none',
+                              padding: '5px 0',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 10,
+                              fontWeight: effortMode === e ? 600 : 400,
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              borderRadius: 999,
+                              transition: 'all 0.15s',
+                            }}
+                          >
+                            {e === 'medium' ? 'Mid' : e.charAt(0).toUpperCase() + e.slice(1)}
+                          </button>
+                        ))}
+                      </div>
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
-
-                {/* Effort mode pills */}
-                {(['low', 'medium', 'high'] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      setEffortMode(m)
-                      if (sessionId) setSessionEffortMode(sessionId, m)
-                    }}
-                    style={{
-                      marginLeft: m === 'low' ? 10 : 2,
-                      padding: '1px 7px',
-                      borderRadius: 4,
-                      border: `1px solid ${effortMode === m ? 'var(--lv-gold)' : 'var(--lv-rule)'}`,
-                      background: effortMode === m ? 'rgba(200,168,106,0.12)' : 'none',
-                      color: effortMode === m ? 'var(--lv-gold)' : 'var(--lv-mute)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: 9,
-                      cursor: 'pointer',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {m === 'medium' ? 'mid' : m}
-                  </button>
-                ))}
               </div>
             </form>
           </div>
