@@ -1920,6 +1920,8 @@ export function ChatWindow() {
     sessionPrompts,
     selectedModel,
     setSelectedModel,
+    effortMode,
+    setEffortMode,
   } = useAppStore()
 
   const draftKey = sessionId ?? '__new__'
@@ -2771,6 +2773,31 @@ export function ChatWindow() {
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
+
+                {/* Effort mode pills */}
+                {(['low', 'medium', 'high'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setEffortMode(m)}
+                    style={{
+                      marginLeft: m === 'low' ? 10 : 2,
+                      padding: '1px 7px',
+                      borderRadius: 4,
+                      border: `1px solid ${effortMode === m ? 'var(--lv-gold)' : 'var(--lv-rule)'}`,
+                      background: effortMode === m ? 'rgba(200,168,106,0.12)' : 'none',
+                      color: effortMode === m ? 'var(--lv-gold)' : 'var(--lv-mute)',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 9,
+                      cursor: 'pointer',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {m === 'medium' ? 'mid' : m}
+                  </button>
+                ))}
               </div>
             </form>
           </div>

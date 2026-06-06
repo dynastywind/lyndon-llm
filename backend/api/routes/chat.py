@@ -38,6 +38,7 @@ class ChatRequest(BaseModel):
     model: str | None = None  # override the default LLM model for this request
     skill_id: str | None = None  # slash-command: force routing to this skill's tools only
     skill_prefix: str | None = None  # "/skill-name" prefix to persist with user message
+    effort_mode: str | None = None  # "low" | "medium" | "high" — controls response verbosity
 
 
 class IngestRequest(BaseModel):
@@ -99,6 +100,7 @@ async def chat(
                     model=body.model or None,
                     skill_id=body.skill_id or None,
                     skill_prefix=body.skill_prefix or None,
+                    effort_mode=body.effort_mode or None,
                 ):
                     await buf.push(event)
             await buf.finish()

@@ -224,6 +224,7 @@ export async function streamChat(
   model?: string,
   skillId?: string,
   skillPrefix?: string,
+  effortMode?: 'low' | 'medium' | 'high',
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/`, {
     method: 'POST',
@@ -236,6 +237,7 @@ export async function streamChat(
       ...(model ? { model } : {}),
       ...(skillId ? { skill_id: skillId } : {}),
       ...(skillPrefix ? { skill_prefix: skillPrefix } : {}),
+      ...(effortMode ? { effort_mode: effortMode } : {}),
     }),
   })
   if (!res.ok) throw new Error(`Chat error: ${res.statusText}`)

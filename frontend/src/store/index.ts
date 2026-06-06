@@ -98,6 +98,10 @@ interface AppState {
   selectedModel: string | null
   setSelectedModel: (model: string | null) => void
 
+  // Effort mode — controls how verbose/thorough the model's responses are
+  effortMode: 'low' | 'medium' | 'high'
+  setEffortMode: (mode: 'low' | 'medium' | 'high') => void
+
   // Prompts
   /** Global system prompt — appended to BASE_SYSTEM_PROMPT on every request. Persisted. */
   systemPrompt: string
@@ -260,6 +264,10 @@ export const useAppStore = create<AppState>()(
       selectedModel: null,
       setSelectedModel: (model) => set({ selectedModel: model }),
 
+      // ── Effort mode ───────────────────────────────────────────────────
+      effortMode: 'medium',
+      setEffortMode: (effortMode) => set({ effortMode }),
+
       // ── Prompts ───────────────────────────────────────────────────────
       systemPrompt: '',
       setSystemPrompt: (text) => set({ systemPrompt: text }),
@@ -304,6 +312,7 @@ export const useAppStore = create<AppState>()(
         systemPrompt: s.systemPrompt,
         appliedSessionPrompts: s.appliedSessionPrompts,
         selectedModel: s.selectedModel,
+        effortMode: s.effortMode,
         profession: s.profession,
         avatarVersion: s.avatarVersion,
       }),

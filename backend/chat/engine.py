@@ -86,6 +86,24 @@ logger = logging.getLogger(__name__)
 # Maximum characters of retrieved RAG context to inject into the system prompt
 MAX_CONTEXT_CHARS = 6000
 
+# ── Effort-mode directives ────────────────────────────────────────────────────
+# Appended to the system prompt to control how verbose/thorough the model is.
+_EFFORT_DIRECTIVES: dict[str, str] = {
+    "low": (
+        "Be concise and direct. Answer in as few sentences as possible; "
+        "omit preamble, caveats, and elaboration unless essential."
+    ),
+    "medium": (
+        "Provide a clear, balanced response. Include enough detail to be "
+        "genuinely helpful without being exhaustive."
+    ),
+    "high": (
+        "Answer at maximum effort. Be thorough, detailed, and comprehensive — "
+        "explain concepts fully, include relevant context, edge cases, examples, "
+        "and considerations. Prioritise completeness over brevity."
+    ),
+}
+
 # Maximum number of tool-call rounds before we force a final answer
 MAX_TOOL_ROUNDS = 5
 
@@ -147,6 +165,7 @@ class ChatEngine:
         model: str | None = None,
         skill_id: str | None = None,
         skill_prefix: str | None = None,
+        effort_mode: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         with _langfuse_session_ctx(self.session.session_id):
             async for event in self._stream_response_inner(
@@ -157,6 +176,7 @@ class ChatEngine:
                 model=model,
                 skill_id=skill_id,
                 skill_prefix=skill_prefix,
+                effort_mode=effort_mode,
             ):
                 yield event
 
@@ -169,6 +189,7 @@ class ChatEngine:
         model: str | None = None,
         skill_id: str | None = None,
         skill_prefix: str | None = None,
+        effort_mode: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         timer = _Timer()
 
@@ -268,6 +289,8 @@ class ChatEngine:
         #    model always sees them as immutable conversation-opening context
         #    while the DB and memory manager store only the clean user message.
         system_prompt = BASE_SYSTEM_PROMPT
+        if effort_mode and effort_mode in _EFFORT_DIRECTIVES:
+            system_prompt = f"{system_prompt}\n\n{_EFFORT_DIRECTIVES[effort_mode]}"
         if skill_prompt_body:
             system_prompt = f"{system_prompt}\n\n{skill_prompt_body}"
             # Tell the frontend a prompt-based skill is active so it can show a badge.

@@ -23,6 +23,7 @@ export function useStream() {
     clearSessionPrompt,
     setAppliedSessionPrompt,
     selectedModel,
+    effortMode,
     setChatPendingPlan,
     setChatPlanStatus,
   } = useAppStore()
@@ -223,6 +224,7 @@ export function useStream() {
           selectedModel ?? undefined,
           skillId,
           skillPrefix,
+          effortMode,
         )
       } finally {
         stopStreaming(activeSessionId)
@@ -243,6 +245,7 @@ export function useStream() {
       clearSessionPrompt,
       setAppliedSessionPrompt,
       selectedModel,
+      effortMode,
       setChatPendingPlan,
       setChatPlanStatus,
     ],
