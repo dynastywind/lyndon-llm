@@ -1,0 +1,13 @@
+apiVersion: v2
+name: lyndon-llm
+description: Personal LLM assistant — backend, frontend, and Qdrant vector store
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - llm
+  - ai
+  - qdrant
+home: https://github.com/your-org/lyndonLLM
+maintainers:
+  - name: Lyndon

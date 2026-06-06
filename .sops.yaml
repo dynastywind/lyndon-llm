@@ -1,0 +1,34 @@
+creation_rules:
+  # ── Helm secrets ────────────────────────────────────────────────────────────
+  #
+  # Encrypts deploy/values-secrets.yaml with an age public key so the file is
+  # safe to commit. Only the secret leaf *values* are encrypted; YAML structure
+  # (keys) remains readable for diffing.
+  #
+  # One-time setup:
+  #   1. brew install age sops
+  #      helm plugin install https://github.com/jkroepke/helm-secrets
+  #
+  #   2. Generate your age key pair (skip if you already have one):
+  #        age-keygen -o ~/.config/sops/age/keys.txt
+  #      The file contains:
+  #        # public key: age1xxxx…   ← paste this below
+  #        AGE-SECRET-KEY-1…         ← this stays private, never committed
+  #
+  #   3. Replace the placeholder recipient below with your age public key.
+  #
+  # Encrypt / edit / decrypt:
+  #   sops --encrypt --in-place deploy/values-secrets.yaml   # first-time encrypt
+  #   sops deploy/values-secrets.yaml                        # open in $EDITOR, re-encrypt on save
+  #   sops --decrypt deploy/values-secrets.yaml              # view plaintext (stdout only)
+  #
+  # Deploy:
+  #   helm secrets install lyndon-llm ./deploy \
+  #     -f deploy/values.yaml \
+  #     -f deploy/values-secrets.yaml
+  # ────────────────────────────────────────────────────────────────────────────
+  - path_regex: deploy/values-secrets\.yaml$
+    age: >-
+      age18wt7x97c35fxfsknd23ah388e8gkzd3mhztmxzg334fzhq2qaeeskk4s3d
+    # Encrypt only the secret leaf values; keys and structure stay readable.
+    encrypted_regex: ^(llmApiKey|embeddingApiKey|langfusePublicKey|langfuseSecretKey|jwtSecretKey|qdrantApiKey)$

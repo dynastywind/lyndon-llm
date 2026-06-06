@@ -44,15 +44,36 @@ from core.session.manager import Session
 from core.tools.registry import tool_registry
 
 if settings.langfuse_secret_key and settings.langfuse_public_key:
+    from contextlib import contextmanager
+
     from langfuse._client.propagation import propagate_attributes as _propagate_attributes
 
-    def _langfuse_session_ctx(session_id: str):
-        return _propagate_attributes(session_id=session_id)
+    from core.llm.gateway import langfuse_client as _langfuse_client
+
+    @contextmanager
+    def _langfuse_session_ctx(  # type: ignore[misc]
+        session_id: str,
+        user_id: str | None = None,
+        service_name: str | None = None,
+    ):
+        # Open a root span using the same Langfuse instance (and thus the same
+        # tracer provider) that the OpenAI wrapper uses — so all nested LLM
+        # generations are correctly parented to this span.
+        metadata = {"service.name": service_name} if service_name else None
+        # Two separate `with` statements are required because start_as_current_observation
+        # is a sync context manager that must wrap propagate_attributes.
+        with _langfuse_client.start_as_current_observation(name="chat", as_type="span"):  # noqa: SIM117
+            with _propagate_attributes(session_id=session_id, user_id=user_id, metadata=metadata):
+                yield
 else:
     from contextlib import contextmanager
 
     @contextmanager
-    def _langfuse_session_ctx(_session_id: str):  # type: ignore[misc]
+    def _langfuse_session_ctx(  # type: ignore[misc]
+        _session_id: str,
+        _user_id: str | None = None,
+        _service_name: str | None = None,
+    ):
         yield
 
 if TYPE_CHECKING:
@@ -142,10 +163,15 @@ def _extract_skill_md_body(skill_md: str) -> str:
 
 class ChatEngine:
     def __init__(
-        self, session: Session, db: AsyncSession | None = None, user_id: str | None = None
+        self,
+        session: Session,
+        db: AsyncSession | None = None,
+        user_id: str | None = None,
+        service_name: str | None = None,
     ) -> None:
         self.session = session
         self.user_id = user_id
+        self.service_name = service_name
         self.memory = MemoryManager(session.session_id, user_id=user_id)
         self._retriever = HybridRetriever()
         self._db = db
@@ -167,7 +193,7 @@ class ChatEngine:
         skill_prefix: str | None = None,
         effort_mode: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        with _langfuse_session_ctx(self.session.session_id):
+        with _langfuse_session_ctx(self.session.session_id, self.user_id, self.service_name):
             async for event in self._stream_response_inner(
                 user_message,
                 attachments=attachments,

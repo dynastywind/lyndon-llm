@@ -31,6 +31,12 @@ htmlcov/
 *.pem
 *.key
 
+# ── Helm / SOPS secrets ───────────────────────────────────────────────────────
+# values-secrets.yaml.example — committed (plaintext template, no real values)
+# values-secrets.yaml          — committed (SOPS-encrypted ciphertext, safe)
+# values-secrets.yaml.dec      — NOT committed (helm-secrets plaintext temp file)
+*.dec
+
 # ── Runtime data ──────────────────────────────────────────────────────────────
 backend/data/
 *.db

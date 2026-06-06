@@ -1,0 +1,136 @@
+# ── Global ────────────────────────────────────────────────────────────────────
+nameOverride: ""
+fullnameOverride: ""
+
+# ── Backend ───────────────────────────────────────────────────────────────────
+backend:
+  image:
+    repository: ghcr.io/your-org/lyndon-llm-backend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+  persistence:
+    size: 5Gi
+    storageClass: ""      # "" uses the cluster default
+
+  service:
+    port: 8000
+
+  # Non-secret environment configuration
+  config:
+    environment: production
+    debug: "false"
+    llmBaseUrl: "http://localhost:11434/v1"
+    llmModel: "llama3.2"
+    llmMaxTokens: "4096"
+    llmTemperature: "0.7"
+    llmStream: "true"
+    embeddingModel: "nomic-embed-text"
+    embeddingBaseUrl: "http://localhost:11434/v1"
+    embeddingDimension: "768"
+    webSearchProvider: "duckduckgo"
+    webSearchMaxResults: "5"
+    # JSON list of allowed CORS origins — update for production
+    corsOrigins: '["https://your-domain.com"]'
+    langfuseHost: "https://jp.cloud.langfuse.com"
+    sessionTtlSeconds: "86400"
+    jwtAlgorithm: "HS256"
+    jwtExpireDays: "30"
+
+  # ── Secret supply — pick ONE of the two methods below ─────────────────────
+  #
+  # Method A — SOPS-encrypted values file (recommended):
+  #   Secrets are encrypted at rest and safe to commit. See .sops.yaml and
+  #   deploy/values-secrets.yaml.example for the full one-time setup.
+  #   Quick summary:
+  #     brew install age sops && helm plugin install https://github.com/jkroepke/helm-secrets
+  #     age-keygen -o ~/.config/sops/age/keys.txt          # generate age key
+  #     # paste public key into .sops.yaml, then:
+  #     cp deploy/values-secrets.yaml.example deploy/values-secrets.yaml
+  #     sops --encrypt --in-place deploy/values-secrets.yaml
+  #     git add deploy/values-secrets.yaml                 # safe — ciphertext only
+  #     helm secrets install lyndon-llm ./deploy \
+  #       -f deploy/values.yaml \
+  #       -f deploy/values-secrets.yaml
+  #
+  # Method B — Pre-existing Secret (for production clusters / ESO / Vault):
+  #   1. Create the Secret in the target namespace with the keys listed below.
+  #   2. Set existingSecret to its name; the chart will skip creating its own Secret.
+  #      helm install lyndon-llm ./deploy --set backend.existingSecret=my-lyndon-secret
+  #
+  # When existingSecret is set, the `secrets` block below is ignored entirely.
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # Name of a pre-existing Secret to use instead of chart-managed secret creation.
+  # Leave empty to let the chart create the Secret from the `secrets` block.
+  existingSecret: ""
+
+  # Chart-managed secret values — leave all empty here; supply via values-secrets.yaml.
+  # Required keys (must also be present when using existingSecret):
+  #   LLM_API_KEY, EMBEDDING_API_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY,
+  #   JWT_SECRET_KEY, QDRANT_API_KEY
+  secrets:
+    llmApiKey: ""            # LLM provider API key (leave empty for local Ollama)
+    embeddingApiKey: ""      # Embedding provider API key (leave empty for local Ollama)
+    langfusePublicKey: ""    # Langfuse public key  (pk-lf-…)
+    langfuseSecretKey: ""    # Langfuse secret key  (sk-lf-…)
+    jwtSecretKey: ""         # Random 32-byte hex — generate: openssl rand -hex 32
+    qdrantApiKey: ""         # Qdrant API key (leave empty to run Qdrant without auth)
+
+# ── Frontend ──────────────────────────────────────────────────────────────────
+frontend:
+  image:
+    repository: ghcr.io/your-org/lyndon-llm-frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+  service:
+    port: 80
+
+  # Seconds nginx waits for SSE / streaming responses before timeout
+  proxyReadTimeout: "300s"
+
+# ── Qdrant ────────────────────────────────────────────────────────────────────
+qdrant:
+  image:
+    repository: qdrant/qdrant
+    tag: v1.9.2
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+
+  persistence:
+    size: 10Gi
+    storageClass: ""      # "" uses the cluster default
+
+  service:
+    httpPort: 6333
+    grpcPort: 6334

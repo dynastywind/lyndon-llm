@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lyndon-llm.fullname" . }}-qdrant
+  labels:
+    {{- include "lyndon-llm.labels" . | nindent 4 }}
+    app.kubernetes.io/component: qdrant
+spec:
+  replicas: {{ .Values.qdrant.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "lyndon-llm.fullname" . }}-qdrant
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "lyndon-llm.fullname" . }}-qdrant
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: qdrant
+    spec:
+      containers:
+        - name: qdrant
+          image: "{{ .Values.qdrant.image.repository }}:{{ .Values.qdrant.image.tag }}"
+          imagePullPolicy: {{ .Values.qdrant.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 6333
+            - name: grpc
+              containerPort: 6334
+          {{- if .Values.backend.secrets.qdrantApiKey }}
+          env:
+            - name: QDRANT__SERVICE__API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lyndon-llm.fullname" . }}-backend-secret
+                  key: QDRANT_API_KEY
+          {{- end }}
+          volumeMounts:
+            - name: storage
+              mountPath: /qdrant/storage
+          resources:
+            {{- toYaml .Values.qdrant.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 6333
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 6333
+            initialDelaySeconds: 30
+            periodSeconds: 20
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: {{ include "lyndon-llm.fullname" . }}-qdrant

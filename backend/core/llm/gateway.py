@@ -20,8 +20,10 @@ if settings.langfuse_secret_key and settings.langfuse_public_key:
     from langfuse import Langfuse
     from langfuse.openai import AsyncOpenAI  # type: ignore[assignment]
 
-    # v4 requires explicit instantiation to register the OTEL tracer provider
-    Langfuse(
+    # v4 requires explicit instantiation to register the OTEL tracer provider.
+    # Store as module-level singleton so other modules (e.g. engine.py) can
+    # reuse the same instance and share its tracer provider.
+    langfuse_client = Langfuse(
         public_key=settings.langfuse_public_key,
         secret_key=settings.langfuse_secret_key,
         host=settings.langfuse_host,

@@ -4,7 +4,7 @@ import asyncio
 from datetime import UTC, datetime
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,8 +68,17 @@ def _sse(event_type: str, data: dict) -> str:
     return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
 
+def _service_name(request: Request) -> str:
+    """Derive Langfuse service name from the request Origin header."""
+    origin = request.headers.get("origin", "")
+    if "tauri" in origin:
+        return "lyndon.llm.desktop"
+    return "lyndon.llm.web"
+
+
 @router.post("/")
 async def chat(
+    request: Request,
     body: ChatRequest,
     session: Session = Depends(get_session),
     db: AsyncSession = Depends(get_db),
@@ -79,6 +88,7 @@ async def chat(
 
     attachments = [a.model_dump() for a in body.attachments] if body.attachments else None
     user_id = user.id if user else None
+    service_name = _service_name(request)
 
     # Create the in-memory event buffer and mark the session as streaming in DB
     buf = stream_registry.start(session.session_id)
@@ -91,7 +101,7 @@ async def chat(
 
         try:
             async with AsyncSessionLocal() as task_db:
-                engine = ChatEngine(session, db=task_db, user_id=user_id)
+                engine = ChatEngine(session, db=task_db, user_id=user_id, service_name=service_name)
                 async for event in engine.stream_response(
                     body.message,
                     attachments=attachments,

@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from api.auth_deps import get_current_user
+from api.auth_deps import get_current_user, get_optional_user
 from db.base import AsyncSessionLocal
 from db.models.user import User
 from db.repos.skill import SkillRepo
@@ -56,7 +56,9 @@ def _skill_out(skill) -> dict[str, Any]:
 
 
 @router.get("")
-async def list_skills(user: User = Depends(get_current_user)):
+async def list_skills(user: User | None = Depends(get_optional_user)):
+    if user is None:
+        return []
     async with AsyncSessionLocal() as db:
         repo = SkillRepo(db)
         skills = await repo.list_skills(user.id)
