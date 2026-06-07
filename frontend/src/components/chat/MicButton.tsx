@@ -3,22 +3,29 @@ import { useAudioRecorder } from '@/hooks/useAudioRecorder'
 import { useT } from '@/i18n'
 
 /**
- * Circular mic button for the message composer. Records via the microphone and
- * inserts the transcription through `onTranscript`. Styled to match the
- * attachment button (28×28, gold accent when active).
+ * Mic button for the message composer. Records via the microphone and inserts
+ * the transcription through `onTranscript`.
+ *
+ * - `round` (default) — 28×28 circle, matches the attachment button.
+ * - `square` — 40×40 rounded rect, matches the send button when placed beside it.
  */
 export function MicButton({
   onTranscript,
   disabled = false,
+  variant = 'round',
 }: {
   onTranscript: (text: string) => void
   disabled?: boolean
+  variant?: 'round' | 'square'
 }) {
   const { t } = useT()
   const { recording, transcribing, error, toggle } = useAudioRecorder(onTranscript)
 
   const active = recording || transcribing
   const title = error ?? (recording ? t('voice.stop') : t('voice.record'))
+  const square = variant === 'square'
+  const size = square ? 40 : 28
+  const iconSize = square ? 16 : 14
 
   return (
     <button
@@ -29,10 +36,10 @@ export function MicButton({
       aria-label={title}
       aria-pressed={recording}
       style={{
-        width: 28,
-        height: 28,
+        width: size,
+        height: size,
         flexShrink: 0,
-        borderRadius: '50%',
+        borderRadius: square ? 4 : '50%',
         border: `1px solid ${active ? 'var(--lv-gold)' : 'var(--lv-rule-strong)'}`,
         background: 'none',
         cursor: disabled || transcribing ? 'default' : 'pointer',
@@ -51,11 +58,11 @@ export function MicButton({
         }
       `}</style>
       {transcribing ? (
-        <Loader2 size={14} className="animate-spin" />
+        <Loader2 size={iconSize} className="animate-spin" />
       ) : recording ? (
-        <Square size={12} fill="currentColor" />
+        <Square size={square ? 16 : 12} fill="currentColor" />
       ) : (
-        <Mic size={14} />
+        <Mic size={iconSize} />
       )}
     </button>
   )

@@ -3230,6 +3230,13 @@ export function ChatWindow() {
                   />
                 </div>
 
+                {/* Voice-to-text — left of the send button */}
+                <MicButton
+                  onTranscript={appendTranscript}
+                  disabled={isStreaming}
+                  variant="square"
+                />
+
                 {/* Send / Stop button — gold rectangle */}
                 <button
                   type={isStreaming ? 'button' : 'submit'}
