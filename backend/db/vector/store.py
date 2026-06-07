@@ -36,8 +36,11 @@ class VectorStoreBase:
 
 
 class ChromaVectorStore(VectorStoreBase):
-    def __init__(self, collection_name: str) -> None:
+    def __init__(self, collection_name: str, vector_size: int | None = None) -> None:
         self._collection_name = collection_name
+        # Chroma infers the vector dimension from the first insert, so vector_size
+        # is accepted for interface symmetry with Qdrant but not used here.
+        self._vector_size = vector_size
         self._col = None  # lazy — connect on first use
 
     def _get_col(self):
@@ -108,7 +111,7 @@ class ChromaVectorStore(VectorStoreBase):
 
 
 class QdrantVectorStore(VectorStoreBase):
-    def __init__(self, collection_name: str) -> None:
+    def __init__(self, collection_name: str, vector_size: int | None = None) -> None:
         from qdrant_client import QdrantClient
         from qdrant_client.models import Distance, VectorParams
 
@@ -118,13 +121,17 @@ class QdrantVectorStore(VectorStoreBase):
             port=settings.qdrant_port,
             api_key=settings.qdrant_api_key or None,
         )
+        # Each collection may use a different vector dimension (e.g. nomic text =
+        # 768, CLIP image = 512). Qdrant must be told the size at creation time;
+        # default to the text embedding dimension when not specified.
+        size = vector_size or settings.embedding_dimension
         # Create collection if it doesn't exist
         existing = [c.name for c in self._client.get_collections().collections]
         if collection_name not in existing:
             self._client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(
-                    size=settings.embedding_dimension,
+                    size=size,
                     distance=Distance.COSINE,
                 ),
             )
@@ -234,14 +241,20 @@ class QdrantVectorStore(VectorStoreBase):
 _instances: dict[str, VectorStoreBase] = {}
 
 
-async def get_vector_store(collection_name: str) -> VectorStoreBase:
+async def get_vector_store(
+    collection_name: str, vector_size: int | None = None
+) -> VectorStoreBase:
     """Return (and cache) the right vector store backend.
     ChromaVectorStore connects lazily, so caching the instance is always safe —
     a failed connection just means the next call to _get_col() will retry.
+
+    *vector_size* sets the collection's vector dimension at creation time. It only
+    takes effect the first time a given collection is opened (each collection has
+    a fixed dimension, so the instance is cached by name alone).
     """
     if collection_name not in _instances:
         if settings.vector_store_backend == VectorStoreBackend.qdrant:
-            _instances[collection_name] = QdrantVectorStore(collection_name)
+            _instances[collection_name] = QdrantVectorStore(collection_name, vector_size)
         else:
-            _instances[collection_name] = ChromaVectorStore(collection_name)
+            _instances[collection_name] = ChromaVectorStore(collection_name, vector_size)
     return _instances[collection_name]

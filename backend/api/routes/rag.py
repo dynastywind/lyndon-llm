@@ -11,12 +11,14 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from api.auth_deps import get_current_user
+from chat.rag.ingestion.loader import IMAGE_EXTENSIONS
 from chat.rag.ingestion.pipeline import IngestPipeline, ingest_pipeline
+from config.settings import settings
 from db.models.user import User
 
 router = APIRouter()
 
-ALLOWED_EXTENSIONS = {
+_TEXT_EXTENSIONS = {
     ".pdf",
     ".md",
     ".mdx",
@@ -31,6 +33,15 @@ ALLOWED_EXTENSIONS = {
     ".java",
     ".cpp",
     ".c",
+}
+ALLOWED_EXTENSIONS = _TEXT_EXTENSIONS | IMAGE_EXTENSIONS
+
+_IMAGE_MIME = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
 }
 
 # Stable upload directory — kept across restarts so the source path in
@@ -57,6 +68,24 @@ def _assert_upload_access(p: Path, user_id: str) -> None:
     # rel.parts[0] is either the user_id subdirectory or the bare filename
     if len(rel.parts) > 1 and rel.parts[0] != user_id:
         raise HTTPException(403, "Access denied")
+
+
+async def _all_user_metas(user_id: str) -> list[dict]:
+    """Return chunk metadata owned by *user_id* across both the text and image
+    collections, so management endpoints surface every indexed source.
+    """
+    from db.vector.store import get_vector_store
+
+    collections = (
+        (IngestPipeline.COLLECTION_NAME, None),
+        (settings.image_collection_name, settings.clip_dimension),
+    )
+    out: list[dict] = []
+    for name, vsize in collections:
+        vs = await get_vector_store(name, vector_size=vsize)
+        _ids, _docs, metas = await vs.list_all(limit=100_000)
+        out.extend(m for m in metas if m.get("user_id") == user_id)
+    return out
 
 
 @router.post("/upload")
@@ -111,15 +140,11 @@ async def get_source_content(
     PDFs are served as binary (FileResponse).
     All other file types are returned as JSON ``{"content": str, "ext": str}``.
 
-    Ownership is verified via ChromaDB metadata rather than path inspection so
-    that files ingested from outside the uploads directory (e.g. via the chat
+    Ownership is verified via vector-store metadata rather than path inspection
+    so that files ingested from outside the uploads directory (e.g. via the chat
     ingest tool) can still be viewed by the user who indexed them.
     """
-    from db.vector.store import get_vector_store
-
-    vs = await get_vector_store(IngestPipeline.COLLECTION_NAME)
-    _ids, _docs, metas = await vs.list_all(limit=100_000)
-    user_sources = {meta.get("source", "") for meta in metas if meta.get("user_id") == user.id}
+    user_sources = {m.get("source", "") for m in await _all_user_metas(user.id)}
     if source not in user_sources:
         raise HTTPException(403, "Access denied")
 
@@ -127,15 +152,18 @@ async def get_source_content(
     if not p.exists():
         raise HTTPException(404, "File not found on disk")
 
-    if p.suffix.lower() == ".pdf":
+    ext = p.suffix.lower()
+    if ext == ".pdf":
         return FileResponse(path=str(p), media_type="application/pdf", filename=p.name)
+    if ext in _IMAGE_MIME:
+        return FileResponse(path=str(p), media_type=_IMAGE_MIME[ext], filename=p.name)
 
     try:
         content = p.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
         raise HTTPException(415, "File cannot be read as text") from exc
 
-    return {"content": content, "ext": p.suffix.lower()}
+    return {"content": content, "ext": ext}
 
 
 @router.get("/sources")
@@ -148,17 +176,13 @@ async def list_sources(
     """
     Return paginated sources for the authenticated user with chunk counts and
     file size.  Supports optional name search and limit/offset pagination.
+    Aggregates both the text and image collections.
     """
-    from db.vector.store import get_vector_store
-
-    vs = await get_vector_store(IngestPipeline.COLLECTION_NAME)
-    _ids, _docs, metas = await vs.list_all(limit=100_000)
+    metas = await _all_user_metas(user.id)
 
     # Count chunks per source for this user
     counts: dict[str, int] = {}
     for meta in metas:
-        if meta.get("user_id") != user.id:
-            continue
         src = meta.get("source", "")
         if src:
             counts[src] = counts.get(src, 0) + 1
@@ -210,12 +234,17 @@ async def delete_source(
 ):
     """
     Remove all chunks for the given source from the vector store and
-    (by default) delete the file from disk.
+    (by default) delete the file from disk. The source may live in either the
+    text or the image collection, so both are cleared (idempotent where absent).
     """
     from db.vector.store import get_vector_store
 
-    vs = await get_vector_store(IngestPipeline.COLLECTION_NAME)
-    await vs.delete_by_source(source)
+    for name, vsize in (
+        (IngestPipeline.COLLECTION_NAME, None),
+        (settings.image_collection_name, settings.clip_dimension),
+    ):
+        vs = await get_vector_store(name, vector_size=vsize)
+        await vs.delete_by_source(source)
 
     if delete_file:
         p = Path(source)

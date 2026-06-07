@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AlertCircle, CheckCircle2, Eye, Loader2, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Eye, Loader2, RefreshCw, Trash2, X } from 'lucide-react'
 import {
   checkRagSourceName,
   deleteAvatar,
@@ -17,6 +17,7 @@ import { useAppStore } from '@/store'
 import { useT } from '@/i18n'
 import { CODE_THEME_OPTIONS } from '@/config/codeThemes'
 import { FileViewerModal } from './FileViewerModal'
+import { ImageThumbnail } from './ImageThumbnail'
 import { PdfPageThumbnail } from './PdfPageThumbnail'
 import { SkillsPanel } from './SkillsPanel'
 import { ToolsRegistryPanel } from './ToolsRegistryPanel'
@@ -43,8 +44,24 @@ interface Props {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-const ACCEPTED = '.pdf,.md,.mdx,.txt,.py,.ts,.tsx,.js,.jsx,.go,.rs,.java,.cpp,.c'
+const ACCEPTED =
+  '.pdf,.md,.mdx,.txt,.py,.ts,.tsx,.js,.jsx,.go,.rs,.java,.cpp,.c,.jpg,.jpeg,.png,.gif,.webp'
 const PAGE_SIZE = 10
+
+// Allowed extensions, derived from ACCEPTED so the two never drift apart.
+const ALLOWED_EXTS = new Set(ACCEPTED.split(',').map((e) => e.replace('.', '').toLowerCase()))
+
+function isSupportedFile(name: string): boolean {
+  const dot = name.lastIndexOf('.')
+  if (dot === -1) return false
+  return ALLOWED_EXTS.has(name.slice(dot + 1).toLowerCase())
+}
+
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp'])
+
+function isImagePath(path: string): boolean {
+  return IMAGE_EXTS.has((path.split('.').pop() ?? '').toLowerCase())
+}
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -73,6 +90,11 @@ function fileTypeLabel(path: string): string {
     java: 'CODE',
     cpp: 'CODE',
     c: 'CODE',
+    jpg: 'IMAGE',
+    jpeg: 'IMAGE',
+    png: 'IMAGE',
+    gif: 'IMAGE',
+    webp: 'IMAGE',
   }
   return map[ext] ?? (ext.toUpperCase() || 'FILE')
 }
@@ -210,6 +232,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
 
   // ── knowledge state ──────────────────────────────────────────────────────
   const [queue, setQueue] = useState<UploadItem[]>([])
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const [sources, setSources] = useState<RagSource[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(0)
@@ -322,7 +345,20 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
   const enqueue = useCallback(
     async (files: FileList | File[]) => {
       const fileArr = Array.from(files)
-      const items: UploadItem[] = fileArr.map((file) => ({
+      // Reject unsupported file types up front: never add them to the queue —
+      // surface an error and skip them. Supported files proceed as normal.
+      const unsupported = fileArr.filter((f) => !isSupportedFile(f.name))
+      const supported = fileArr.filter((f) => isSupportedFile(f.name))
+      if (unsupported.length) {
+        setUploadError(
+          t('settings.knowledge.queue.unsupported', {
+            names: unsupported.map((f) => f.name).join(', '),
+          }),
+        )
+      }
+      if (!supported.length) return
+
+      const items: UploadItem[] = supported.map((file) => ({
         id: `${file.name}-${Date.now()}-${Math.random()}`,
         file,
         status: 'checking',
@@ -343,8 +379,15 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
         }
       }
     },
-    [uploadOne],
+    [uploadOne, t],
   )
+
+  // Auto-dismiss the unsupported-file error after a few seconds.
+  useEffect(() => {
+    if (!uploadError) return
+    const id = setTimeout(() => setUploadError(null), 5000)
+    return () => clearTimeout(id)
+  }, [uploadError])
 
   const handleReindex = async (src: RagSource) => {
     setReindexing(src.path)
@@ -1271,6 +1314,43 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                     </KbButton>
                   </div>
 
+                  {/* Unsupported-file error */}
+                  {uploadError && (
+                    <div
+                      role="alert"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        marginTop: 12,
+                        padding: '10px 12px',
+                        border: '1px solid #dc2626',
+                        background: 'rgba(220,38,38,0.08)',
+                        color: '#dc2626',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 12,
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      <AlertCircle size={14} style={{ flexShrink: 0 }} />
+                      <span style={{ flex: 1 }}>{uploadError}</span>
+                      <button
+                        onClick={() => setUploadError(null)}
+                        aria-label={t('fileViewer.close')}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: '#dc2626',
+                          display: 'flex',
+                          padding: 2,
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
+
                   {/* Upload queue */}
                   {queue.length > 0 && (
                     <div style={{ paddingTop: 8, borderBottom: '1px solid var(--lv-rule)' }}>
@@ -2128,6 +2208,8 @@ function KnowledgeRow({
       >
         {ext.toLowerCase() === 'pdf' ? (
           <PdfPageThumbnail source={src.path} containerWidth={62} containerHeight={50} />
+        ) : isImagePath(src.path) ? (
+          <ImageThumbnail source={src.path} containerWidth={62} containerHeight={50} />
         ) : (
           <span
             style={{

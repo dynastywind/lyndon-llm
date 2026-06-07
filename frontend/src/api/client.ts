@@ -685,7 +685,9 @@ export async function deleteRagSource(source: string, deleteFile = true): Promis
   if (!res.ok) throw new Error(`Failed to delete source: ${res.statusText}`)
 }
 
-export async function fetchRagSourceContent(source: string, isPdf: boolean): Promise<string> {
+// Set asBinary for files served as raw bytes (PDF, images) — returns an object
+// URL for a Blob. For text/code files it returns the decoded text content.
+export async function fetchRagSourceContent(source: string, asBinary: boolean): Promise<string> {
   const res = await fetch(`${BASE}/rag/sources/content?source=${encodeURIComponent(source)}`, {
     headers: authHeader(),
   })
@@ -693,7 +695,7 @@ export async function fetchRagSourceContent(source: string, isPdf: boolean): Pro
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error((err as { detail?: string }).detail ?? res.statusText)
   }
-  if (isPdf) {
+  if (asBinary) {
     const blob = await res.blob()
     return URL.createObjectURL(blob)
   }

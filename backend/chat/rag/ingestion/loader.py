@@ -9,6 +9,10 @@ from pathlib import Path
 import re
 from typing import Protocol
 
+# Image files are embedded with CLIP (see ImageRetriever / IngestPipeline) and
+# never reach a text Loader — they are routed in the ingest pipeline directly.
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+
 
 class RawDocument:
     def __init__(self, content: str, source: str, metadata: dict | None = None):

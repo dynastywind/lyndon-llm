@@ -16,7 +16,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from chat.rag.retriever import HybridRetriever
+from chat.rag.retriever import HybridRetriever, ImageRetriever, RetrievedChunk
 from db.repos.chat import ChatRepo
 from db.repos.project import ProjectRepo
 
@@ -77,3 +77,31 @@ async def build_project_block(
     except Exception:  # noqa: BLE001 — context is best-effort; never break the turn
         logger.exception("build_project_block failed for session %s", session_id)
         return ""
+
+
+async def retrieve_project_images(
+    db: AsyncSession | None,
+    session_id: str,
+    query: str,
+    user_id: str | None = None,
+) -> list[RetrievedChunk]:
+    """Return project-scoped image chunks for *session_id*, or [] if none apply.
+
+    Mirrors the project-scoped text RAG in ``build_project_block`` but for the
+    CLIP image collection — so a project's chats surface that project's images
+    every turn, just like its text files. Best-effort: never raises. Only the
+    streaming chat path calls this (it injects the actual pixels); planner and
+    cowork paths build text-only prompts and skip it, so they pay no CLIP cost.
+    """
+    if db is None or not session_id:
+        return []
+    try:
+        session = await ChatRepo(db).get_session(session_id)
+        if session is None or not session.project_id:
+            return []
+        return await ImageRetriever().retrieve(
+            query, user_id=user_id, project_id=session.project_id
+        )
+    except Exception:  # noqa: BLE001 — best-effort; never break the turn
+        logger.exception("project image retrieval failed for session %s", session_id)
+        return []

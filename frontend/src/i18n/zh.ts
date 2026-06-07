@@ -127,6 +127,7 @@ export const zh: Dict = {
         queued: '排队中',
         replace: '替换',
         skip: '跳过',
+        unsupported: '不支持的文件类型，未添加：{names}',
       },
       row: {
         chunks_one: '{count} 个分块',

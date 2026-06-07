@@ -18,6 +18,25 @@ class RetrievedChunk:
     metadata: dict
 
 
+def _scope_where(user_id: str | None, project_id: str | None) -> dict | None:
+    """Build a metadata filter scoping results to a user and/or project.
+
+    Chroma requires ``$and`` to combine more than one clause; Qdrant's adapter
+    treats a flat ``{key: value}`` dict as an AND of field matches, so the
+    single-clause and multi-clause shapes both translate cleanly.
+    """
+    clauses = []
+    if user_id:
+        clauses.append({"user_id": user_id})
+    if project_id:
+        clauses.append({"project_id": project_id})
+    if len(clauses) > 1:
+        return {"$and": clauses}
+    if clauses:
+        return clauses[0]
+    return None
+
+
 class HybridRetriever:
     COLLECTION_NAME = "rag_knowledge_base"
 
@@ -49,18 +68,8 @@ class HybridRetriever:
         embeddings = await llm_gateway.embed([query])
         vs = await self._get_vector_store()
         # Scope by user, and (when given) by project so a project's chats only
-        # see that project's uploaded files. Chroma needs $and for >1 clause.
-        clauses = []
-        if user_id:
-            clauses.append({"user_id": user_id})
-        if project_id:
-            clauses.append({"project_id": project_id})
-        if len(clauses) > 1:
-            where = {"$and": clauses}
-        elif clauses:
-            where = clauses[0]
-        else:
-            where = None
+        # see that project's uploaded files.
+        where = _scope_where(user_id, project_id)
         results = await vs.query(
             query_embeddings=[embeddings[0]],
             n_results=k,
@@ -133,5 +142,68 @@ class HybridRetriever:
         return [chunk_map[key] for key, _ in ranked]
 
 
-# Module-level singleton
+class ImageRetriever:
+    """Cross-modal image retrieval over the CLIP image collection.
+
+    Embeds the text query with CLIP's *text* encoder and searches the dedicated
+    image collection (CLIP image vectors). Results below the similarity
+    threshold are dropped so unrelated images are never injected into chat.
+    """
+
+    def __init__(self) -> None:
+        self._vector_store = None
+
+    async def _get_vector_store(self):
+        if self._vector_store is None:
+            from db.vector.store import get_vector_store
+
+            self._vector_store = await get_vector_store(
+                settings.image_collection_name, vector_size=settings.clip_dimension
+            )
+        return self._vector_store
+
+    async def retrieve(
+        self,
+        query: str,
+        top_k: int | None = None,
+        user_id: str | None = None,
+        project_id: str | None = None,
+    ) -> list[RetrievedChunk]:
+        from core.llm.clip_embedder import clip_embedder
+
+        vs = await self._get_vector_store()
+        # Cheap gate: don't load the CLIP model (~350 MB) or text-encode when no
+        # images have been indexed at all. Keeps text-only users on the fast path.
+        ids, _docs, _metas = await vs.list_all(limit=1)
+        if not ids:
+            return []
+
+        k = int(top_k or settings.rag_image_top_k)
+        vec = (await clip_embedder.embed_texts([query]))[0]
+        where = _scope_where(user_id, project_id)
+        results = await vs.query(query_embeddings=[vec], n_results=k, where=where)
+
+        chunks: list[RetrievedChunk] = []
+        for doc, meta, dist in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
+            strict=False,
+        ):
+            similarity = 1.0 - float(dist)
+            if similarity < settings.rag_image_min_similarity:
+                continue
+            chunks.append(
+                RetrievedChunk(
+                    content=doc,
+                    source=meta.get("source", meta.get("filename", "unknown")),
+                    score=similarity,
+                    metadata=meta,
+                )
+            )
+        return chunks
+
+
+# Module-level singletons
 retriever = HybridRetriever()
+image_retriever = ImageRetriever()

@@ -35,8 +35,8 @@ from chat.orchestrator import (
     kb_has_sources,
     legacy_route_decision,
 )
-from chat.project_context import build_project_block
-from chat.rag.retriever import HybridRetriever, RetrievedChunk
+from chat.project_context import build_project_block, retrieve_project_images
+from chat.rag.retriever import HybridRetriever, ImageRetriever, RetrievedChunk
 from config.settings import settings
 from core.events.bus import Events, event_bus
 from core.llm.gateway import LLMUsage, llm_gateway
@@ -169,11 +169,36 @@ class _Timer:
         return round((time.monotonic() - self._t0) * 1000)
 
 
-def _format_context(chunks: list[RetrievedChunk]) -> str:
-    if not chunks:
+def _format_context(
+    chunks: list[RetrievedChunk],
+    image_chunks: list[RetrievedChunk] | None = None,
+) -> str:
+    image_chunks = image_chunks or []
+    if not chunks and not image_chunks:
         return ""
     parts = [f"[{i}] Source: {c.source}\n{c.content}" for i, c in enumerate(chunks, 1)]
+    # Images are attached below as actual image content; the marker tells the
+    # model which retrieved images it is looking at and where they came from.
+    for c in image_chunks:
+        name = c.metadata.get("filename") or c.source
+        parts.append(f"[image] {name} (attached below for visual reference)")
     return "## Retrieved context\n\n" + "\n\n---\n\n".join(parts)
+
+
+def _dedupe_by_source(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
+    """Drop duplicate chunks sharing a source path, preserving first-seen order.
+
+    A project image carries both user_id and project_id, so the global
+    (user-scoped) and project-scoped retrievals can both surface it — keep one.
+    """
+    seen: set[str] = set()
+    out: list[RetrievedChunk] = []
+    for c in chunks:
+        if c.source in seen:
+            continue
+        seen.add(c.source)
+        out.append(c)
+    return out
 
 
 def _extract_skill_md_body(skill_md: str) -> str:
@@ -200,6 +225,7 @@ class ChatEngine:
         self.service_name = service_name
         self.memory = MemoryManager(session.session_id, user_id=user_id)
         self._retriever = HybridRetriever()
+        self._image_retriever = ImageRetriever()
         self._db = db
         # Build a permission gate scoped to the session's mode (chat/cowork/code)
         self._gate = PermissionGate(session.mode)
@@ -337,9 +363,17 @@ class ChatEngine:
 
         # 3. Retrieve RAG context when orchestrator requests it
         rag_chunks: list[RetrievedChunk] = []
+        image_chunks: list[RetrievedChunk] = []
         if decision.needs_rag:
             rag_chunks = await self._retrieve(user_message)
-        context_block = _format_context(rag_chunks)
+            image_chunks = await self._retrieve_images(user_message)
+        # Project-scoped images run every turn (parity with project text RAG in
+        # build_project_block), then merge + dedupe with any global image matches.
+        project_images = await retrieve_project_images(
+            self._db, self.session.session_id, user_message, self.user_id
+        )
+        image_chunks = _dedupe_by_source(image_chunks + project_images)
+        context_block = _format_context(rag_chunks, image_chunks)
         if decision.needs_rag:
             timer.mark("rag_ms")
 
@@ -381,6 +415,10 @@ class ChatEngine:
         # patch the last user message to multimodal content *after* memory is
         # updated so compression always operates on plain text.
         llm_messages = _inject_attachments(self.memory.get_messages(), attachments or [])
+        # Inject any RAG-retrieved images (actual pixels) so vision-capable models
+        # can reason over them — the system prompt only carries a textual marker.
+        if image_chunks:
+            llm_messages = _inject_rag_images(llm_messages, image_chunks)
 
         # 4b. First-message context injection (LLM copy only — invisible to user)
         #   • custom_system_prompt: global rules the user set in Settings; arrives
@@ -901,6 +939,14 @@ class ChatEngine:
         except Exception:
             return []
 
+    async def _retrieve_images(self, query: str) -> list[RetrievedChunk]:
+        """Cross-modal image retrieval. Never raises — a CLIP/model failure must
+        not break chat, so it degrades to no images."""
+        try:
+            return await self._image_retriever.retrieve(query, user_id=self.user_id)
+        except Exception:
+            return []
+
     async def close(self) -> None:
         await self.memory.end_session()
 
@@ -1117,6 +1163,60 @@ def _inject_attachments(messages: list[dict], attachments: list[dict]) -> list[d
             else:
                 new_content = combined_text
 
+            patched[i] = {**patched[i], "content": new_content}
+            break
+
+    return patched
+
+
+def _inject_rag_images(messages: list[dict], image_chunks: list[RetrievedChunk]) -> list[dict]:
+    """Append RAG-retrieved images as ``image_url`` blocks on the last user message.
+
+    The textual marker is already in the system prompt (see ``_format_context``);
+    this adds the actual pixels so vision-capable models can reason over them.
+    Each image is downscaled (longest side ≤ 768 px) and JPEG-encoded to bound
+    the request payload. Images missing on disk are skipped silently.
+    """
+    import io
+    from pathlib import Path
+
+    from PIL import Image
+
+    max_side = 768
+
+    image_blocks: list[dict] = []
+    for chunk in image_chunks:
+        p = Path(chunk.source)
+        if not p.exists():
+            continue
+        try:
+            img = Image.open(p).convert("RGB")
+            longest = max(img.size)
+            if longest > max_side:
+                ratio = max_side / longest
+                img = img.resize(
+                    (int(img.width * ratio), int(img.height * ratio)), Image.LANCZOS
+                )
+            buf = io.BytesIO()
+            img.save(buf, format="JPEG", quality=85)
+            data = b64.b64encode(buf.getvalue()).decode()
+        except Exception:
+            continue
+        image_blocks.append(
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{data}"}}
+        )
+
+    if not image_blocks:
+        return messages
+
+    patched = list(messages)
+    for i in range(len(patched) - 1, -1, -1):
+        if patched[i].get("role") == "user":
+            existing = patched[i].get("content") or ""
+            if isinstance(existing, list):
+                new_content: list[dict] | str = existing + image_blocks
+            else:
+                new_content = [{"type": "text", "text": existing or " "}] + image_blocks
             patched[i] = {**patched[i], "content": new_content}
             break
 

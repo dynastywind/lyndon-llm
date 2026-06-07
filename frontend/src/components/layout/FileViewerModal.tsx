@@ -23,12 +23,23 @@ const MONACO_LANG: Record<string, string> = {
   txt: 'plaintext',
 }
 
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp'])
+
 function getExt(path: string): string {
   return (path.split('.').pop() ?? '').toLowerCase()
 }
 
 function isPdfPath(path: string): boolean {
   return getExt(path) === 'pdf'
+}
+
+function isImagePath(path: string): boolean {
+  return IMAGE_EXTS.has(getExt(path))
+}
+
+// PDFs and images are served as binary blobs (object URL); text/code as a string.
+function isBinaryPath(path: string): boolean {
+  return isPdfPath(path) || isImagePath(path)
 }
 
 // ── FileViewerModal ───────────────────────────────────────────────────────────
@@ -46,6 +57,7 @@ export function FileViewerModal({ src, onClose }: Props) {
   const blobUrlRef = useRef<string | null>(null)
 
   const isPdf = src !== null && isPdfPath(src.path)
+  const isImage = src !== null && isImagePath(src.path)
   const ext = src ? getExt(src.path) : ''
   const monacoLang = MONACO_LANG[ext] ?? 'plaintext'
 
@@ -62,10 +74,10 @@ export function FileViewerModal({ src, onClose }: Props) {
     setError(null)
     setLoading(true)
 
-    fetchRagSourceContent(src.path, isPdfPath(src.path))
+    fetchRagSourceContent(src.path, isBinaryPath(src.path))
       .then((result) => {
         if (cancelled) return
-        if (isPdfPath(src.path)) {
+        if (isBinaryPath(src.path)) {
           blobUrlRef.current = result
         }
         setContent(result)
@@ -240,6 +252,25 @@ export function FileViewerModal({ src, onClose }: Props) {
                     type="application/pdf"
                     style={{ width: '100%', height: '100%', border: 'none' }}
                   />
+                ) : isImage ? (
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: 16,
+                      boxSizing: 'border-box',
+                      overflow: 'auto',
+                    }}
+                  >
+                    <img
+                      src={content}
+                      alt={src?.name ?? ''}
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
+                    />
+                  </div>
                 ) : (
                   <MonacoEditor
                     height="100%"

@@ -130,6 +130,7 @@ export const en = {
         queued: 'Queued',
         replace: 'Replace',
         skip: 'Skip',
+        unsupported: 'Unsupported file type, not added: {names}',
       },
       row: {
         chunks_one: '{count} chunk',

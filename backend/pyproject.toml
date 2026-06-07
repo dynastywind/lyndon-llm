@@ -29,6 +29,9 @@ dependencies = [
     "pypdf>=4.2",
     "httpx>=0.27",
     "beautifulsoup4>=4.12",
+    # Image RAG (CLIP multimodal embeddings)
+    "open-clip-torch>=2.24",
+    "pillow>=10.0",
     # Web search
     "ddgs>=9.0",
     # Code block

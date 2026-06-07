@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     rag_top_k: int = 6
     rag_bm25_weight: float = 0.3  # hybrid retrieval weight
 
+    # Image RAG (CLIP multimodal — separate collection, app-level embeddings)
+    clip_model: str = "ViT-B-32"
+    clip_pretrained: str = "laion2b_s34b_b79k"
+    clip_dimension: int = 512  # ViT-B-32 output dim
+    image_collection_name: str = "rag_image_knowledge_base"
+    rag_image_top_k: int = 2  # max images retrieved per query
+    rag_image_min_similarity: float = 0.20  # cosine threshold to inject (tunable)
+
     # Chat orchestrator (route: direct | rag | tools | rag_and_tools | plan)
     orchestrator_enabled: bool = True
     orchestrator_strategy: str = "heuristic"  # heuristic | llm (future)
