@@ -228,6 +228,7 @@ export const en = {
     copy: 'Copy',
     copied: 'Copied!',
     rerun: 'Rerun',
+    stop: 'Stop',
     chartError: 'Chart could not be rendered: {message}',
     invalidChartSpec: 'invalid chart spec',
     toolCode: 'code',

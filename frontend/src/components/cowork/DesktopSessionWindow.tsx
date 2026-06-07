@@ -13,6 +13,7 @@ import {
   Check,
   Copy,
   RotateCcw,
+  Square,
   Loader2,
   ShieldAlert,
 } from 'lucide-react'
@@ -929,7 +930,7 @@ export function DesktopSessionWindow({ mode }: Props) {
     setPendingToolApproval,
   } = useAppStore()
 
-  const { send } = useStream()
+  const { send, stop } = useStream()
 
   const [inputText, setInputText] = useState('')
   const [models, setModels] = useState<string[]>([])
@@ -1193,16 +1194,17 @@ export function DesktopSessionWindow({ mode }: Props) {
               />
               <button
                 type="button"
-                onClick={() => void handleSend()}
-                disabled={!canSend}
+                onClick={() => (isStreaming ? stop(sessionId ?? '') : void handleSend())}
+                disabled={isStreaming ? false : !canSend}
+                title={isStreaming ? 'Stop' : undefined}
                 style={{
                   width: 32,
                   height: 32,
                   flexShrink: 0,
-                  background: canSend ? LV.gold : LV.rule,
-                  color: canSend ? LV.bg : LV.mute,
+                  background: canSend || isStreaming ? LV.gold : LV.rule,
+                  color: canSend || isStreaming ? LV.bg : LV.mute,
                   border: 'none',
-                  cursor: canSend ? 'pointer' : 'not-allowed',
+                  cursor: canSend || isStreaming ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1210,7 +1212,7 @@ export function DesktopSessionWindow({ mode }: Props) {
                   borderRadius: 4,
                 }}
               >
-                <Send size={15} />
+                {isStreaming ? <Square size={15} fill="currentColor" /> : <Send size={15} />}
               </button>
             </div>
           </div>
@@ -1509,16 +1511,17 @@ export function DesktopSessionWindow({ mode }: Props) {
             />
             <button
               type="button"
-              onClick={() => void handleSend()}
-              disabled={!canSend}
+              onClick={() => (isStreaming ? stop(sessionId ?? '') : void handleSend())}
+              disabled={isStreaming ? false : !canSend}
+              title={isStreaming ? 'Stop' : undefined}
               style={{
                 width: 28,
                 height: 28,
                 flexShrink: 0,
-                background: canSend ? LV.gold : LV.rule,
-                color: canSend ? LV.bg : LV.mute,
+                background: canSend || isStreaming ? LV.gold : LV.rule,
+                color: canSend || isStreaming ? LV.bg : LV.mute,
                 border: 'none',
-                cursor: canSend ? 'pointer' : 'not-allowed',
+                cursor: canSend || isStreaming ? 'pointer' : 'not-allowed',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1526,7 +1529,7 @@ export function DesktopSessionWindow({ mode }: Props) {
                 borderRadius: 4,
               }}
             >
-              <Send size={14} />
+              {isStreaming ? <Square size={14} fill="currentColor" /> : <Send size={14} />}
             </button>
           </div>
 

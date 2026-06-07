@@ -17,6 +17,7 @@ All yields are typed event dicts consumed by the SSE route:
 
 from __future__ import annotations
 
+import asyncio
 import base64 as b64
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
@@ -244,6 +245,7 @@ class ChatEngine:
         skill_id: str | None = None,
         skill_prefix: str | None = None,
         effort_mode: str | None = None,
+        cancel_event: asyncio.Event | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         with _langfuse_session_ctx(self.session.session_id, self.user_id, self.service_name):
             async for event in self._stream_response_inner(
@@ -255,6 +257,7 @@ class ChatEngine:
                 skill_id=skill_id,
                 skill_prefix=skill_prefix,
                 effort_mode=effort_mode,
+                cancel_event=cancel_event,
             ):
                 yield event
 
@@ -268,6 +271,7 @@ class ChatEngine:
         skill_id: str | None = None,
         skill_prefix: str | None = None,
         effort_mode: str | None = None,
+        cancel_event: asyncio.Event | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         timer = _Timer()
 
@@ -468,6 +472,8 @@ class ChatEngine:
 
             if fast_path_gen is not None:
                 async for event in fast_path_gen:
+                    if cancel_event and cancel_event.is_set():
+                        break
                     if event["type"] == "tool_result":
                         timer.mark("search_ms")
                     if event["type"] == "token":
@@ -502,6 +508,8 @@ class ChatEngine:
                     model=model,
                     force_tool_call=skill_pinned,
                 ):
+                    if cancel_event and cancel_event.is_set():
+                        break
                     if event["type"] == "token":
                         if cot_parser:
                             for evt_type, text in cot_parser.feed(event["text"]):
@@ -532,6 +540,8 @@ class ChatEngine:
                         yield event
         else:
             async for item in llm_gateway.stream_from_raw(llm_messages, model=model):
+                if cancel_event and cancel_event.is_set():
+                    break
                 if isinstance(item, LLMUsage):
                     total_usage += item
                     if cot_parser:
@@ -577,8 +587,7 @@ class ChatEngine:
         await self.memory.maybe_compress()
 
         # 8. Update per-session memory file (fire-and-forget — never blocks SSE)
-        import asyncio as _asyncio
-        _asyncio.create_task(
+        asyncio.create_task(
             self.memory.update_session_file(self.memory.short_term.last_n(20))
         )
 

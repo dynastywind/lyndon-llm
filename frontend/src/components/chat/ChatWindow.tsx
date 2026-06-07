@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Copy,
   RotateCcw,
+  Square,
   Plus,
   Puzzle,
   X,
@@ -2036,7 +2037,7 @@ export function ChatWindow() {
       .catch(() => setChatProject(null))
   }, [sessionId, sessionListVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const { send, resume } = useStream()
+  const { send, resume, stop } = useStream()
 
   // Each session keeps its own draft; initialise from store on mount.
   const [input, setInput] = useState(() => drafts[draftKey] ?? '')
@@ -2736,19 +2737,21 @@ export function ChatWindow() {
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
 
-                {/* Send button */}
+                {/* Send / Stop button */}
                 <button
-                  type="submit"
-                  disabled={!canSend}
+                  type={isStreaming ? 'button' : 'submit'}
+                  onClick={isStreaming ? () => stop(sessionId ?? '') : undefined}
+                  disabled={isStreaming ? false : !canSend}
+                  title={isStreaming ? t('chat.stop') : undefined}
                   style={{
                     marginLeft: 8,
                     width: 34,
                     height: 34,
                     flexShrink: 0,
-                    background: canSend ? 'var(--lv-gold)' : 'var(--lv-rule-strong)',
-                    color: canSend ? 'var(--lv-bg)' : 'var(--lv-mute)',
+                    background: canSend || isStreaming ? 'var(--lv-gold)' : 'var(--lv-rule-strong)',
+                    color: canSend || isStreaming ? 'var(--lv-bg)' : 'var(--lv-mute)',
                     border: 'none',
-                    cursor: canSend ? 'pointer' : 'not-allowed',
+                    cursor: canSend || isStreaming ? 'pointer' : 'not-allowed',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -2756,7 +2759,7 @@ export function ChatWindow() {
                     borderRadius: 6,
                   }}
                 >
-                  <Send size={16} />
+                  {isStreaming ? <Square size={14} fill="currentColor" /> : <Send size={16} />}
                 </button>
               </div>
             </form>
@@ -3204,18 +3207,20 @@ export function ChatWindow() {
                   />
                 </div>
 
-                {/* Send button — gold rectangle with arrow */}
+                {/* Send / Stop button — gold rectangle */}
                 <button
-                  type="submit"
-                  disabled={!canSend}
+                  type={isStreaming ? 'button' : 'submit'}
+                  onClick={isStreaming ? () => stop(sessionId ?? '') : undefined}
+                  disabled={isStreaming ? false : !canSend}
+                  title={isStreaming ? t('chat.stop') : undefined}
                   style={{
                     width: 40,
                     height: 40,
                     flexShrink: 0,
-                    background: canSend ? 'var(--lv-gold)' : 'var(--lv-rule-strong)',
-                    color: canSend ? 'var(--lv-bg)' : 'var(--lv-mute)',
+                    background: canSend || isStreaming ? 'var(--lv-gold)' : 'var(--lv-rule-strong)',
+                    color: canSend || isStreaming ? 'var(--lv-bg)' : 'var(--lv-mute)',
                     border: 'none',
-                    cursor: canSend ? 'pointer' : 'not-allowed',
+                    cursor: canSend || isStreaming ? 'pointer' : 'not-allowed',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -3223,7 +3228,7 @@ export function ChatWindow() {
                     borderRadius: 4,
                   }}
                 >
-                  {isStreaming ? <AsteriskAnimated size={16} /> : <Send size={18} />}
+                  {isStreaming ? <Square size={18} fill="currentColor" /> : <Send size={18} />}
                 </button>
               </div>
 

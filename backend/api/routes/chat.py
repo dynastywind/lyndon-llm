@@ -125,6 +125,7 @@ async def chat(
                     skill_id=body.skill_id or None,
                     skill_prefix=body.skill_prefix or None,
                     effort_mode=body.effort_mode or None,
+                    cancel_event=buf.cancelled,
                 ):
                     await buf.push(event)
             await buf.finish()
@@ -362,6 +363,19 @@ async def stream_status(session_id: str):
     from core.session.stream_registry import stream_registry
 
     return {"streaming": stream_registry.get(session_id) is not None}
+
+
+@router.post("/sessions/{session_id}/stream/cancel")
+async def cancel_stream(session_id: str):
+    """Stop an in-progress LLM stream.
+
+    Sets the buffer's cancel flag; the engine breaks at its next streamed event and
+    falls through to its normal persistence path, so the partial reply is saved. The
+    background task's ``finally`` clears the DB streaming flag and removes the buffer.
+    """
+    from core.session.stream_registry import stream_registry
+
+    return {"cancelled": stream_registry.cancel(session_id)}
 
 
 @router.get("/sessions/{session_id}/stream/resume")

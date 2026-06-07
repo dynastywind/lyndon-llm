@@ -231,57 +231,78 @@ export async function streamChat(
   mode: string = 'chat',
   requireToolApproval: boolean = false,
   workingDirectory?: string,
+  signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(`${BASE}/chat/`, {
-    method: 'POST',
-    headers: headers(sessionId, mode),
-    body: JSON.stringify({
-      message,
-      ...(attachments?.length ? { attachments } : {}),
-      ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
-      ...(sessionPrompt ? { session_prompt: sessionPrompt } : {}),
-      ...(model ? { model } : {}),
-      ...(skillId ? { skill_id: skillId } : {}),
-      ...(skillPrefix ? { skill_prefix: skillPrefix } : {}),
-      ...(effortMode ? { effort_mode: effortMode } : {}),
-      ...(requireToolApproval ? { require_tool_approval: true } : {}),
-      ...(workingDirectory ? { working_directory: workingDirectory } : {}),
-    }),
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE}/chat/`, {
+      method: 'POST',
+      headers: headers(sessionId, mode),
+      signal,
+      body: JSON.stringify({
+        message,
+        ...(attachments?.length ? { attachments } : {}),
+        ...(systemPrompt ? { system_prompt: systemPrompt } : {}),
+        ...(sessionPrompt ? { session_prompt: sessionPrompt } : {}),
+        ...(model ? { model } : {}),
+        ...(skillId ? { skill_id: skillId } : {}),
+        ...(skillPrefix ? { skill_prefix: skillPrefix } : {}),
+        ...(effortMode ? { effort_mode: effortMode } : {}),
+        ...(requireToolApproval ? { require_tool_approval: true } : {}),
+        ...(workingDirectory ? { working_directory: workingDirectory } : {}),
+      }),
+    })
+  } catch (err) {
+    // Aborted before headers arrived (user hit stop) — not a real error.
+    if ((err as Error)?.name === 'AbortError') return
+    throw err
+  }
   if (!res.ok) throw new Error(`Chat error: ${res.statusText}`)
 
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  try {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
 
-    buffer += decoder.decode(value, { stream: true })
+      buffer += decoder.decode(value, { stream: true })
 
-    // SSE messages are separated by \n\n
-    const parts = buffer.split('\n\n')
-    buffer = parts.pop() ?? '' // last element may be incomplete
+      // SSE messages are separated by \n\n
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() ?? '' // last element may be incomplete
 
-    for (const part of parts) {
-      if (!part.trim()) continue
-      let eventType = 'message'
-      let dataStr = ''
+      for (const part of parts) {
+        if (!part.trim()) continue
+        let eventType = 'message'
+        let dataStr = ''
 
-      for (const line of part.split('\n')) {
-        if (line.startsWith('event: ')) eventType = line.slice(7).trim()
-        else if (line.startsWith('data: ')) dataStr = line.slice(6)
-      }
+        for (const line of part.split('\n')) {
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim()
+          else if (line.startsWith('data: ')) dataStr = line.slice(6)
+        }
 
-      if (dataStr) {
-        try {
-          onEvent(eventType, JSON.parse(dataStr))
-        } catch {
-          // malformed JSON — skip
+        if (dataStr) {
+          try {
+            onEvent(eventType, JSON.parse(dataStr))
+          } catch {
+            // malformed JSON — skip
+          }
         }
       }
+    }
+  } catch (err) {
+    // Aborted mid-stream by the stop button — swallow so the caller ends cleanly.
+    if ((err as Error)?.name === 'AbortError') return
+    throw err
+  } finally {
+    try {
+      await reader.cancel()
+    } catch {
+      // reader already released/closed
     }
   }
 }
@@ -305,41 +326,76 @@ export async function getStreamStatus(sessionId: string): Promise<{ streaming: b
 export async function resumeStream(
   sessionId: string,
   onEvent: (type: string, data: Record<string, unknown>) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/stream/resume`, {
-    headers: authHeader(),
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE}/chat/sessions/${sessionId}/stream/resume`, {
+      headers: authHeader(),
+      signal,
+    })
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') return
+    throw err
+  }
   if (!res.ok) throw new Error(`Resume stream failed: ${res.statusText}`)
 
   const reader = res.body!.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
+  try {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
 
-    buffer += decoder.decode(value, { stream: true })
-    const parts = buffer.split('\n\n')
-    buffer = parts.pop() ?? ''
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() ?? ''
 
-    for (const part of parts) {
-      if (!part.trim()) continue
-      let eventType = 'message'
-      let dataStr = ''
-      for (const line of part.split('\n')) {
-        if (line.startsWith('event: ')) eventType = line.slice(7).trim()
-        else if (line.startsWith('data: ')) dataStr = line.slice(6)
-      }
-      if (dataStr) {
-        try {
-          onEvent(eventType, JSON.parse(dataStr))
-        } catch {
-          // malformed JSON — skip
+      for (const part of parts) {
+        if (!part.trim()) continue
+        let eventType = 'message'
+        let dataStr = ''
+        for (const line of part.split('\n')) {
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim()
+          else if (line.startsWith('data: ')) dataStr = line.slice(6)
+        }
+        if (dataStr) {
+          try {
+            onEvent(eventType, JSON.parse(dataStr))
+          } catch {
+            // malformed JSON — skip
+          }
         }
       }
     }
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') return
+    throw err
+  } finally {
+    try {
+      await reader.cancel()
+    } catch {
+      // reader already released/closed
+    }
+  }
+}
+
+/**
+ * Ask the backend to stop the in-progress LLM task for this session.
+ * Best-effort: the engine stops at its next streamed event and persists the
+ * partial reply. Safe to call even if no stream is active.
+ */
+export async function cancelStream(sessionId: string): Promise<void> {
+  try {
+    await fetch(`${BASE}/chat/sessions/${sessionId}/stream/cancel`, {
+      method: 'POST',
+      headers: authHeader(),
+    })
+  } catch {
+    // network hiccup — the client-side abort already stopped receiving
   }
 }
 

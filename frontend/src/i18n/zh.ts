@@ -223,6 +223,7 @@ export const zh: Dict = {
     copy: '复制',
     copied: '已复制！',
     rerun: '重新运行',
+    stop: '停止',
     chartError: '无法渲染图表：{message}',
     invalidChartSpec: '图表配置无效',
     toolCode: '代码',

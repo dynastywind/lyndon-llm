@@ -33,6 +33,9 @@ class StreamBuffer:
         self.error: str | None = None
         self.started_at: datetime = datetime.now(UTC)
         self._cond: asyncio.Condition = asyncio.Condition()
+        # Set by /stream/cancel; the engine checks it between streamed events and
+        # stops gracefully (so the partial reply is still persisted).
+        self.cancelled: asyncio.Event = asyncio.Event()
 
     async def push(self, event: dict) -> None:
         """Append an event and wake all waiting subscribers."""
@@ -85,6 +88,14 @@ class StreamRegistry:
     def get(self, session_id: str) -> StreamBuffer | None:
         """Return the active buffer for *session_id*, or ``None``."""
         return self._buffers.get(session_id)
+
+    def cancel(self, session_id: str) -> bool:
+        """Signal the active stream for *session_id* to stop. Returns True if one existed."""
+        buf = self._buffers.get(session_id)
+        if buf is None:
+            return False
+        buf.cancelled.set()
+        return True
 
     def remove(self, session_id: str) -> None:
         """Remove the buffer (called when the background LLM task finishes)."""

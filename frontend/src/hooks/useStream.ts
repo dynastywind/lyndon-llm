@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { createChatSession, resumeStream, streamChat } from '@/api/client'
+import { cancelStream, createChatSession, resumeStream, streamChat } from '@/api/client'
 import { useAppStore } from '@/store'
 import { generateId } from '@/lib/utils'
 import type { ToolCallRecord, ChartSpec, MessageAttachment, ChatPlan } from '@/types'
@@ -8,6 +8,11 @@ import type { AttachmentPayload } from '@/api/client'
 export interface SendOptions {
   requireToolApproval?: boolean
 }
+
+// In-flight stream AbortControllers, keyed by sessionId. Module-level (not a hook
+// ref) so the stop button in any component can abort a stream started by another —
+// ChatWindow and DesktopSessionWindow each call useStream() independently.
+const activeControllers = new Map<string, AbortController>()
 
 function chartSpecToMarkdown(spec: ChartSpec): string {
   return `\n\n\`\`\`chart\n${JSON.stringify(spec)}\n\`\`\`\n\n`
@@ -162,6 +167,8 @@ export function useStream() {
           }))
         : undefined
 
+      const controller = new AbortController()
+      activeControllers.set(activeSessionId, controller)
       try {
         await streamChat(
           userMessage,
@@ -283,8 +290,10 @@ export function useStream() {
           mode,
           options?.requireToolApproval ?? false,
           workingDirectory,
+          controller.signal,
         )
       } finally {
+        activeControllers.delete(activeSessionId)
         // Clear any lingering approval dialog when the stream ends
         setPendingToolApproval(null)
         stopStreaming(activeSessionId)
@@ -359,76 +368,82 @@ export function useStream() {
       }
 
       startStreaming(targetSessionId)
+      const controller = new AbortController()
+      activeControllers.set(targetSessionId, controller)
       try {
-        await resumeStream(targetSessionId, (type, data) => {
-          switch (type) {
-            case 'token':
-              updateMsg((m) => ({ ...m, content: m.content + (data.text as string) }))
-              bumpScrollToBottom()
-              break
-            case 'thinking_token':
-              updateMsg((m) => ({ ...m, thinking: (m.thinking ?? '') + (data.text as string) }))
-              break
-            case 'skill_activated': {
-              const activatedCall: ToolCallRecord = {
-                id: `skill_activated_${data.skill_id as string}`,
-                name: `skill__${data.skill_id as string}__[prompt]`,
-                args: {},
-                status: 'active',
+        await resumeStream(
+          targetSessionId,
+          (type, data) => {
+            switch (type) {
+              case 'token':
+                updateMsg((m) => ({ ...m, content: m.content + (data.text as string) }))
+                bumpScrollToBottom()
+                break
+              case 'thinking_token':
+                updateMsg((m) => ({ ...m, thinking: (m.thinking ?? '') + (data.text as string) }))
+                break
+              case 'skill_activated': {
+                const activatedCall: ToolCallRecord = {
+                  id: `skill_activated_${data.skill_id as string}`,
+                  name: `skill__${data.skill_id as string}__[prompt]`,
+                  args: {},
+                  status: 'active',
+                }
+                updateMsg((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), activatedCall] }))
+                break
               }
-              updateMsg((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), activatedCall] }))
-              break
-            }
-            case 'tool_start': {
-              const newCall: ToolCallRecord = {
-                id: data.id as string,
-                name: data.name as string,
-                args: data.args as Record<string, unknown>,
-                status: 'running',
+              case 'tool_start': {
+                const newCall: ToolCallRecord = {
+                  id: data.id as string,
+                  name: data.name as string,
+                  args: data.args as Record<string, unknown>,
+                  status: 'running',
+                }
+                updateMsg((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), newCall] }))
+                break
               }
-              updateMsg((m) => ({ ...m, toolCalls: [...(m.toolCalls ?? []), newCall] }))
-              break
-            }
-            case 'tool_result': {
-              const { id, success, preview } = data as {
-                id: string
-                success: boolean
-                preview: string
-              }
-              updateMsg((m) => ({
-                ...m,
-                toolCalls: (m.toolCalls ?? []).map((tc) =>
-                  tc.id === id
-                    ? { ...tc, status: success ? ('done' as const) : ('error' as const), preview }
-                    : tc,
-                ),
-              }))
-              break
-            }
-            case 'chart': {
-              const spec = data.spec as ChartSpec
-              updateMsg((m) => ({ ...m, content: m.content + chartSpecToMarkdown(spec) }))
-              break
-            }
-            case 'plan_preview':
-              setChatPendingPlan(data as unknown as ChatPlan)
-              setChatPlanStatus('pending_confirm')
-              useAppStore.setState((s) => ({
-                sessionMessages: {
-                  ...s.sessionMessages,
-                  [targetSessionId]: (s.sessionMessages[targetSessionId] ?? []).filter(
-                    (m) => m.id !== msgId,
+              case 'tool_result': {
+                const { id, success, preview } = data as {
+                  id: string
+                  success: boolean
+                  preview: string
+                }
+                updateMsg((m) => ({
+                  ...m,
+                  toolCalls: (m.toolCalls ?? []).map((tc) =>
+                    tc.id === id
+                      ? { ...tc, status: success ? ('done' as const) : ('error' as const), preview }
+                      : tc,
                   ),
-                },
-              }))
-              break
-            case 'error':
-              console.warn('[resume] backend error:', data.message)
-              break
-            default:
-              break
-          }
-        })
+                }))
+                break
+              }
+              case 'chart': {
+                const spec = data.spec as ChartSpec
+                updateMsg((m) => ({ ...m, content: m.content + chartSpecToMarkdown(spec) }))
+                break
+              }
+              case 'plan_preview':
+                setChatPendingPlan(data as unknown as ChatPlan)
+                setChatPlanStatus('pending_confirm')
+                useAppStore.setState((s) => ({
+                  sessionMessages: {
+                    ...s.sessionMessages,
+                    [targetSessionId]: (s.sessionMessages[targetSessionId] ?? []).filter(
+                      (m) => m.id !== msgId,
+                    ),
+                  },
+                }))
+                break
+              case 'error':
+                console.warn('[resume] backend error:', data.message)
+                break
+              default:
+                break
+            }
+          },
+          controller.signal,
+        )
       } catch {
         // Resume failed (stream already finished or 404) — remove the empty bubble
         useAppStore.setState((s) => ({
@@ -440,6 +455,7 @@ export function useStream() {
           },
         }))
       } finally {
+        activeControllers.delete(targetSessionId)
         stopStreaming(targetSessionId)
         bumpScrollToBottom()
         bumpSessionVersion()
@@ -455,5 +471,20 @@ export function useStream() {
     ],
   )
 
-  return { send, resume }
+  /**
+   * Stop an in-flight stream: abort the client read (so we stop receiving), tell
+   * the backend to cancel the LLM task (it persists the partial reply), and flip
+   * the streaming flag off so the button reverts to Send immediately.
+   */
+  const stop = useCallback(
+    (targetSessionId: string) => {
+      activeControllers.get(targetSessionId)?.abort()
+      activeControllers.delete(targetSessionId)
+      void cancelStream(targetSessionId)
+      stopStreaming(targetSessionId)
+    },
+    [stopStreaming],
+  )
+
+  return { send, resume, stop }
 }
