@@ -45,14 +45,21 @@ export function useAudioRecorder(onTranscript: (text: string) => void): AudioRec
       streamRef.current = stream
       chunksRef.current = []
 
-      const recorder = new MediaRecorder(stream)
+      // Pick a container the engine supports. WKWebView/Safari (the Tauri
+      // desktop webview) only records audio/mp4, not webm — let it choose.
+      const mimeType = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(
+        (m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m),
+      )
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream)
       recorderRef.current = recorder
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data)
       }
       recorder.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
         cleanupStream()
         if (blob.size === 0) return
         setTranscribing(true)

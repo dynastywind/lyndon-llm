@@ -13,10 +13,15 @@ export function MicButton({
   onTranscript,
   disabled = false,
   variant = 'round',
+  size,
+  radius = 4,
 }: {
   onTranscript: (text: string) => void
   disabled?: boolean
   variant?: 'round' | 'square'
+  /** Square variant only — match the adjacent send button's footprint. */
+  size?: number
+  radius?: number
 }) {
   const { t } = useT()
   const { recording, transcribing, error, toggle } = useAudioRecorder(onTranscript)
@@ -24,8 +29,8 @@ export function MicButton({
   const active = recording || transcribing
   const title = error ?? (recording ? t('voice.stop') : t('voice.record'))
   const square = variant === 'square'
-  const size = square ? 40 : 28
-  const iconSize = square ? 16 : 14
+  const btnSize = size ?? (square ? 40 : 28)
+  const iconSize = square ? Math.round(btnSize * 0.4) : 14
 
   return (
     <button
@@ -36,10 +41,10 @@ export function MicButton({
       aria-label={title}
       aria-pressed={recording}
       style={{
-        width: size,
-        height: size,
+        width: btnSize,
+        height: btnSize,
         flexShrink: 0,
-        borderRadius: square ? 4 : '50%',
+        borderRadius: square ? radius : '50%',
         border: `1px solid ${active ? 'var(--lv-gold)' : 'var(--lv-rule-strong)'}`,
         background: 'none',
         cursor: disabled || transcribing ? 'default' : 'pointer',
@@ -60,7 +65,7 @@ export function MicButton({
       {transcribing ? (
         <Loader2 size={iconSize} className="animate-spin" />
       ) : recording ? (
-        <Square size={square ? 16 : 12} fill="currentColor" />
+        <Square size={square ? iconSize : 12} fill="currentColor" />
       ) : (
         <Mic size={iconSize} />
       )}

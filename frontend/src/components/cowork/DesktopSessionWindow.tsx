@@ -1209,13 +1209,19 @@ export function DesktopSessionWindow({ mode }: Props) {
               <DirectoryChip directory={directory} onChange={handleSelectDirectory} />
               <ActingModeChip actingMode={actingMode} onChange={handleSelectActingMode} />
               <span style={{ flex: 1 }} />
-              <MicButton onTranscript={appendTranscript} disabled={isStreaming} />
               <ModelDropdown
                 models={models}
                 selectedModel={selectedModel}
                 effortMode={effortMode}
                 onSelectModel={setSelectedModel}
                 onSelectEffort={handleSelectEffort}
+              />
+              <MicButton
+                onTranscript={appendTranscript}
+                disabled={isStreaming}
+                variant="square"
+                size={32}
+                radius={4}
               />
               <button
                 type="button"
@@ -1534,6 +1540,13 @@ export function DesktopSessionWindow({ mode }: Props) {
                 minHeight: 26,
               }}
             />
+            <MicButton
+              onTranscript={appendTranscript}
+              disabled={isStreaming}
+              variant="square"
+              size={28}
+              radius={4}
+            />
             <button
               type="button"
               onClick={() => (isStreaming ? stop(sessionId ?? '') : void handleSend())}
@@ -1574,7 +1587,6 @@ export function DesktopSessionWindow({ mode }: Props) {
               @ reference
             </span>
             <span style={{ flex: 1 }} />
-            <MicButton onTranscript={appendTranscript} disabled={isStreaming} />
             <ModelDropdown
               models={models}
               selectedModel={selectedModel}

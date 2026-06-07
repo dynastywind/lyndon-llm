@@ -2583,9 +2583,6 @@ export function ChatWindow() {
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
 
-                {/* Voice-to-text */}
-                <MicButton onTranscript={appendTranscript} disabled={isStreaming} />
-
                 <span style={{ flex: 1 }} />
 
                 {/* Model dropdown */}
@@ -2759,6 +2756,15 @@ export function ChatWindow() {
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
+
+                {/* Voice-to-text — left of the send button */}
+                <MicButton
+                  onTranscript={appendTranscript}
+                  disabled={isStreaming}
+                  variant="square"
+                  size={34}
+                  radius={6}
+                />
 
                 {/* Send / Stop button */}
                 <button
