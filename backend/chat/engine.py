@@ -44,6 +44,7 @@ from core.llm.gateway import LLMUsage, llm_gateway
 from core.permissions.gate import Mode, PermissionGate
 from core.session.manager import Session
 from core.tools.registry import tool_registry
+from core.tools.risk import RiskTier
 from core.tools.working_dir import apply_working_directory
 
 if settings.langfuse_secret_key and settings.langfuse_public_key:
@@ -119,17 +120,46 @@ than guessing or recalling from training data.  \
 Real, live output from the user's machine is always preferred over \
 any knowledge you already have.
 
+**Never write a script (AppleScript, shell, etc.) as text in your reply and \
+stop.** Writing the code is not doing the task. You must actually CALL a tool \
+so it runs. For multi-step requests, call the tools one after another until \
+the whole task is done — do not narrate the steps and quit.
+
 Examples:
-- "list mac applications" → use shell_exec: `ls /Applications`
-- "what's in my Desktop?" → use file_read or shell_exec: `ls ~/Desktop`
-- "open Safari" → use mac_control
-- "create a file…" → use file_write
+- "list mac applications" → call desktop_control action="list_installed_apps"
+- "what apps are running?" → call desktop_control action="list_running_apps"
+- "open Safari" → call desktop_control action="open_app", app_name="Safari"
+- "center Safari's window" → call desktop_control action="center_window", app_name="Safari"
+- "move the window to 100,100" → call desktop_control action="move_window", app_name=…, x=100, y=100
+- "take a screenshot" → call desktop_control action="screenshot", output_path=…
+- a raw AppleScript you composed → call desktop_control action="run_script", script="…" \
+(do NOT just print the script)
+- "what's in my Desktop?" → call file_read or shell: `ls ~/Desktop`
+- "create a file…" → call file_write
+- arbitrary shell commands → call shell
 
 If a task is ambiguous, pick the most appropriate tool and explain what \
 you ran and what the result means.
 """
 
 logger = logging.getLogger(__name__)
+
+
+def _should_request_approval(ask_mode: bool, risk: RiskTier | None) -> bool:
+    """
+    Decide whether a tool call must pause for user approval.
+
+    - Tools that declare a risk tier: in "ask first" mode prompt on
+      SENSITIVE or above; in "act" mode prompt only on DANGEROUS.
+    - Tools without a tier (``risk is None``): fall back to the coarse
+      session-wide approval boolean (behavior unchanged for those tools).
+    """
+    if risk is None:
+        return ask_mode
+    if ask_mode:
+        return risk >= RiskTier.SENSITIVE
+    return risk >= RiskTier.DANGEROUS
+
 
 # Maximum characters of retrieved RAG context to inject into the system prompt
 MAX_CONTEXT_CHARS = 6000
@@ -506,7 +536,10 @@ class ChatEngine:
                     allowed_tools=decision.tools,
                     messages_override=llm_messages,
                     model=model,
-                    force_tool_call=skill_pinned,
+                    # Cowork/Code are action modes: require a real tool call on
+                    # the first round so the model can't reply with a script as
+                    # plain text instead of invoking desktop_control / shell.
+                    force_tool_call=skill_pinned or self.session.mode != Mode.CHAT,
                 ):
                     if cancel_event and cancel_event.is_set():
                         break
@@ -739,12 +772,19 @@ class ChatEngine:
                     )
 
                     # ── Permission gate ("ask before acting" mode) ─────────────────
-                    if self.session.metadata.get("require_tool_approval"):
+                    # A tool may classify the call into a risk tier. When it does,
+                    # the gate prompts based on both the tier and the acting mode;
+                    # otherwise it falls back to the coarse session-wide approval
+                    # boolean (behavior unchanged for all other tools).
+                    ask_mode = bool(self.session.metadata.get("require_tool_approval"))
+                    _tool = tools.get(fn_name)
+                    risk = _tool.risk_for(fn_args) if _tool else None
+                    if _should_request_approval(ask_mode, risk):
                         from core.session.tool_approval import tool_approval_gate
 
                         logger.info(
-                            "tool approval required  tool=%s id=%s session=%s",
-                            fn_name, tc.id, self.session.session_id,
+                            "tool approval required  tool=%s risk=%s id=%s session=%s",
+                            fn_name, risk, tc.id, self.session.session_id,
                         )
                         yield {
                             "type": "tool_permission_request",

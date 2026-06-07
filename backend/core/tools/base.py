@@ -5,11 +5,14 @@ BaseTool — all tools across Chat, Cowork, and Code implement this interface.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from core.permissions.gate import Permission, PermissionGate
+
+if TYPE_CHECKING:
+    from core.tools.risk import RiskTier
 
 
 class ToolResult(BaseModel):
@@ -53,3 +56,13 @@ class BaseTool(ABC):
             "type": "function",
             "function": self.schema(),
         }
+
+    def risk_for(self, args: dict[str, Any]) -> RiskTier | None:
+        """
+        Per-call risk tier consulted by the approval gate.
+
+        Return ``None`` (the default) to use the coarse session-wide approval
+        behavior. Override to classify a call (e.g. by its ``action``) so the
+        engine can pause only for sensitive/dangerous operations.
+        """
+        return None
