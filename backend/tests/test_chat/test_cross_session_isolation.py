@@ -159,3 +159,51 @@ async def test_anonymous_manager_scopes_episodic_to_session(monkeypatch, tmp_pat
     mgr2 = MemoryManager("sess-xyz", user_id="user-A")
     await mgr2.build_system_prompt("base", "question")
     assert captured == {"user_id": "user-A", "session_id": None}
+
+
+@pytest.mark.asyncio
+async def test_prompt_has_exactly_one_user_profile(monkeypatch, tmp_path):
+    """Episodic memories are whole session snapshots that each contain a
+    '## User Profile'. The assembled prompt must still carry exactly ONE."""
+    from chat.memory import cross_session_file as csf
+    from chat.memory.long_term import LongTermMemory
+    from chat.memory.manager import MemoryManager
+    from chat.memory.session_file import SessionFileMemory
+    from chat.memory.types import Memory, MemoryType
+    from config.settings import settings
+
+    monkeypatch.setattr(settings, "session_memory_dir", str(tmp_path))
+    # Cross-session profile (authoritative, merged once).
+    monkeypatch.setattr(
+        csf.CrossSessionFileMemory,
+        "load_sections",
+        lambda self: "## User Profile\n- Gender: Male\n\n## Key Facts\n- Likes coffee",
+    )
+    monkeypatch.setattr(
+        SessionFileMemory,
+        "load",
+        lambda self, sid: "## Conversation Summary\nDiscussed travel.\n\n## User Profile\n- Age: 30",
+    )
+
+    # Two retrieved episodic memories, each a full session-file snapshot.
+    snapshot = (
+        "# Session Memory: s\nUpdated: x\n\n"
+        "## Conversation Summary\nUser asked about Python.\n\n"
+        "## User Profile\n- Age: 30\n- Gender: Male"
+    )
+
+    async def _retrieve(self, query, top_k=None, user_id=None, session_id=None, **kw):
+        return [
+            Memory(session_id="s1", memory_type=MemoryType.EPISODIC, content=snapshot),
+            Memory(session_id="s2", memory_type=MemoryType.EPISODIC, content=snapshot),
+        ]
+
+    monkeypatch.setattr(LongTermMemory, "retrieve", _retrieve)
+
+    mgr = MemoryManager("sess-xyz", user_id="user-A")
+    prompt = await mgr.build_system_prompt("base", "tell me about python")
+
+    assert prompt.count("## User Profile") == 1
+    # The conversational substance of the episodic memories still made it in.
+    assert "User asked about Python." in prompt
+    assert "## Relevant memories from past sessions" in prompt
