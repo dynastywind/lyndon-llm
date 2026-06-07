@@ -419,15 +419,26 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
 
   // ── save / discard ────────────────────────────────────────────────────────
   const handleSave = async () => {
-    setSystemPrompt(promptDraft.trim())
-    setProfession(profDraft)
-    if (emailDraft !== storedEmail && user) {
+    const nextPrompt = promptDraft.trim()
+    const nextProfession = profDraft.trim()
+    setSystemPrompt(nextPrompt)
+    setProfession(nextProfession)
+    if (user) {
+      const emailChanged = emailDraft !== storedEmail
       try {
-        await updateProfile({ email: emailDraft.trim() || null })
-        // Update local store so the email shown elsewhere is current
-        useAppStore.setState((s) => ({
-          user: s.user ? { ...s.user, email: emailDraft.trim() || null } : s.user,
-        }))
+        // Persist server-side so these settings are scoped to this account and
+        // never leak to another user via shared client-side storage.
+        await updateProfile({
+          system_prompt: nextPrompt || null,
+          profession: nextProfession || null,
+          ...(emailChanged ? { email: emailDraft.trim() || null } : {}),
+        })
+        if (emailChanged) {
+          // Update local store so the email shown elsewhere is current
+          useAppStore.setState((s) => ({
+            user: s.user ? { ...s.user, email: emailDraft.trim() || null } : s.user,
+          }))
+        }
       } catch {
         /* silently ignore — backend may not be running */
       }

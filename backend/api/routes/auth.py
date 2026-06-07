@@ -47,6 +47,8 @@ class TokenResponse(BaseModel):
 
 class UpdateProfileRequest(BaseModel):
     email: str | None = None
+    system_prompt: str | None = None
+    profession: str | None = None
 
 
 class ResetPasswordRequest(BaseModel):
@@ -434,16 +436,40 @@ async def oauth_complete(
     )
 
 
+@router.get("/me")
+async def get_me(user: User = Depends(get_current_user)):
+    """Return the authenticated user's profile + assistant settings.
+
+    The frontend calls this after login so per-user settings (system prompt,
+    profession) come from the server, never from shared client-side storage.
+    """
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "profession": user.profession,
+        "system_prompt": user.system_prompt,
+    }
+
+
 @router.patch("/me")
 async def update_profile(
     body: UpdateProfileRequest,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update mutable profile fields (email)."""
+    """Update mutable profile fields (email) and per-user assistant settings."""
     repo = UserRepo(db)
     if "email" in body.model_fields_set:
         await repo.update_email(user.id, body.email)
+    if {"system_prompt", "profession"} & body.model_fields_set:
+        await repo.update_settings(
+            user.id,
+            system_prompt=body.system_prompt,
+            profession=body.profession,
+            set_system_prompt="system_prompt" in body.model_fields_set,
+            set_profession="profession" in body.model_fields_set,
+        )
     return {"ok": True}
 
 

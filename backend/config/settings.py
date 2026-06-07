@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     long_term_top_k: int = 5  # memories injected per conversation
     memory_consolidation_interval: int = 10  # consolidate every N sessions
     session_memory_dir: str = "data/session_memories"  # per-session memory files
+    # Encrypt PII-bearing memory at rest (files + Chroma docs). Decryption is
+    # transparent in-process for the local model. Kill-switch for local debugging.
+    memory_encryption_enabled: bool = True
 
     # RAG
     rag_chunk_size: int = 512

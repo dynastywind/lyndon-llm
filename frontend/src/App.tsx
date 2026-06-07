@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
-import { checkAvatarExists } from '@/api/client'
+import { checkAvatarExists, getMe } from '@/api/client'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { ChatWindow } from '@/components/chat/ChatWindow'
 import { CoworkWindow } from '@/components/cowork/CoworkWindow'
@@ -23,6 +23,8 @@ export default function App() {
     user,
     avatarVersion,
     setAvatarVersion,
+    setSystemPrompt,
+    setProfession,
   } = useAppStore()
 
   // Apply theme class to <html> whenever uiTheme changes
@@ -52,6 +54,29 @@ export default function App() {
     checkAvatarExists(user.id).then((exists) => {
       if (exists) setAvatarVersion(1)
     })
+  }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load per-user assistant settings (system prompt, profession) from the
+  // server whenever the active account changes (login or reload). These are
+  // server-scoped — clearing first guarantees one account never momentarily
+  // shows another's prompt before the fetch resolves.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    setSystemPrompt('')
+    setProfession('')
+    getMe()
+      .then((me) => {
+        if (cancelled) return
+        setSystemPrompt(me.system_prompt ?? '')
+        setProfession(me.profession ?? '')
+      })
+      .catch(() => {
+        /* backend unreachable — leave cleared */
+      })
+    return () => {
+      cancelled = true
+    }
   }, [user?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle OAuth redirects on mount

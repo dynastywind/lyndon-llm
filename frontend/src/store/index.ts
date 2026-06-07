@@ -166,7 +166,11 @@ interface AppState {
   unpinSession: (id: string) => void
 
   // Prompts
-  /** Global system prompt — appended to BASE_SYSTEM_PROMPT on every request. Persisted. */
+  /**
+   * Per-user system prompt — appended to BASE_SYSTEM_PROMPT on every request.
+   * Server-scoped: loaded from getMe() after login and saved via updateProfile,
+   * NOT persisted in client storage (so it can't leak across accounts).
+   */
   systemPrompt: string
   setSystemPrompt: (text: string) => void
   /** Per-session prompts — quoted into the first message of each session. Not persisted. */
@@ -217,6 +221,10 @@ export const useAppStore = create<AppState>()(
           activeView: 'main',
           activeProjectId: null,
           pendingProjectId: null,
+          // Per-user assistant settings are server-scoped — clear them so the
+          // next account never inherits the previous user's prompt/profession.
+          systemPrompt: '',
+          profession: '',
         }),
 
       // ── Session ──────────────────────────────────────────────────────
@@ -429,7 +437,9 @@ export const useAppStore = create<AppState>()(
         codeTheme: s.codeTheme,
         uiTheme: s.uiTheme,
         language: s.language,
-        systemPrompt: s.systemPrompt,
+        // systemPrompt & profession are intentionally NOT persisted here — they
+        // are server-scoped per user (loaded via getMe on login) so they can
+        // never leak across accounts through shared client-side storage.
         appliedSessionPrompts: s.appliedSessionPrompts,
         selectedModel: s.selectedModel,
         effortMode: s.effortMode,
@@ -439,7 +449,6 @@ export const useAppStore = create<AppState>()(
         pinnedSessionIds: s.pinnedSessionIds,
         projectSort: s.projectSort,
         pinnedProjectIds: s.pinnedProjectIds,
-        profession: s.profession,
         avatarVersion: s.avatarVersion,
       }),
     },

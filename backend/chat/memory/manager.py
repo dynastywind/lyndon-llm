@@ -115,7 +115,7 @@ class MemoryManager:
         self.short_term = ShortTermMemory(session_id)
         self.long_term = LongTermMemory()
         self.session_file = SessionFileMemory()
-        self.cross_session_file = CrossSessionFileMemory()
+        self.cross_session_file = CrossSessionFileMemory(user_id)
 
     # ------------------------------------------------------------------ #
     #  Session start — inject relevant memories into system prompt         #
@@ -181,10 +181,14 @@ class MemoryManager:
             enriched = f"{enriched}\n\n## This Session's Summary\n{summary_body}"
 
         # --- 4. Relevant long-term memories from Chroma -----------------------
+        # Always scope the query. Logged-in users filter by user_id (proven to
+        # isolate cross-user). Anonymous users (no user_id) fall back to their
+        # own session so they can never pull the global cross-user pool.
         memories = await self.long_term.retrieve(
             query=user_message,
             top_k=settings.long_term_top_k,
             user_id=self.user_id,
+            session_id=None if self.user_id else self.session_id,
         )
         if memories:
             mem_block = "\n".join(
@@ -307,6 +311,11 @@ class MemoryManager:
         risk).  Key Facts are updated via a focused LLM call so noteworthy
         observations can be accumulated in natural language.
         """
+        # Anonymous sessions have no persistent cross-session profile — skip
+        # (also avoids a pointless LLM Key-Facts call).
+        if not self.cross_session_file.enabled:
+            return
+
         existing_sections = self.cross_session_file.load_sections() or ""
         existing_profile = _extract_user_profile(existing_sections)
         existing_key_facts = _extract_section(existing_sections, "Key Facts")

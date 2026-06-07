@@ -1,13 +1,18 @@
 """
-Cross-Session File Memory — a single Markdown file that accumulates the user's
-factual profile and key facts across ALL sessions.
+Cross-Session File Memory — a per-user Markdown file that accumulates one user's
+factual profile and key facts across ALL of that user's sessions.
 
-File path: {session_memory_dir}/cross_session_memory.md
+File path: {session_memory_dir}/cross_session_{user_id}.md
 
-Unlike per-session memory files (one per session), this file is shared across
-sessions and is updated whenever the User Profile section of a session file
-changes.  It is injected into every new message so the model always knows who
-the user is regardless of which session is active.
+The file is keyed by user_id so each user's profile is isolated — a single
+shared file would leak one user's profile into every other user's prompt.
+It spans that user's sessions (updated whenever the User Profile section of a
+session file changes) and is injected into every new message so the model
+always knows who the user is regardless of which session is active.
+
+For anonymous requests (user_id=None) the store is disabled: loads return None
+and writes are no-ops, so anonymous sessions neither read nor accumulate any
+cross-session profile.
 
 File format
 -----------
@@ -34,6 +39,7 @@ from pathlib import Path
 import re
 
 from config.settings import settings
+from core.security.crypto import memory_cipher
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +72,12 @@ Return ONLY the updated content formatted exactly as:
 No extra commentary, no markdown fences, no headings other than the two above.\
 """
 
-_FILENAME = "cross_session_memory.md"
+# Per-user filename. The cross-session profile is private to one user, so the
+# file MUST be keyed by user_id — a single shared file would leak one user's
+# profile into every other user's prompt.
+def _filename_for(user_id: str) -> str:
+    return f"cross_session_{user_id}.md"
+
 
 # Matches the first ## section heading (User Profile or Key Facts) and everything after
 _SECTIONS_RE = re.compile(r"(## (?:User Profile|Key Facts).+)", re.DOTALL)
@@ -83,25 +94,36 @@ def _sections_only(content: str) -> str:
 
 
 class CrossSessionFileMemory:
-    """Read/write the single cross-session memory Markdown file."""
+    """Read/write the per-user cross-session memory Markdown file.
 
-    def __init__(self) -> None:
+    The file is keyed by ``user_id`` so each user's persistent profile is
+    isolated. When ``user_id`` is None (anonymous / not logged in) the store is
+    *disabled*: loads return None and writes are no-ops, so anonymous sessions
+    neither read nor accumulate any cross-session profile.
+    """
+
+    def __init__(self, user_id: str | None = None) -> None:
         self._dir = Path(settings.session_memory_dir)
-        self._path = self._dir / _FILENAME
+        self._user_id = user_id
+        self.enabled = user_id is not None
+        self._path = self._dir / _filename_for(user_id) if self.enabled else None
 
     # ------------------------------------------------------------------ #
     #  Public API                                                          #
     # ------------------------------------------------------------------ #
 
     def load(self) -> str | None:
-        """Return the full file contents, or None if the file does not exist."""
+        """Return the decrypted file contents, or None if missing/disabled."""
+        if not self.enabled:
+            return None
         try:
-            return self._path.read_text(encoding="utf-8")
+            raw = self._path.read_text(encoding="utf-8")
         except FileNotFoundError:
             return None
         except Exception:
             logger.exception("Failed to load cross-session memory file")
             return None
+        return memory_cipher.decrypt(raw, self._user_id)
 
     def load_sections(self) -> str | None:
         """Return only the '## User Profile' / '## Key Facts' sections (no header).
@@ -117,7 +139,9 @@ class CrossSessionFileMemory:
         return sections or None
 
     def save(self, sections_content: str) -> None:
-        """Write the cross-session memory file atomically."""
+        """Write the cross-session memory file atomically (no-op when disabled)."""
+        if not self.enabled:
+            return
         self._dir.mkdir(parents=True, exist_ok=True)
         tmp = self._path.with_suffix(".tmp")
 
@@ -127,9 +151,12 @@ class CrossSessionFileMemory:
             f"Updated: {timestamp}\n\n"
             f"{sections_content.strip()}\n"
         )
+        # Encrypt the whole file at rest (scope = user_id). Decryption happens
+        # transparently in load() for the local model.
+        payload = memory_cipher.encrypt(full_content, self._user_id)
 
         try:
-            tmp.write_text(full_content, encoding="utf-8")
+            tmp.write_text(payload, encoding="utf-8")
             os.replace(tmp, self._path)  # atomic on POSIX
         except Exception:
             logger.exception("Failed to save cross-session memory file")
@@ -148,6 +175,9 @@ class CrossSessionFileMemory:
         `new_user_profile_section` should be the raw '## User Profile' block
         extracted from the triggering session's memory file.
         """
+        if not self.enabled:
+            return ""
+
         from core.llm.gateway import LLMMessage
 
         # Use load_sections() so the file header is never fed back to the LLM,

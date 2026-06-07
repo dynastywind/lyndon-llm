@@ -85,6 +85,9 @@ async def _migrate(conn) -> None:
         # v11 — projects: group sessions under a shared brief + context.
         # The `projects` table itself is created by create_all; this links sessions to it.
         "ALTER TABLE chat_sessions ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE SET NULL",
+        # v12 — per-user assistant settings (server-scoped; replaces global client storage)
+        "ALTER TABLE users ADD COLUMN system_prompt TEXT",
+        "ALTER TABLE users ADD COLUMN profession TEXT",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore

@@ -173,7 +173,11 @@ export async function deleteAvatar(): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete avatar')
 }
 
-export async function updateProfile(fields: { email?: string | null }): Promise<void> {
+export async function updateProfile(fields: {
+  email?: string | null
+  system_prompt?: string | null
+  profession?: string | null
+}): Promise<void> {
   const res = await fetch(`${BASE}/auth/me`, {
     method: 'PATCH',
     headers: jsonHeaders(),
@@ -183,6 +187,24 @@ export async function updateProfile(fields: { email?: string | null }): Promise<
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? res.statusText)
   }
+}
+
+/** Per-user profile + assistant settings, loaded from the server after login. */
+export interface MeResponse {
+  id: string
+  username: string
+  email: string | null
+  profession: string | null
+  system_prompt: string | null
+}
+
+export async function getMe(): Promise<MeResponse> {
+  const res = await fetch(`${BASE}/auth/me`, { headers: jsonHeaders() })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
 }
 
 export async function resetPassword(username: string, newPassword: string): Promise<void> {

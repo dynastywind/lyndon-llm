@@ -22,6 +22,8 @@ if settings.langfuse_secret_key and settings.langfuse_public_key:
     from langfuse import Langfuse
     from langfuse.openai import AsyncOpenAI  # type: ignore[assignment]
 
+    from core.security.pii import mask_langfuse
+
     # OTEL reads OTEL_SERVICE_NAME once when the tracer provider is created.
     # Set it before instantiating Langfuse so it appears as
     # resourceAttributes.service.name in every exported span.
@@ -30,11 +32,14 @@ if settings.langfuse_secret_key and settings.langfuse_public_key:
     # v4 requires explicit instantiation to register the OTEL tracer provider.
     # Store as module-level singleton so other modules (e.g. engine.py) can
     # reuse the same instance and share its tracer provider.
+    # `mask` strips PII from every traced input/output before it is exported to
+    # the (cloud) Langfuse host — prompts carry decrypted profile data.
     langfuse_client = Langfuse(
         public_key=settings.langfuse_public_key,
         secret_key=settings.langfuse_secret_key,
         host=settings.langfuse_host,
         environment="dev" if settings.environment.value == "development" else "prod",
+        mask=mask_langfuse,
     )
     logger.info(
         "Langfuse observability enabled (host: %s, service: %s)",

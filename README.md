@@ -302,8 +302,9 @@ All settings are read from environment variables or a `.env` file in `backend/`.
 | `VECTOR_STORE_BACKEND` | `chroma` | `chroma` or `qdrant` |
 | `CHROMA_PERSIST_DIR` | `./data/chroma` | Chroma data directory |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./data/lyndon.db` | SQLite (or Postgres) URL |
-| `JWT_SECRET_KEY` | `change-me-in-production` | **Change this in production** |
+| `JWT_SECRET_KEY` | `change-me-in-production` | **Change this in production.** Also derives the memory-at-rest encryption key — see rotation note below |
 | `JWT_EXPIRE_DAYS` | `30` | JWT TTL |
+| `MEMORY_ENCRYPTION_ENABLED` | `true` | Encrypt PII-bearing memory at rest |
 | `GOOGLE_CLIENT_ID` | _(empty)_ | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | _(empty)_ | Google OAuth client secret |
 | `LANGFUSE_SECRET_KEY` | _(empty)_ | Langfuse observability (leave blank to disable) |
@@ -311,6 +312,11 @@ All settings are read from environment variables or a `.env` file in `backend/`.
 | `WEB_SEARCH_PROVIDER` | `duckduckgo` | `duckduckgo` / `google` / `tavily` / `serpapi` |
 | `SANDBOX_TIMEOUT` | `60` | Max seconds per sandbox run |
 | `CORS_ORIGINS` | `localhost:5173, localhost:3000` | Allowed origins |
+
+> **Rotating `JWT_SECRET_KEY`:** it also derives the memory-at-rest encryption
+> key, so rotating it makes existing memory unreadable unless you re-key first.
+> Run `scripts/rekey_memory.py` as part of the rotation — see
+> [`doc/RUNBOOK.md`](doc/RUNBOOK.md).
 
 ---
 

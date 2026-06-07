@@ -78,6 +78,30 @@ class UserRepo:
             row.email = email
             await self._db.commit()
 
+    async def update_settings(
+        self,
+        user_id: str,
+        *,
+        system_prompt: str | None = None,
+        profession: str | None = None,
+        set_system_prompt: bool = False,
+        set_profession: bool = False,
+    ) -> None:
+        """Update per-user assistant settings.
+
+        Only fields whose ``set_*`` flag is True are written, so a caller can
+        update one field without clobbering the other (and can explicitly clear
+        a field by passing None with the flag set).
+        """
+        row = await self.get_by_id(user_id)
+        if not row:
+            return
+        if set_system_prompt:
+            row.system_prompt = (system_prompt or "").strip() or None
+        if set_profession:
+            row.profession = (profession or "").strip() or None
+        await self._db.commit()
+
     async def delete(self, user_id: str) -> None:
         row = await self.get_by_id(user_id)
         if row:

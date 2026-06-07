@@ -21,6 +21,7 @@ import os
 from pathlib import Path
 
 from config.settings import settings
+from core.security.crypto import memory_cipher
 
 logger = logging.getLogger(__name__)
 
@@ -63,15 +64,16 @@ class SessionFileMemory:
     # ------------------------------------------------------------------ #
 
     def load(self, session_id: str) -> str | None:
-        """Return the file contents, or None if the file does not exist."""
+        """Return the decrypted file contents, or None if the file is missing."""
         path = self._path(session_id)
         try:
-            return path.read_text(encoding="utf-8")
+            raw = path.read_text(encoding="utf-8")
         except FileNotFoundError:
             return None
         except Exception:
             logger.exception("Failed to load session memory file for %s", session_id)
             return None
+        return memory_cipher.decrypt(raw, session_id)
 
     def save(self, session_id: str, sections_content: str) -> None:
         """
@@ -91,9 +93,11 @@ class SessionFileMemory:
             f"Updated: {timestamp}\n\n"
             f"{sections_content.strip()}\n"
         )
+        # Encrypt the whole file at rest (scope = session_id).
+        payload = memory_cipher.encrypt(full_content, session_id)
 
         try:
-            tmp.write_text(full_content, encoding="utf-8")
+            tmp.write_text(payload, encoding="utf-8")
             os.replace(tmp, path)  # atomic on POSIX
         except Exception:
             logger.exception("Failed to save session memory file for %s", session_id)

@@ -23,6 +23,10 @@ class User(Base):
     hashed_password: Mapped[str | None] = mapped_column(Text, nullable=True)
     email: Mapped[str | None] = mapped_column(String(256), nullable=True)
     avatar: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    # Per-user assistant settings — server-authoritative so they never leak
+    # across accounts the way global client-side storage would.
+    system_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profession: Mapped[str | None] = mapped_column(String(256), nullable=True)
     # OAuth fields — set for users who signed in via a third-party provider
     oauth_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)  # e.g. "google"
     oauth_sub: Mapped[str | None] = mapped_column(String(256), nullable=True)  # provider user ID

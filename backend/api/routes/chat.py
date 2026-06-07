@@ -536,19 +536,30 @@ async def get_memories(
     user: User | None = Depends(get_optional_user),
 ):
     from chat.memory.manager import MemoryManager
+    from core.security.pii import redact
 
     mgr = MemoryManager(session.session_id, user_id=user.id if user else None)
     memories = await mgr.retrieve_memories(query)
-    return {"memories": [m.model_dump(exclude={"embedding"}) for m in memories]}
+    # Mask PII before it leaves the device (the local model path is unaffected).
+    out = []
+    for m in memories:
+        d = m.model_dump(exclude={"embedding"})
+        d["content"] = redact(d.get("content", ""))
+        out.append(d)
+    return {"memories": out}
 
 
 @router.get("/memories")
 async def list_memories(user: User = Depends(get_current_user)):
     """Return all long-term memories for the authenticated user, newest-first."""
     from chat.memory.long_term import LongTermMemory
+    from core.security.pii import redact
 
     lt = LongTermMemory()
     items = await lt.list_all(user_id=user.id)
+    # Mask PII before it leaves the device.
+    for item in items:
+        item["content"] = redact(item.get("content", ""))
     return {"memories": items, "total": len(items)}
 
 
