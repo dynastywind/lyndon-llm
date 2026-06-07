@@ -194,6 +194,48 @@ async def _migrate_orphan_data(user_id: str, db: AsyncSession) -> None:
         pass  # memory migration is best-effort
 
 
+async def _finalize_oauth_login(
+    provider: str, sub: str, email: str | None, db: AsyncSession
+) -> RedirectResponse:
+    """Resolve an OAuth identity to a session and redirect the browser accordingly.
+
+    Provider-agnostic: callers pass the provider name, the stable subject id, and
+    a *verified* email (or None). Behaviour:
+    - Known (provider, sub) → refresh email if changed, log straight in.
+    - Else if a verified email matches an existing account → link and log in.
+    - Else → issue a short-lived pending token so the user can pick a username.
+
+    `email` must already be verified by the caller; it is the linking key, so an
+    unverified address must never reach here (account-takeover guard).
+    """
+    repo = UserRepo(db)
+    user = await repo.get_by_oauth(provider, sub)
+    if user:
+        if email and user.email != email:
+            await repo.update_email(user.id, email)
+            user.email = email
+        return RedirectResponse(f"{settings.frontend_url}/#token={_create_token(user)}")
+
+    if email:
+        existing = await repo.get_by_email(email)
+        if existing:
+            await repo.link_oauth(existing.id, provider, sub)
+            existing.oauth_provider = provider
+            existing.oauth_sub = sub
+            return RedirectResponse(f"{settings.frontend_url}/#token={_create_token(existing)}")
+
+    expire = datetime.now(UTC) + timedelta(minutes=settings.oauth_pending_expire_minutes)
+    pending_payload = {
+        "pending": True,
+        "oauth_provider": provider,
+        "oauth_sub": sub,
+        "email": email,
+        "exp": expire,
+    }
+    pending_token = jwt.encode(pending_payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    return RedirectResponse(f"{settings.frontend_url}/?oauth_pending={pending_token}")
+
+
 # ── Routes ────────────────────────────────────────────────────────────────────
 
 
@@ -359,43 +401,92 @@ async def google_callback(
         return RedirectResponse(f"{settings.frontend_url}/?oauth_error=invalid_id_token")
 
     google_sub = payload.get("sub")
-    email = payload.get("email", "")
+    # Google verifies the email on its end, so it is safe to use as the linking key.
+    email = payload.get("email") or None
     if not google_sub:
         return RedirectResponse(f"{settings.frontend_url}/?oauth_error=missing_sub")
 
-    repo = UserRepo(db)
-    user = await repo.get_by_oauth("google", google_sub)
+    return await _finalize_oauth_login("google", google_sub, email, db)
 
-    if user:
-        # Existing user — refresh email if it changed, then issue full JWT
-        if email and user.email != email:
-            await repo.update_email(user.id, email)
-            user.email = email
-        full_token = _create_token(user)
-        return RedirectResponse(f"{settings.frontend_url}/#token={full_token}")
 
-    # No account linked to this Google sub yet — check if the email matches an existing account
-    if email:
-        existing = await repo.get_by_email(email)
-        if existing:
-            # Link the Google identity to the existing account and log straight in
-            await repo.link_oauth(existing.id, "google", google_sub)
-            existing.oauth_provider = "google"
-            existing.oauth_sub = google_sub
-            full_token = _create_token(existing)
-            return RedirectResponse(f"{settings.frontend_url}/#token={full_token}")
-
-    # Truly new Google user — issue short-lived pending token and ask frontend to pick a username
-    expire = datetime.now(UTC) + timedelta(minutes=settings.oauth_pending_expire_minutes)
-    pending_payload = {
-        "pending": True,
-        "oauth_provider": "google",
-        "oauth_sub": google_sub,
-        "email": email,
-        "exp": expire,
+@router.get("/github/authorize")
+async def github_authorize():
+    """Return the GitHub OAuth consent URL. Frontend redirects to this URL."""
+    if not settings.github_client_id:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="GitHub login is not configured.")
+    state = secrets.token_urlsafe(16)
+    params = {
+        "client_id": settings.github_client_id,
+        "redirect_uri": settings.github_redirect_uri,
+        "scope": "read:user user:email",
+        "state": state,
+        "allow_signup": "true",
     }
-    pending_token = jwt.encode(pending_payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-    return RedirectResponse(f"{settings.frontend_url}/?oauth_pending={pending_token}")
+    from urllib.parse import urlencode
+
+    url = "https://github.com/login/oauth/authorize?" + urlencode(params)
+    return {"url": url}
+
+
+@router.get("/github/callback")
+async def github_callback(
+    code: str,
+    state: str | None = None,
+    error: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Exchange a GitHub auth code for an access token, fetch the profile, then redirect.
+
+    Unlike Google, GitHub is not OIDC (no id_token), so we call the GitHub API for the
+    user id and a verified email. Only a primary + verified email is used for linking.
+    """
+    if error:
+        return RedirectResponse(f"{settings.frontend_url}/?oauth_error={error}")
+
+    async with httpx.AsyncClient() as client:
+        # 1) Exchange the code for an access token (Accept: json → JSON body, not form-encoded)
+        token_resp = await client.post(
+            "https://github.com/login/oauth/access_token",
+            headers={"Accept": "application/json"},
+            data={
+                "code": code,
+                "client_id": settings.github_client_id,
+                "client_secret": settings.github_client_secret,
+                "redirect_uri": settings.github_redirect_uri,
+            },
+        )
+        if token_resp.status_code != 200:
+            return RedirectResponse(f"{settings.frontend_url}/?oauth_error=token_exchange_failed")
+        access_token = token_resp.json().get("access_token")
+        if not access_token:
+            return RedirectResponse(f"{settings.frontend_url}/?oauth_error=token_exchange_failed")
+
+        # GitHub's API requires a User-Agent header on every request.
+        gh_headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "LyndonLLM",
+        }
+
+        # 2) Fetch the user profile — `id` is the stable subject.
+        user_resp = await client.get("https://api.github.com/user", headers=gh_headers)
+        if user_resp.status_code != 200:
+            return RedirectResponse(f"{settings.frontend_url}/?oauth_error=profile_fetch_failed")
+        profile = user_resp.json()
+        github_sub = str(profile["id"]) if profile.get("id") is not None else None
+        if not github_sub:
+            return RedirectResponse(f"{settings.frontend_url}/?oauth_error=missing_sub")
+
+        # 3) Resolve a primary + verified email (GitHub profile email is often private/null).
+        email: str | None = None
+        emails_resp = await client.get("https://api.github.com/user/emails", headers=gh_headers)
+        if emails_resp.status_code == 200:
+            for entry in emails_resp.json():
+                if entry.get("primary") and entry.get("verified"):
+                    email = entry.get("email")
+                    break
+
+    return await _finalize_oauth_login("github", github_sub, email, db)
 
 
 @router.post("/oauth/complete", response_model=TokenResponse, status_code=201)

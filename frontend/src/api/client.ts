@@ -117,6 +117,15 @@ export async function getGoogleAuthUrl(): Promise<{ url: string }> {
   return res.json()
 }
 
+export async function getGithubAuthUrl(): Promise<{ url: string }> {
+  const res = await fetch(`${BASE}/auth/github/authorize`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
 export async function completeOAuthLogin(
   pendingToken: string,
   username: string,

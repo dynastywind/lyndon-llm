@@ -290,7 +290,7 @@ export const en = {
     usernameTaken: 'Username already taken',
     passwordsDoNotMatch: 'Passwords do not match',
     resetSuccess: 'Password updated. Please sign in with your new password.',
-    oauthSubtitle: "Your Google account isn't linked to a user yet. Choose a username to continue.",
+    oauthSubtitle: "Your account isn't linked to a user yet. Choose a username to continue.",
     forgotPassword: 'Forgot password?',
     register: 'Register',
     signIn: 'Sign in',
@@ -299,10 +299,12 @@ export const en = {
     haveAccount: 'Already have an account?',
     rememberIt: 'Remember it?',
     continueWithGoogle: 'Continue with Google',
+    continueWithGithub: 'Continue with GitHub',
     or: 'or',
     pleaseWait: 'Please wait…',
     genericError: 'An error occurred',
     googleUnavailable: 'Google login unavailable',
+    githubUnavailable: 'GitHub login unavailable',
   },
 
   deleteAccount: {

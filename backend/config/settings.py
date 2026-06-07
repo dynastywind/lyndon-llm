@@ -139,6 +139,11 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:5173"
     oauth_pending_expire_minutes: int = 10
 
+    # Auth — GitHub OAuth (reuses the shared frontend_url and oauth_pending_expire_minutes)
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    github_redirect_uri: str = "http://localhost:8000/api/auth/github/callback"
+
     # Langfuse observability (leave blank to disable)
     langfuse_secret_key: str = ""
     langfuse_public_key: str = ""
