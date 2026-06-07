@@ -89,6 +89,12 @@ class WindowsDriver(OSDriver):
     async def set_clipboard(self, content: str | None = None) -> ToolResult:
         return self._unsupported("set_clipboard")
 
+    # App tasks
+    async def create_note(
+        self, title: str | None = None, body: str | None = None
+    ) -> ToolResult:
+        return self._unsupported("create_note")
+
     # Escape hatch
     async def run_script(self, script: str | None = None) -> ToolResult:
         return self._unsupported("run_script")

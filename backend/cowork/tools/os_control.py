@@ -110,6 +110,14 @@ class OSControlTool(BaseTool):
                         "type": "string",
                         "description": "Text to place on the clipboard (set_clipboard).",
                     },
+                    "title": {
+                        "type": "string",
+                        "description": "Note title (create_note).",
+                    },
+                    "body": {
+                        "type": "string",
+                        "description": "Note body text (create_note).",
+                    },
                     "script": {
                         "type": "string",
                         "description": "Raw platform script — AppleScript on macOS (run_script).",

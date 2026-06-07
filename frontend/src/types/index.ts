@@ -189,7 +189,7 @@ export interface Project {
 export interface ProjectFile {
   path: string
   name: string
-  chunks: number
+  size_bytes?: number
 }
 
 export interface ChatSessionMessage {

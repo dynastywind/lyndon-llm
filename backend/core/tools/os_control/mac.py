@@ -298,6 +298,32 @@ class MacDriver(OSDriver):
             return self._err("'content' is required for set_clipboard.")
         return await self._run_exec("pbcopy", stdin_data=content.encode())
 
+    # --- app tasks ---------------------------------------------------------
+
+    async def create_note(
+        self, title: str | None = None, body: str | None = None
+    ) -> ToolResult:
+        if not title and not body:
+            return self._err("create_note needs at least a 'title' or 'body'.")
+        # Notes renders the body as HTML; the first line becomes the title, so
+        # prepend the title as a heading. Use 'with properties {body:…}' which is
+        # the reliable, account-default way to create a visible note.
+        title = title or "New Note"
+        html_body = f"<div><b>{_quote(title)}</b></div>"
+        if body:
+            html_body += f"<div>{_quote(body)}</div>"
+        script = (
+            'tell application "Notes" to make new note with properties {body:"'
+            + html_body
+            + '"}'
+        )
+        result = await self._run_osascript(script)
+        if result.success:
+            return ToolResult(
+                tool_name=_TOOL_NAME, success=True, output=f"Note '{title}' created in Notes."
+            )
+        return result
+
     # --- escape hatch ------------------------------------------------------
 
     async def run_script(self, script: str | None = None) -> ToolResult:

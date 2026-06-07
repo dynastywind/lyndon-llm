@@ -131,6 +131,7 @@ Examples:
 - "open Safari" → call desktop_control action="open_app", app_name="Safari"
 - "center Safari's window" → call desktop_control action="center_window", app_name="Safari"
 - "move the window to 100,100" → call desktop_control action="move_window", app_name=…, x=100, y=100
+- "add a note to Notes" → call desktop_control action="create_note", title=…, body=…
 - "take a screenshot" → call desktop_control action="screenshot", output_path=…
 - a raw AppleScript you composed → call desktop_control action="run_script", script="…" \
 (do NOT just print the script)
@@ -141,6 +142,25 @@ Examples:
 If a task is ambiguous, pick the most appropriate tool and explain what \
 you ran and what the result means.
 """
+
+# Appended to the agentic prompt when the user has pinned a work directory for
+# the thread. Tells the model to anchor reads/writes/commands there by default,
+# which—combined with apply_working_directory() in the tool-call path—keeps file
+# and shell operations inside the directory unless the user names another place.
+WORKING_DIR_PROMPT = """\
+## Working directory
+The user has pinned this working directory for the conversation:
+
+    {work_dir}
+
+Treat it as your base directory. By default keep every file read, file write, \
+and shell command inside it:
+- For file_read / file_write, use paths relative to this directory (e.g. \
+`src/app.py`); a plain filename or relative path resolves inside it automatically.
+- For shell, omit `cwd` (it defaults to this directory) or set it to a path within it.
+
+Only read, write, or run commands outside this directory when the user \
+explicitly asks for a specific other location."""
 
 logger = logging.getLogger(__name__)
 
@@ -421,6 +441,12 @@ class ChatEngine:
         # from training data when it should run a real command.
         if self.session.mode != Mode.CHAT:
             system_prompt = AGENTIC_SYSTEM_PROMPT
+            # Surface the pinned work directory so the model anchors file/shell
+            # operations there by default (the tool-call path resolves relative
+            # paths into it via apply_working_directory).
+            work_dir = self.session.metadata.get("working_directory")
+            if work_dir:
+                system_prompt = f"{system_prompt}\n\n{WORKING_DIR_PROMPT.format(work_dir=work_dir)}"
         else:
             system_prompt = BASE_SYSTEM_PROMPT
         if effort_mode and effort_mode in _EFFORT_DIRECTIVES:

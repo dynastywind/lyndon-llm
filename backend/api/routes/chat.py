@@ -109,6 +109,18 @@ async def chat(
     repo = ChatRepo(db)
     await repo.set_streaming(session.session_id, True)
 
+    # Files attached while chatting inside a project are also saved to that
+    # project's file store (and indexed) so they show in its Context → Files
+    # panel. Fired as a background task so embedding never delays the response.
+    if attachments and user_id:
+        _db_session = await repo.get_session(session.session_id)
+        if _db_session is not None and _db_session.project_id:
+            from api.routes.projects import save_project_attachments
+
+            asyncio.create_task(
+                save_project_attachments(user_id, _db_session.project_id, attachments)
+            )
+
     # Run the LLM as a background task so the stream survives client disconnects
     async def _run_llm() -> None:
         from db.base import AsyncSessionLocal

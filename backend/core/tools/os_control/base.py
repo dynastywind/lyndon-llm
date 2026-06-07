@@ -57,6 +57,8 @@ OS_CONTROL_ACTIONS: tuple[str, ...] = (
     "screenshot",
     "get_clipboard",
     "set_clipboard",
+    # App tasks
+    "create_note",
     # Escape hatch
     "run_script",
 )
@@ -79,6 +81,7 @@ ACTION_RISK: dict[str, RiskTier] = {
     "minimize_window": RiskTier.SENSITIVE,
     "maximize_window": RiskTier.SENSITIVE,
     "set_clipboard": RiskTier.SENSITIVE,
+    "create_note": RiskTier.SENSITIVE,
     # DANGEROUS — arbitrary or irreversible
     "quit_app": RiskTier.DANGEROUS,
     "close_window": RiskTier.DANGEROUS,
@@ -207,6 +210,13 @@ class OSDriver(ABC):
 
     @abstractmethod
     async def set_clipboard(self, content: str | None = None) -> ToolResult: ...
+
+    # --- app tasks ---------------------------------------------------------
+
+    @abstractmethod
+    async def create_note(
+        self, title: str | None = None, body: str | None = None
+    ) -> ToolResult: ...
 
     # --- escape hatch ------------------------------------------------------
 

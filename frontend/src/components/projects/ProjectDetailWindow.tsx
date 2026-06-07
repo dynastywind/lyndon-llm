@@ -31,6 +31,7 @@ import {
   IconArrowLeft,
   IconChat,
   IconDots,
+  IconFile,
   IconFolder,
   IconMemory,
   IconMove,
@@ -563,7 +564,7 @@ export function ProjectDetailWindow() {
                       <div key={f.path} className="p-ctx-item">
                         <span className="p-ctx-arrow">▸</span>
                         <span className="p-ctx-icon">
-                          <IconChat />
+                          <IconFile />
                         </span>
                         <span>{f.name}</span>
                         <button

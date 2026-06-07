@@ -67,6 +67,7 @@ def test_every_action_has_a_risk_tier():
         ("move_window", RiskTier.SENSITIVE),
         ("center_window", RiskTier.SENSITIVE),
         ("set_clipboard", RiskTier.SENSITIVE),
+        ("create_note", RiskTier.SENSITIVE),
         ("quit_app", RiskTier.DANGEROUS),
         ("close_window", RiskTier.DANGEROUS),
         ("send_keystroke", RiskTier.DANGEROUS),
@@ -232,3 +233,26 @@ async def test_mac_legacy_alias_list_apps_live():
     res = await MacControlTool(_gate()).run(action="list_apps")
     assert res.success is True
     assert res.output
+
+
+@mac_only
+async def test_mac_create_note_live():
+    title = "lyndonLLM pytest note"
+    try:
+        res = await _tool().run(action="create_note", title=title, body="created by pytest")
+        assert res.success is True
+        # Confirm the note actually exists in Notes.
+        check = await MacDriver().run_script(
+            f'tell application "Notes" to count (notes whose name is "{title}")'
+        )
+        assert check.success is True
+        assert int((check.output or "0").strip()) >= 1
+    finally:
+        # Clean up regardless of assertion outcome.
+        await MacDriver().run_script(
+            'tell application "Notes"\n'
+            f'  repeat with n in (get notes whose name is "{title}")\n'
+            "    delete n\n"
+            "  end repeat\n"
+            "end tell"
+        )
