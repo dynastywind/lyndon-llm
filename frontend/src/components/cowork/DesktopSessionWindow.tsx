@@ -653,6 +653,23 @@ function DirectoryChip({
   directory: string | null
   onChange: (d: string | null) => void
 }) {
+  // Open the OS folder picker via the Tauri dialog plugin. Loaded lazily so the
+  // web bundle never pulls it in (cowork/code are desktop-only anyway).
+  const handleBrowse = async () => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog')
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select work directory',
+        // defaultPath only accepts absolute paths — skip "~/…" shortcuts.
+        ...(directory?.startsWith('/') ? { defaultPath: directory } : {}),
+      })
+      if (typeof selected === 'string') onChange(selected)
+    } catch (err) {
+      console.warn('[directory] folder picker failed:', err)
+    }
+  }
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -746,7 +763,7 @@ function DirectoryChip({
           ))}
           <div style={{ height: 1, background: LV.rule, margin: '4px 0' }} />
           <DropdownMenu.Item
-            onSelect={() => onChange(null)}
+            onSelect={() => void handleBrowse()}
             style={{ outline: 'none', cursor: 'pointer' }}
             className="hover:bg-accent focus:bg-accent transition-colors"
           >
