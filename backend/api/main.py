@@ -9,7 +9,18 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import auth, chat, code, cowork, projects, rag, registry, sandbox, skills
+from api.routes import (
+    auth,
+    chat,
+    code,
+    cowork,
+    projects,
+    rag,
+    registry,
+    sandbox,
+    skills,
+    transcribe,
+)
 from api.ws.stream import router as ws_router
 from config.settings import settings
 
@@ -113,10 +124,12 @@ def _register_all_tools() -> None:
     # Cowork tools (read + write + exec)
     from cowork.tools.file_io import FileReadTool, FileWriteTool
     from cowork.tools.mac_control import MacControlTool
+    from cowork.tools.os_control import OSControlTool
     from cowork.tools.shell import ShellTool
 
     tool_registry.register(Mode.COWORK, ShellTool)
-    tool_registry.register(Mode.COWORK, MacControlTool)
+    tool_registry.register(Mode.COWORK, OSControlTool)
+    tool_registry.register(Mode.COWORK, MacControlTool)  # deprecated alias
     tool_registry.register(Mode.COWORK, FileReadTool)
     tool_registry.register(Mode.COWORK, FileWriteTool)
     tool_registry.register(Mode.COWORK, RAGQueryTool)
@@ -125,7 +138,8 @@ def _register_all_tools() -> None:
 
     # Code tools (same as cowork + git-aware)
     tool_registry.register(Mode.CODE, ShellTool)
-    tool_registry.register(Mode.CODE, MacControlTool)
+    tool_registry.register(Mode.CODE, OSControlTool)
+    tool_registry.register(Mode.CODE, MacControlTool)  # deprecated alias
     tool_registry.register(Mode.CODE, FileReadTool)
     tool_registry.register(Mode.CODE, FileWriteTool)
 
@@ -153,6 +167,7 @@ app.include_router(rag.router, prefix="/api/rag", tags=["rag"])
 app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
 app.include_router(sandbox.router, prefix="/api/sandbox", tags=["sandbox"])
 app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
+app.include_router(transcribe.router, prefix="/api/transcribe", tags=["transcribe"])
 app.include_router(ws_router, prefix="/ws", tags=["websocket"])
 
 

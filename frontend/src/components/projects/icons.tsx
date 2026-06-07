@@ -136,6 +136,15 @@ export function IconPushpin() {
   )
 }
 
+export function IconFile() {
+  return (
+    <svg viewBox="0 0 24 24">
+      <path d="M14 3 H6 a1 1 0 0 0 -1 1 v16 a1 1 0 0 0 1 1 h12 a1 1 0 0 0 1 -1 V8 z" />
+      <polyline points="14 3 14 8 19 8" />
+    </svg>
+  )
+}
+
 export function IconArchive() {
   return (
     <svg viewBox="0 0 24 24">

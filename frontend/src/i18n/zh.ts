@@ -285,7 +285,7 @@ export const zh: Dict = {
     usernameTaken: '用户名已被占用',
     passwordsDoNotMatch: '两次输入的密码不一致',
     resetSuccess: '密码已更新，请使用新密码登录。',
-    oauthSubtitle: '你的 Google 账户尚未关联用户，请选择一个用户名以继续。',
+    oauthSubtitle: '你的账户尚未关联用户，请选择一个用户名以继续。',
     forgotPassword: '忘记密码？',
     register: '注册',
     signIn: '登录',
@@ -294,10 +294,12 @@ export const zh: Dict = {
     haveAccount: '已有账户？',
     rememberIt: '想起来了？',
     continueWithGoogle: '使用 Google 继续',
+    continueWithGithub: '使用 GitHub 继续',
     or: '或',
     pleaseWait: '请稍候…',
     genericError: '发生错误',
     googleUnavailable: 'Google 登录不可用',
+    githubUnavailable: 'GitHub 登录不可用',
   },
 
   deleteAccount: {
@@ -432,5 +434,15 @@ export const zh: Dict = {
     close: '关闭',
     loading: '加载中…',
     loadError: '文件加载失败',
+  },
+
+  voice: {
+    record: '语音输入',
+    stop: '停止录音',
+    transcribing: '转写中…',
+    denied: '麦克风访问被拒绝',
+    failed: '转写失败',
+    speak: '朗读',
+    stopSpeak: '停止朗读',
   },
 }

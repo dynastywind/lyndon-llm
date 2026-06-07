@@ -16,6 +16,8 @@ dependencies = [
     "pydantic-settings>=2.3",
     # LLM & Embeddings
     "openai>=1.30",
+    # Speech-to-text (local Whisper)
+    "faster-whisper>=1.0",
     # Observability
     "langfuse>=2.0",
     # MCP (user-registered tool servers)

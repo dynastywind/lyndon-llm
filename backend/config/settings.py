@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     embedding_api_key: str = "local"
     embedding_dimension: int = 768
 
+    # Speech-to-text (local Whisper)
+    transcription_enabled: bool = True
+    whisper_model: str = "base"  # tiny | base | small | medium | large-v3
+    whisper_device: str = "cpu"  # cpu | cuda
+    whisper_compute_type: str = "int8"  # int8 (cpu) | float16 (gpu)
+
     # Vector store
     vector_store_backend: VectorStoreBackend = VectorStoreBackend.chroma
     chroma_host: str = "localhost"
@@ -132,6 +138,11 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
     frontend_url: str = "http://localhost:5173"
     oauth_pending_expire_minutes: int = 10
+
+    # Auth — GitHub OAuth (reuses the shared frontend_url and oauth_pending_expire_minutes)
+    github_client_id: str = ""
+    github_client_secret: str = ""
+    github_redirect_uri: str = "http://localhost:8000/api/auth/github/callback"
 
     # Langfuse observability (leave blank to disable)
     langfuse_secret_key: str = ""

@@ -35,6 +35,25 @@ def _extract_user_profile(content: str) -> str:
     return _extract_section(content, "User Profile")
 
 
+def _episodic_snippet(content: str) -> str:
+    """Reduce a stored episodic memory to its conversational substance.
+
+    Episodic documents are whole session-file snapshots (header +
+    ## Conversation Summary + ## User Profile). Injecting them verbatim as
+    "relevant memories" would litter the prompt with duplicate ## User Profile
+    sections — the authoritative profile is already merged and injected once.
+    So we keep only the conversation summary (or, for plain summaries, the text
+    minus any profile block and file header).
+    """
+    summary = _extract_section(content, "Conversation Summary")
+    if summary:
+        return summary.split("\n", 1)[1].strip() if "\n" in summary else ""
+    # Not a sectioned snapshot — strip any User Profile block + file header.
+    text = re.sub(r"\n?## User Profile\n.*?(?=\n## |\Z)", "", content, flags=re.DOTALL)
+    text = re.sub(r"\A#.*\n(?:Updated:.*\n)?", "", text)
+    return text.strip()
+
+
 def _parse_profile_items(profile_block: str) -> dict[str, str]:
     """Parse '- Key: Value' lines from a User Profile block into an ordered dict."""
     items: dict[str, str] = {}
@@ -191,10 +210,17 @@ class MemoryManager:
             session_id=None if self.user_id else self.session_id,
         )
         if memories:
-            mem_block = "\n".join(
-                f"- [{m.memory_type.value}] {m.content}" for m in memories
-            )
-            enriched = f"{enriched}\n\n## Relevant memories from past sessions\n{mem_block}"
+            # Reduce each memory to its conversational substance so the prompt
+            # carries exactly ONE ## User Profile (the merged one above), not a
+            # duplicate per retrieved session snapshot.
+            lines = []
+            for m in memories:
+                snippet = _episodic_snippet(m.content)
+                if snippet:
+                    lines.append(f"- [{m.memory_type.value}] {snippet}")
+            if lines:
+                mem_block = "\n".join(lines)
+                enriched = f"{enriched}\n\n## Relevant memories from past sessions\n{mem_block}"
 
         self.short_term.set_system_prompt(enriched)
         return enriched

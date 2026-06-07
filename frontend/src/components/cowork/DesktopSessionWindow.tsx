@@ -22,6 +22,7 @@ import { useStream } from '@/hooks/useStream'
 import { getAllChatMessages, getModels, approveToolCall, rejectToolCall } from '@/api/client'
 import type { Message, ChatSessionMessage, ToolCallRecord } from '@/types'
 import { cn } from '@/lib/utils'
+import { MicButton } from '@/components/chat/MicButton'
 
 // ── LV tokens ────────────────────────────────────────────────────────────────
 const LV = {
@@ -653,6 +654,23 @@ function DirectoryChip({
   directory: string | null
   onChange: (d: string | null) => void
 }) {
+  // Open the OS folder picker via the Tauri dialog plugin. Loaded lazily so the
+  // web bundle never pulls it in (cowork/code are desktop-only anyway).
+  const handleBrowse = async () => {
+    try {
+      const { open } = await import('@tauri-apps/plugin-dialog')
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: 'Select work directory',
+        // defaultPath only accepts absolute paths — skip "~/…" shortcuts.
+        ...(directory?.startsWith('/') ? { defaultPath: directory } : {}),
+      })
+      if (typeof selected === 'string') onChange(selected)
+    } catch (err) {
+      console.warn('[directory] folder picker failed:', err)
+    }
+  }
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -746,7 +764,7 @@ function DirectoryChip({
           ))}
           <div style={{ height: 1, background: LV.rule, margin: '4px 0' }} />
           <DropdownMenu.Item
-            onSelect={() => onChange(null)}
+            onSelect={() => void handleBrowse()}
             style={{ outline: 'none', cursor: 'pointer' }}
             className="hover:bg-accent focus:bg-accent transition-colors"
           >
@@ -943,6 +961,12 @@ export function DesktopSessionWindow({ mode }: Props) {
   const messages = sessionId ? (sessionMessages[sessionId] ?? []) : []
   const isHome = !sessionId
   const canSend = inputText.trim().length > 0 && !isStreaming
+
+  // Insert transcribed speech into the input, appended to whatever is typed.
+  const appendTranscript = (text: string) => {
+    setInputText((prev) => (prev.trim() ? `${prev.trimEnd()} ${text}` : text))
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
 
   // Working directory and acting mode are remembered per thread: keyed by
   // sessionId once the thread exists, or under '__new__' while still on the home
@@ -1191,6 +1215,13 @@ export function DesktopSessionWindow({ mode }: Props) {
                 effortMode={effortMode}
                 onSelectModel={setSelectedModel}
                 onSelectEffort={handleSelectEffort}
+              />
+              <MicButton
+                onTranscript={appendTranscript}
+                disabled={isStreaming}
+                variant="square"
+                size={32}
+                radius={4}
               />
               <button
                 type="button"
@@ -1508,6 +1539,13 @@ export function DesktopSessionWindow({ mode }: Props) {
                 paddingBottom: 3,
                 minHeight: 26,
               }}
+            />
+            <MicButton
+              onTranscript={appendTranscript}
+              disabled={isStreaming}
+              variant="square"
+              size={28}
+              radius={4}
             />
             <button
               type="button"

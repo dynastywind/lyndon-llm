@@ -8,7 +8,10 @@ but remain searchable.
 
 from __future__ import annotations
 
+import base64
+import binascii
 from datetime import UTC, datetime
+import logging
 from pathlib import Path
 import shutil
 
@@ -22,6 +25,8 @@ from chat.rag.ingestion.pipeline import IngestPipeline, ingest_pipeline
 from db.base import get_db
 from db.models.user import User
 from db.repos.project import ProjectRepo
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -92,6 +97,36 @@ async def _owned_project(repo: ProjectRepo, project_id: str, user: User | None):
 
 def _project_dir(user_id: str, project_id: str) -> Path:
     return UPLOADS_DIR / user_id / "projects" / project_id
+
+
+async def save_project_attachments(
+    user_id: str, project_id: str, attachments: list[dict] | None
+) -> None:
+    """Persist chat attachments to a project's file store and index them.
+
+    Files attached while chatting inside a project are saved to the project's
+    upload directory (so they appear in the Context → Files panel) and ingested
+    into RAG scoped by ``project_id`` (text → text collection, images → CLIP).
+    Best-effort: a single bad attachment never aborts the others or the chat.
+    """
+    if not attachments or not user_id or not project_id:
+        return
+    dest_dir = _project_dir(user_id, project_id)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for att in attachments:
+        name = att.get("name") or "upload"
+        data_b64 = att.get("data") or ""
+        try:
+            raw = base64.b64decode(data_b64)
+        except (binascii.Error, ValueError):
+            logger.warning("skipping project attachment with invalid base64: %s", name)
+            continue
+        dest = dest_dir / Path(name).name  # strip any path components from the name
+        try:
+            dest.write_bytes(raw)
+            await ingest_pipeline.ingest(str(dest), user_id=user_id, project_id=project_id)
+        except Exception:  # noqa: BLE001 — indexing is best-effort; the file is still stored
+            logger.exception("failed to index project attachment %s", dest)
 
 
 # ── Project CRUD ─────────────────────────────────────────────────────────────
@@ -238,22 +273,15 @@ async def list_project_files(
     repo = ProjectRepo(db)
     await _owned_project(repo, project_id, user)
 
-    from db.vector.store import get_vector_store
-
-    vs = await get_vector_store(IngestPipeline.COLLECTION_NAME)
-    _ids, _docs, metas = await vs.list_all(limit=100_000)
-
-    counts: dict[str, int] = {}
-    for meta in metas:
-        if meta.get("user_id") != user.id or meta.get("project_id") != project_id:
-            continue
-        src = meta.get("source", "")
-        if src:
-            counts[src] = counts.get(src, 0) + 1
-
+    # List the project's upload directory directly so every stored file shows —
+    # both panel uploads and files attached while chatting in the project,
+    # regardless of which RAG collection (text vs. image) indexed them.
+    pdir = _project_dir(user.id, project_id)
     files = []
-    for src, chunk_count in sorted(counts.items(), key=lambda kv: Path(kv[0]).name.lower()):
-        files.append({"path": src, "name": Path(src).name, "chunks": chunk_count})
+    if pdir.exists():
+        for p in sorted(pdir.iterdir(), key=lambda x: x.name.lower()):
+            if p.is_file():
+                files.append({"path": str(p), "name": p.name, "size_bytes": p.stat().st_size})
     return {"files": files}
 
 
