@@ -18,6 +18,7 @@ import {
   Copy,
   RotateCcw,
   Square,
+  Volume2,
   Plus,
   Puzzle,
   X,
@@ -67,6 +68,8 @@ import type {
   MessageAttachment,
 } from '@/types'
 import { PlanPreviewCard } from '@/components/chat/PlanPreviewCard'
+import { MicButton } from '@/components/chat/MicButton'
+import { useSpeech } from '@/hooks/useSpeech'
 
 // ─── Asterisk mark components ─────────────────────────────────────────────────
 
@@ -1524,6 +1527,7 @@ function MsgActionBtn({
 function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
   const { t } = useT()
   const [copied, setCopied] = useState(false)
+  const speech = useSpeech(msg.content)
 
   const handleCopy = () => {
     navigator.clipboard.writeText(msg.content).catch(() => {})
@@ -1559,6 +1563,14 @@ function MessageActions({ msg, isUser }: { msg: Message; isUser: boolean }) {
       <MsgActionBtn onClick={handleCopy} title={copied ? t('chat.copied') : t('chat.copy')}>
         {copied ? <Check size={13} /> : <Copy size={13} />}
       </MsgActionBtn>
+      {!isUser && speech.supported && (
+        <MsgActionBtn
+          onClick={speech.toggle}
+          title={speech.speaking ? t('voice.stopSpeak') : t('voice.speak')}
+        >
+          {speech.speaking ? <Square size={12} fill="currentColor" /> : <Volume2 size={13} />}
+        </MsgActionBtn>
+      )}
     </div>
   )
 }
@@ -2082,6 +2094,14 @@ export function ChatWindow() {
     setTimeout(() => textareaRef.current?.focus(), 0)
   }
 
+  // Insert transcribed speech into the draft, appended to whatever is typed.
+  const appendTranscript = (text: string) => {
+    const next = input.trim() ? `${input.trimEnd()} ${text}` : text
+    setInput(next)
+    setDraft(draftKey, next)
+    setTimeout(() => textareaRef.current?.focus(), 0)
+  }
+
   // ── Context panel — collect all attachments from current session ──────
   // Newest-first; deduplicated by data URL prefix so identical files are
   // not listed twice even if sent in multiple messages.
@@ -2562,6 +2582,9 @@ export function ChatWindow() {
                     </DropdownMenu.Content>
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
+
+                {/* Voice-to-text */}
+                <MicButton onTranscript={appendTranscript} disabled={isStreaming} />
 
                 <span style={{ flex: 1 }} />
 

@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     embedding_api_key: str = "local"
     embedding_dimension: int = 768
 
+    # Speech-to-text (local Whisper)
+    transcription_enabled: bool = True
+    whisper_model: str = "base"  # tiny | base | small | medium | large-v3
+    whisper_device: str = "cpu"  # cpu | cuda
+    whisper_compute_type: str = "int8"  # int8 (cpu) | float16 (gpu)
+
     # Vector store
     vector_store_backend: VectorStoreBackend = VectorStoreBackend.chroma
     chroma_host: str = "localhost"

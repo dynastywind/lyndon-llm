@@ -439,6 +439,16 @@ export const en = {
     loading: 'Loading…',
     loadError: 'Failed to load file',
   },
+
+  voice: {
+    record: 'Record voice',
+    stop: 'Stop recording',
+    transcribing: 'Transcribing…',
+    denied: 'Microphone access denied',
+    failed: 'Transcription failed',
+    speak: 'Read aloud',
+    stopSpeak: 'Stop reading',
+  },
 } as const
 
 // Structural type of the dictionary with leaf strings widened to `string`,

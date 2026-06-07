@@ -711,6 +711,24 @@ export async function uploadRagFile(
   return res.json()
 }
 
+/** Transcribe a recorded audio clip to text (local Whisper on the backend). */
+export async function transcribeAudio(blob: Blob, language?: string): Promise<string> {
+  const form = new FormData()
+  form.append('file', blob, 'recording.webm')
+  if (language) form.append('language', language)
+  const res = await fetch(`${BASE}/transcribe/`, {
+    method: 'POST',
+    body: form,
+    headers: authHeader(),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  const data = (await res.json()) as { text: string }
+  return data.text
+}
+
 export interface RagSource {
   path: string
   name: string

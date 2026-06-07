@@ -22,6 +22,7 @@ import { useStream } from '@/hooks/useStream'
 import { getAllChatMessages, getModels, approveToolCall, rejectToolCall } from '@/api/client'
 import type { Message, ChatSessionMessage, ToolCallRecord } from '@/types'
 import { cn } from '@/lib/utils'
+import { MicButton } from '@/components/chat/MicButton'
 
 // ── LV tokens ────────────────────────────────────────────────────────────────
 const LV = {
@@ -961,6 +962,12 @@ export function DesktopSessionWindow({ mode }: Props) {
   const isHome = !sessionId
   const canSend = inputText.trim().length > 0 && !isStreaming
 
+  // Insert transcribed speech into the input, appended to whatever is typed.
+  const appendTranscript = (text: string) => {
+    setInputText((prev) => (prev.trim() ? `${prev.trimEnd()} ${text}` : text))
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
   // Working directory and acting mode are remembered per thread: keyed by
   // sessionId once the thread exists, or under '__new__' while still on the home
   // screen (carried onto the real session by useStream when the first message
@@ -1202,6 +1209,7 @@ export function DesktopSessionWindow({ mode }: Props) {
               <DirectoryChip directory={directory} onChange={handleSelectDirectory} />
               <ActingModeChip actingMode={actingMode} onChange={handleSelectActingMode} />
               <span style={{ flex: 1 }} />
+              <MicButton onTranscript={appendTranscript} disabled={isStreaming} />
               <ModelDropdown
                 models={models}
                 selectedModel={selectedModel}
@@ -1566,6 +1574,7 @@ export function DesktopSessionWindow({ mode }: Props) {
               @ reference
             </span>
             <span style={{ flex: 1 }} />
+            <MicButton onTranscript={appendTranscript} disabled={isStreaming} />
             <ModelDropdown
               models={models}
               selectedModel={selectedModel}

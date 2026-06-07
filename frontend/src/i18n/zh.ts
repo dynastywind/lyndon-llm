@@ -433,4 +433,14 @@ export const zh: Dict = {
     loading: '加载中…',
     loadError: '文件加载失败',
   },
+
+  voice: {
+    record: '语音输入',
+    stop: '停止录音',
+    transcribing: '转写中…',
+    denied: '麦克风访问被拒绝',
+    failed: '转写失败',
+    speak: '朗读',
+    stopSpeak: '停止朗读',
+  },
 }
