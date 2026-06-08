@@ -78,7 +78,7 @@ backend:
   # Chart-managed secret values — leave all empty here; supply via values-secrets.yaml.
   # Required keys (must also be present when using existingSecret):
   #   LLM_API_KEY, EMBEDDING_API_KEY, LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY,
-  #   JWT_SECRET_KEY, QDRANT_API_KEY
+  #   JWT_SECRET_KEY, QDRANT_API_KEY, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
   secrets:
     llmApiKey: ""            # LLM provider API key (leave empty for local Ollama)
     embeddingApiKey: ""      # Embedding provider API key (leave empty for local Ollama)
@@ -86,6 +86,8 @@ backend:
     langfuseSecretKey: ""    # Langfuse secret key  (sk-lf-…)
     jwtSecretKey: ""         # Random 32-byte hex — generate: openssl rand -hex 32
     qdrantApiKey: ""         # Qdrant API key (leave empty to run Qdrant without auth)
+    githubClientId: ""       # GitHub OAuth App client ID (leave empty to disable GitHub login)
+    githubClientSecret: ""   # GitHub OAuth App client secret
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
 frontend:

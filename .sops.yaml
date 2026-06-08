@@ -31,4 +31,4 @@ creation_rules:
     age: >-
       age18wt7x97c35fxfsknd23ah388e8gkzd3mhztmxzg334fzhq2qaeeskk4s3d
     # Encrypt only the secret leaf values; keys and structure stay readable.
-    encrypted_regex: ^(llmApiKey|embeddingApiKey|langfusePublicKey|langfuseSecretKey|jwtSecretKey|qdrantApiKey)$
+    encrypted_regex: ^(llmApiKey|embeddingApiKey|langfusePublicKey|langfuseSecretKey|jwtSecretKey|qdrantApiKey|githubClientId|githubClientSecret)$
