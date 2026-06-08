@@ -382,3 +382,66 @@ describe('chatPlanner', () => {
     expect(useAppStore.getState().chatPlanStepStatuses).toEqual({})
   })
 })
+
+// ── language ──────────────────────────────────────────────────────────────────
+
+describe('language', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    useAppStore.setState({ language: 'en' })
+  })
+
+  it('setLanguage updates the value', () => {
+    useAppStore.getState().setLanguage('zh')
+    expect(useAppStore.getState().language).toBe('zh')
+  })
+
+  it('setLanguage persists the choice to localStorage under lv-lang', () => {
+    useAppStore.getState().setLanguage('zh')
+    expect(localStorage.getItem('lv-lang')).toBe('zh')
+  })
+
+  it('can switch back to English', () => {
+    useAppStore.getState().setLanguage('zh')
+    useAppStore.getState().setLanguage('en')
+    expect(useAppStore.getState().language).toBe('en')
+    expect(localStorage.getItem('lv-lang')).toBe('en')
+  })
+})
+
+// ── active project ────────────────────────────────────────────────────────────
+
+describe('activeProjectId', () => {
+  beforeEach(() => useAppStore.setState({ activeProjectId: null }))
+
+  it('defaults to null', () => {
+    expect(useAppStore.getState().activeProjectId).toBeNull()
+  })
+
+  it('setActiveProjectId stores the id', () => {
+    useAppStore.getState().setActiveProjectId('proj-1')
+    expect(useAppStore.getState().activeProjectId).toBe('proj-1')
+  })
+
+  it('setActiveProjectId(null) clears the active project', () => {
+    useAppStore.getState().setActiveProjectId('proj-1')
+    useAppStore.getState().setActiveProjectId(null)
+    expect(useAppStore.getState().activeProjectId).toBeNull()
+  })
+})
+
+// ── project list version ──────────────────────────────────────────────────────
+
+describe('projectListVersion', () => {
+  beforeEach(() => useAppStore.setState({ projectListVersion: 0 }))
+
+  it('starts at 0', () => {
+    expect(useAppStore.getState().projectListVersion).toBe(0)
+  })
+
+  it('bumpProjectVersion increments monotonically', () => {
+    useAppStore.getState().bumpProjectVersion()
+    useAppStore.getState().bumpProjectVersion()
+    expect(useAppStore.getState().projectListVersion).toBe(2)
+  })
+})
