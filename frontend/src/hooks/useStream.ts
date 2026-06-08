@@ -37,6 +37,7 @@ export function useStream() {
     mode,
     setSessionEffortMode,
     setSessionDirectory,
+    setSessionRepo,
     setSessionActingMode,
     setChatPendingPlan,
     setChatPlanStatus,
@@ -75,6 +76,10 @@ export function useStream() {
           const draftDir = useAppStore.getState().sessionDirectories['__new__']
           if (draftDir) setSessionDirectory(activeSessionId, draftDir)
           setSessionDirectory('__new__', null)
+          // Same for the GitHub repo picked on the home screen.
+          const draftRepo = useAppStore.getState().sessionRepos['__new__']
+          if (draftRepo) setSessionRepo(activeSessionId, draftRepo)
+          setSessionRepo('__new__', null)
           // Same for the acting mode picked on the home screen.
           const draftActing = useAppStore.getState().sessionActingModes['__new__']
           if (draftActing) setSessionActingMode(activeSessionId, draftActing)
@@ -157,6 +162,7 @@ export function useStream() {
       // draft key above, so the closure's snapshot would be stale.
       const workingDirectory =
         useAppStore.getState().sessionDirectories[activeSessionId] ?? undefined
+      const githubRepo = useAppStore.getState().sessionRepos[activeSessionId] ?? undefined
 
       // Convert MessageAttachment → AttachmentPayload
       const apiAttachments: AttachmentPayload[] | undefined = attachments?.length
@@ -290,6 +296,7 @@ export function useStream() {
           mode,
           options?.requireToolApproval ?? false,
           workingDirectory,
+          githubRepo,
           controller.signal,
         )
       } finally {
@@ -319,6 +326,7 @@ export function useStream() {
       mode,
       setSessionEffortMode,
       setSessionDirectory,
+      setSessionRepo,
       setSessionActingMode,
       setChatPendingPlan,
       setChatPlanStatus,

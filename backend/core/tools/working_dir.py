@@ -41,6 +41,22 @@ def normalize_working_directory(raw: str | None) -> str | None:
     return None
 
 
+def is_directory_empty(raw: str | None) -> bool:
+    """True when *raw* points at an existing directory with no entries.
+
+    Used to gate ``git clone`` — we refuse to clone into a non-empty directory and
+    ask the user to pick an empty one. A non-existent path is *not* empty (the clone
+    endpoint requires the directory to exist, since it is chosen via the folder picker).
+    """
+    if not raw or not raw.strip():
+        return False
+    try:
+        path = Path(raw.strip()).expanduser()
+        return path.is_dir() and not any(path.iterdir())
+    except OSError:
+        return False
+
+
 def apply_working_directory(fn_name: str, fn_args: dict, working_dir: str | None) -> dict:
     """Return ``fn_args`` with the work directory applied for known tools.
 

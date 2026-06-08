@@ -43,6 +43,7 @@ class ChatRequest(BaseModel):
     working_directory: str | None = (
         None  # Cowork/Code: pin shell cwd & file paths to this per-thread directory
     )
+    github_repo: str | None = None  # Code: full_name of the GitHub repo cloned into the dir
 
 
 class IngestRequest(BaseModel):
@@ -103,6 +104,9 @@ async def chat(
     from core.tools.working_dir import normalize_working_directory
 
     session.metadata["working_directory"] = normalize_working_directory(body.working_directory)
+    # The GitHub repo (full_name) cloned into the work dir, surfaced to the model so it
+    # knows which project it is working on.
+    session.metadata["github_repo"] = (body.github_repo or "").strip() or None
 
     # Create the in-memory event buffer and mark the session as streaming in DB
     buf = stream_registry.start(session.session_id)

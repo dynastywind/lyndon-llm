@@ -152,6 +152,13 @@ interface AppState {
   sessionDirectories: Record<string, string | null>
   setSessionDirectory: (key: string, directory: string | null) => void
   /**
+   * Per-session GitHub repo (code mode) — the full_name (e.g. "owner/repo") cloned
+   * into the work directory. Keyed by sessionId with the '__new__' home-screen key,
+   * mirroring sessionDirectories. Persisted and migrated onto the real session id.
+   */
+  sessionRepos: Record<string, string | null>
+  setSessionRepo: (key: string, repo: string | null) => void
+  /**
    * Per-session acting mode (cowork/code) — 'ask' requires tool approval before
    * each action, 'auto' acts autonomously. Keyed by sessionId, with the '__new__'
    * key holding the selection for a thread not yet created. Persisted so the
@@ -377,6 +384,9 @@ export const useAppStore = create<AppState>()(
       sessionDirectories: {},
       setSessionDirectory: (key, directory) =>
         set((s) => ({ sessionDirectories: { ...s.sessionDirectories, [key]: directory } })),
+      sessionRepos: {},
+      setSessionRepo: (key, repo) =>
+        set((s) => ({ sessionRepos: { ...s.sessionRepos, [key]: repo } })),
       sessionActingModes: {},
       setSessionActingMode: (key, mode) =>
         set((s) => ({ sessionActingModes: { ...s.sessionActingModes, [key]: mode } })),
@@ -445,6 +455,7 @@ export const useAppStore = create<AppState>()(
         effortMode: s.effortMode,
         sessionEffortModes: s.sessionEffortModes,
         sessionDirectories: s.sessionDirectories,
+        sessionRepos: s.sessionRepos,
         sessionActingModes: s.sessionActingModes,
         pinnedSessionIds: s.pinnedSessionIds,
         projectSort: s.projectSort,

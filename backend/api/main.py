@@ -14,6 +14,7 @@ from api.routes import (
     chat,
     code,
     cowork,
+    github,
     projects,
     rag,
     registry,
@@ -99,6 +100,8 @@ async def _migrate(conn) -> None:
         # v12 — per-user assistant settings (server-scoped; replaces global client storage)
         "ALTER TABLE users ADD COLUMN system_prompt TEXT",
         "ALTER TABLE users ADD COLUMN profession TEXT",
+        # v13 — encrypted GitHub access token (repo scope) for Code-mode clone/list
+        "ALTER TABLE users ADD COLUMN github_token TEXT",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore
@@ -162,6 +165,7 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(cowork.router, prefix="/api/cowork", tags=["cowork"])
 app.include_router(code.router, prefix="/api/code", tags=["code"])
+app.include_router(github.router, prefix="/api/github", tags=["github"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(rag.router, prefix="/api/rag", tags=["rag"])
 app.include_router(registry.router, prefix="/api/registry", tags=["registry"])

@@ -5,6 +5,7 @@ Wraps gitpython with an async-friendly interface.
 
 from __future__ import annotations
 
+from contextlib import suppress
 from pathlib import Path
 
 from config.settings import settings
@@ -15,6 +16,43 @@ class RepoDiff:
         self.file_path = file_path
         self.diff_text = diff_text
         self.is_new = is_new
+
+
+def _authed_clone_url(clone_url: str, token: str | None) -> str:
+    """Inject a token into an https GitHub URL so private repos clone non-interactively."""
+    if not token or not clone_url.startswith("https://"):
+        return clone_url
+    return clone_url.replace("https://", f"https://x-access-token:{token}@", 1)
+
+
+def _clean_remote_url(clone_url: str) -> str:
+    """Strip any embedded credentials so the token is never written to .git/config."""
+    import re
+
+    return re.sub(r"https://[^@/]+@", "https://", clone_url, count=1)
+
+
+async def clone_repo(clone_url: str, target_dir: str, token: str | None = None) -> str:
+    """Clone *clone_url* into *target_dir* (must be empty). Returns the cloned branch.
+
+    Runs the synchronous GitPython clone off the event loop. After cloning, the
+    ``origin`` remote is reset to the token-free URL so credentials never persist on
+    disk.
+    """
+    import asyncio
+
+    def _do_clone() -> str:
+        import git
+
+        repo = git.Repo.clone_from(_authed_clone_url(clone_url, token), target_dir)
+        with suppress(Exception):  # always strip any embedded token from the saved remote
+            repo.remote("origin").set_url(_clean_remote_url(clone_url))
+        try:
+            return repo.active_branch.name
+        except TypeError:  # detached HEAD (rare for a fresh clone)
+            return repo.head.commit.hexsha[:8]
+
+    return await asyncio.to_thread(_do_clone)
 
 
 class RepoManager:

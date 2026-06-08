@@ -461,6 +461,15 @@ async def github_callback(
         if not access_token:
             return RedirectResponse(f"{settings.frontend_url}/?oauth_error=token_exchange_failed")
 
+        # Connect flow: an already-logged-in user linking GitHub for repo access. The
+        # signed `state` carries the user id — store the token and return, no login.
+        from api.routes.github import decode_connect_state, store_connect_token
+
+        connect_uid = decode_connect_state(state)
+        if connect_uid:
+            await store_connect_token(connect_uid, access_token, db)
+            return RedirectResponse(f"{settings.frontend_url}/?github_connected=1")
+
         # GitHub's API requires a User-Agent header on every request.
         gh_headers = {
             "Authorization": f"Bearer {access_token}",

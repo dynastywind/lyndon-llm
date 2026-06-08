@@ -447,6 +447,12 @@ class ChatEngine:
             work_dir = self.session.metadata.get("working_directory")
             if work_dir:
                 system_prompt = f"{system_prompt}\n\n{WORKING_DIR_PROMPT.format(work_dir=work_dir)}"
+            github_repo = self.session.metadata.get("github_repo")
+            if github_repo:
+                system_prompt = (
+                    f"{system_prompt}\n\nThe working directory is a clone of the GitHub "
+                    f"repository **{github_repo}**."
+                )
         else:
             system_prompt = BASE_SYSTEM_PROMPT
         if effort_mode and effort_mode in _EFFORT_DIRECTIVES:

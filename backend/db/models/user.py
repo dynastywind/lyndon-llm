@@ -30,6 +30,9 @@ class User(Base):
     # OAuth fields — set for users who signed in via a third-party provider
     oauth_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)  # e.g. "google"
     oauth_sub: Mapped[str | None] = mapped_column(String(256), nullable=True)  # provider user ID
+    # GitHub access token (repo scope) for cloning/listing repos in Code mode.
+    # Stored encrypted at rest (memory_cipher, scoped to the user id).
+    github_token: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

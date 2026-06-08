@@ -102,6 +102,13 @@ class UserRepo:
             row.profession = (profession or "").strip() or None
         await self._db.commit()
 
+    async def set_github_token(self, user_id: str, token: str | None) -> None:
+        """Store (or clear) the user's encrypted GitHub access token."""
+        row = await self.get_by_id(user_id)
+        if row:
+            row.github_token = token
+            await self._db.commit()
+
     async def delete(self, user_id: str) -> None:
         row = await self.get_by_id(user_id)
         if row:

@@ -16,10 +16,23 @@ import {
   Square,
   Loader2,
   ShieldAlert,
+  Github,
+  GitBranch,
+  Search,
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
-import { getAllChatMessages, getModels, approveToolCall, rejectToolCall } from '@/api/client'
+import {
+  getAllChatMessages,
+  getModels,
+  approveToolCall,
+  rejectToolCall,
+  getGithubConnectUrl,
+  getGithubRepos,
+  cloneRepo,
+  getRepoStatus,
+} from '@/api/client'
+import type { GithubRepo, RepoStatus } from '@/api/client'
 import type { Message, ChatSessionMessage, ToolCallRecord } from '@/types'
 import { cn } from '@/lib/utils'
 import { MicButton } from '@/components/chat/MicButton'
@@ -919,6 +932,275 @@ function ActingModeChip({
   )
 }
 
+// ── GitHub repo dropdown (code mode) ──────────────────────────────────────────
+
+/** Start an OAuth flow by navigating the webview to the provider URL.
+ * Matches the login flow (LoginDialog uses `window.location.href`); the backend
+ * redirects back to the app afterward. */
+function openExternal(url: string) {
+  window.location.href = url
+}
+
+const CHIP_BTN: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 7,
+  border: `1px solid ${LV.rule}`,
+  padding: '5px 12px 5px 8px',
+  cursor: 'pointer',
+  borderRadius: 999,
+  transition: 'all 0.18s',
+}
+
+function RepoChip({
+  repo,
+  cloning,
+  onSelect,
+}: {
+  repo: string | null
+  cloning: boolean
+  onSelect: (r: GithubRepo) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [connected, setConnected] = useState(true)
+  const [repos, setRepos] = useState<GithubRepo[]>([])
+  const [search, setSearch] = useState('')
+
+  // Re-check connection + repos each time the menu opens (catches a just-finished connect).
+  const handleOpenChange = (o: boolean) => {
+    setOpen(o)
+    if (!o) return
+    setLoading(true)
+    void (async () => {
+      try {
+        const r = await getGithubRepos()
+        setConnected(r.connected)
+        setRepos(r.repos)
+      } catch {
+        setConnected(false)
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }
+
+  const handleConnect = async () => {
+    try {
+      const { url } = await getGithubConnectUrl()
+      openExternal(url)
+    } catch (err) {
+      console.warn('[github] connect failed:', err)
+    }
+  }
+
+  const filtered = search
+    ? repos.filter((r) => r.full_name.toLowerCase().includes(search.toLowerCase()))
+    : repos
+
+  return (
+    <DropdownMenu.Root open={open} onOpenChange={handleOpenChange}>
+      <DropdownMenu.Trigger asChild>
+        <button type="button" style={{ ...CHIP_BTN, background: repo ? LV.wash : 'transparent' }}>
+          <span style={{ color: repo ? LV.gold : LV.mute, lineHeight: 0 }}>
+            {cloning ? <Loader2 size={13} className="animate-spin" /> : <Github size={13} />}
+          </span>
+          <span
+            style={{
+              fontFamily: LV.font.mono,
+              fontSize: 11,
+              color: repo ? LV.soft : LV.mute,
+              letterSpacing: '0.02em',
+              maxWidth: 170,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap' as const,
+            }}
+          >
+            {cloning ? 'Cloning…' : (repo ?? 'Select repo')}
+          </span>
+          <ChevronDown size={11} style={{ color: LV.mute, flexShrink: 0 }} />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          side="top"
+          align="start"
+          sideOffset={8}
+          style={{
+            zIndex: 200,
+            minWidth: 300,
+            maxHeight: 360,
+            overflow: 'auto',
+            background: 'var(--lv-card)',
+            border: `1px solid ${LV.ruleStrong}`,
+            borderRadius: 8,
+            padding: '4px 0',
+            boxShadow: LV.shadow,
+          }}
+          className={cn(
+            'data-[state=open]:animate-in data-[state=closed]:animate-out',
+            'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+            'data-[state=open]:slide-in-from-bottom-2',
+          )}
+        >
+          {loading ? (
+            <div
+              style={{
+                padding: '10px 14px',
+                fontFamily: LV.font.mono,
+                fontSize: 11,
+                color: LV.mute,
+              }}
+            >
+              Loading…
+            </div>
+          ) : !connected ? (
+            <DropdownMenu.Item
+              onSelect={(e) => {
+                e.preventDefault()
+                void handleConnect()
+              }}
+              style={{ outline: 'none', cursor: 'pointer' }}
+              className="hover:bg-accent focus:bg-accent transition-colors"
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px' }}>
+                <Github size={14} style={{ color: LV.mute }} />
+                <span style={{ fontFamily: LV.font.sans, fontSize: 12.5, color: LV.ink }}>
+                  Connect GitHub
+                </span>
+              </div>
+            </DropdownMenu.Item>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 12px 8px',
+                }}
+              >
+                <Search size={12} style={{ color: LV.mute, flexShrink: 0 }} />
+                <input
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => e.stopPropagation()}
+                  placeholder="Search repos…"
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: LV.ink,
+                    fontFamily: LV.font.sans,
+                    fontSize: 12.5,
+                  }}
+                />
+              </div>
+              <div style={{ height: 1, background: LV.rule, margin: '0 0 4px' }} />
+              {filtered.length === 0 ? (
+                <div
+                  style={{
+                    padding: '8px 14px',
+                    fontFamily: LV.font.mono,
+                    fontSize: 11,
+                    color: LV.mute,
+                  }}
+                >
+                  No repositories
+                </div>
+              ) : (
+                filtered.slice(0, 50).map((r) => (
+                  <DropdownMenu.Item
+                    key={r.full_name}
+                    onSelect={() => onSelect(r)}
+                    style={{ outline: 'none', cursor: 'pointer' }}
+                    className="hover:bg-accent focus:bg-accent transition-colors"
+                  >
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px' }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: LV.font.sans,
+                          fontSize: 12.5,
+                          color: LV.ink,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap' as const,
+                        }}
+                      >
+                        {r.full_name}
+                      </span>
+                      {r.private && (
+                        <span style={{ fontFamily: LV.font.mono, fontSize: 9, color: LV.mute }}>
+                          private
+                        </span>
+                      )}
+                      {r.full_name === repo && (
+                        <Check
+                          size={13}
+                          style={{ color: LV.gold, marginLeft: 'auto', flexShrink: 0 }}
+                        />
+                      )}
+                    </div>
+                  </DropdownMenu.Item>
+                ))
+              )}
+            </>
+          )}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  )
+}
+
+// ── Git status pill (code mode) ───────────────────────────────────────────────
+function GitStatusChip({
+  status,
+  loading,
+  onRefresh,
+}: {
+  status: RepoStatus | null
+  loading: boolean
+  onRefresh: () => void
+}) {
+  if (!status?.is_repo) return null
+  const s = status.status
+  const dirty = s ? s.modified.length + s.staged.length + s.untracked.length : 0
+  return (
+    <button
+      type="button"
+      onClick={onRefresh}
+      title="Git status — click to refresh"
+      style={{ ...CHIP_BTN, background: 'transparent', cursor: 'pointer' }}
+    >
+      <span style={{ color: LV.gold, lineHeight: 0 }}>
+        {loading ? <Loader2 size={12} className="animate-spin" /> : <GitBranch size={12} />}
+      </span>
+      <span
+        style={{
+          fontFamily: LV.font.mono,
+          fontSize: 11,
+          color: LV.soft,
+          letterSpacing: '0.02em',
+          maxWidth: 140,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap' as const,
+        }}
+      >
+        {status.branch ?? '—'}
+      </span>
+      {dirty > 0 && (
+        <span style={{ fontFamily: LV.font.mono, fontSize: 10.5, color: LV.gold }}>·{dirty}●</span>
+      )}
+    </button>
+  )
+}
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 interface Props {
   mode: 'cowork' | 'code'
@@ -941,6 +1223,8 @@ export function DesktopSessionWindow({ mode }: Props) {
     setSessionEffortMode,
     sessionDirectories,
     setSessionDirectory,
+    sessionRepos,
+    setSessionRepo,
     sessionActingModes,
     setSessionActingMode,
     setSessionPrompt,
@@ -953,6 +1237,11 @@ export function DesktopSessionWindow({ mode }: Props) {
   const [inputText, setInputText] = useState('')
   const [models, setModels] = useState<string[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  // GitHub repo / git status (code mode only)
+  const [cloning, setCloning] = useState(false)
+  const [cloneMsg, setCloneMsg] = useState<string | null>(null)
+  const [gitStatus, setGitStatus] = useState<RepoStatus | null>(null)
+  const [gitLoading, setGitLoading] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -973,6 +1262,7 @@ export function DesktopSessionWindow({ mode }: Props) {
   // screen (carried onto the real session by useStream when the first message
   // creates it).
   const directory = sessionDirectories[sessionId ?? '__new__'] ?? null
+  const repo = sessionRepos[sessionId ?? '__new__'] ?? null
   const actingMode = sessionActingModes[sessionId ?? '__new__'] ?? 'ask'
 
   // Load models once
@@ -1025,6 +1315,57 @@ export function DesktopSessionWindow({ mode }: Props) {
       setSessionActingMode(sessionId ?? '__new__', m)
     },
     [sessionId, setSessionActingMode],
+  )
+
+  /** Fetch git status for the current work directory (code mode only). */
+  const refreshGitStatus = useCallback(async () => {
+    if (mode !== 'code' || !directory) {
+      setGitStatus(null)
+      return
+    }
+    setGitLoading(true)
+    try {
+      setGitStatus(await getRepoStatus(directory))
+    } catch {
+      setGitStatus(null)
+    } finally {
+      setGitLoading(false)
+    }
+  }, [mode, directory])
+
+  // Refresh git status when the directory changes, and after each assistant turn
+  // finishes (the agent may have edited files in the repo).
+  useEffect(() => {
+    setCloneMsg(null)
+    void refreshGitStatus()
+  }, [refreshGitStatus])
+
+  const prevStreaming = useRef(isStreaming)
+  useEffect(() => {
+    if (prevStreaming.current && !isStreaming) void refreshGitStatus()
+    prevStreaming.current = isStreaming
+  }, [isStreaming, refreshGitStatus])
+
+  /** Select a GitHub repo → auto-clone into the chosen (empty) directory. */
+  const handleSelectRepo = useCallback(
+    async (r: GithubRepo) => {
+      setSessionRepo(sessionId ?? '__new__', r.full_name)
+      setCloneMsg(null)
+      if (!directory) {
+        setCloneMsg('Choose a directory first, then pick the repo again.')
+        return
+      }
+      setCloning(true)
+      try {
+        await cloneRepo(r.clone_url, directory)
+        await refreshGitStatus()
+      } catch (err) {
+        setCloneMsg(err instanceof Error ? err.message : 'Clone failed')
+      } finally {
+        setCloning(false)
+      }
+    },
+    [sessionId, directory, setSessionRepo, refreshGitStatus],
   )
 
   // Scroll to bottom on streaming ticks and new messages
@@ -1206,8 +1547,37 @@ export function DesktopSessionWindow({ mode }: Props) {
                 gap: 8,
               }}
             >
+              {mode === 'code' && (
+                <RepoChip
+                  repo={repo}
+                  cloning={cloning}
+                  onSelect={(r) => void handleSelectRepo(r)}
+                />
+              )}
               <DirectoryChip directory={directory} onChange={handleSelectDirectory} />
               <ActingModeChip actingMode={actingMode} onChange={handleSelectActingMode} />
+              {mode === 'code' && (
+                <GitStatusChip
+                  status={gitStatus}
+                  loading={gitLoading}
+                  onRefresh={() => void refreshGitStatus()}
+                />
+              )}
+              {mode === 'code' && cloneMsg && (
+                <span
+                  style={{
+                    fontFamily: LV.font.mono,
+                    fontSize: 10,
+                    color: '#dc2626',
+                    maxWidth: 220,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap' as const,
+                  }}
+                >
+                  {cloneMsg}
+                </span>
+              )}
               <span style={{ flex: 1 }} />
               <ModelDropdown
                 models={models}
@@ -1580,8 +1950,33 @@ export function DesktopSessionWindow({ mode }: Props) {
               padding: '8px 0 14px',
             }}
           >
+            {mode === 'code' && (
+              <RepoChip repo={repo} cloning={cloning} onSelect={(r) => void handleSelectRepo(r)} />
+            )}
             <DirectoryChip directory={directory} onChange={handleSelectDirectory} />
             <ActingModeChip actingMode={actingMode} onChange={handleSelectActingMode} />
+            {mode === 'code' && (
+              <GitStatusChip
+                status={gitStatus}
+                loading={gitLoading}
+                onRefresh={() => void refreshGitStatus()}
+              />
+            )}
+            {mode === 'code' && cloneMsg && (
+              <span
+                style={{
+                  fontFamily: LV.font.mono,
+                  fontSize: 10,
+                  color: '#dc2626',
+                  maxWidth: 220,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap' as const,
+                }}
+              >
+                {cloneMsg}
+              </span>
+            )}
             <span style={{ fontFamily: LV.font.mono, fontSize: 9.5, color: LV.mute }}>⌘↵ send</span>
             <span style={{ fontFamily: LV.font.mono, fontSize: 9.5, color: LV.mute }}>
               @ reference

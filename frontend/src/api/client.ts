@@ -262,6 +262,7 @@ export async function streamChat(
   mode: string = 'chat',
   requireToolApproval: boolean = false,
   workingDirectory?: string,
+  githubRepo?: string,
   signal?: AbortSignal,
 ): Promise<void> {
   let res: Response
@@ -281,6 +282,7 @@ export async function streamChat(
         ...(effortMode ? { effort_mode: effortMode } : {}),
         ...(requireToolApproval ? { require_tool_approval: true } : {}),
         ...(workingDirectory ? { working_directory: workingDirectory } : {}),
+        ...(githubRepo ? { github_repo: githubRepo } : {}),
       }),
     })
   } catch (err) {
@@ -945,6 +947,76 @@ export async function commitFiles(files: string[], message: string, sessionId: s
     headers: headers(sessionId, 'code'),
     body: JSON.stringify({ files, message }),
   })
+  return res.json()
+}
+
+// ── GitHub / repo (Code mode) ───────────────────────────────────────────────
+
+export interface GithubRepo {
+  full_name: string
+  clone_url: string
+  private: boolean
+  default_branch: string
+  updated_at: string | null
+}
+
+export interface RepoStatus {
+  is_repo: boolean
+  branch?: string
+  status?: { modified: string[]; staged: string[]; untracked: string[] }
+  log?: { sha: string; message: string; author: string; date: string }[]
+}
+
+/** Whether the user has connected GitHub (a token is stored server-side). */
+export async function getGithubStatus(): Promise<{ connected: boolean }> {
+  const res = await fetch(`${BASE}/github/status`, { headers: authHeader() })
+  if (!res.ok) return { connected: false }
+  return res.json()
+}
+
+/** GitHub consent URL (repo scope) to connect the logged-in user's account. */
+export async function getGithubConnectUrl(): Promise<{ url: string }> {
+  const res = await fetch(`${BASE}/github/connect/authorize`, { headers: authHeader() })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+/** List the connected user's GitHub repos (most recently updated first). */
+export async function getGithubRepos(
+  search?: string,
+): Promise<{ connected: boolean; repos: GithubRepo[] }> {
+  const q = search ? `?search=${encodeURIComponent(search)}` : ''
+  const res = await fetch(`${BASE}/github/repos${q}`, { headers: authHeader() })
+  if (!res.ok) return { connected: false, repos: [] }
+  return res.json()
+}
+
+/** Clone a repo into an empty directory. Throws with the server detail on failure (e.g. 409). */
+export async function cloneRepo(
+  cloneUrl: string,
+  targetDir: string,
+): Promise<{ path: string; branch: string }> {
+  const res = await fetch(`${BASE}/code/clone`, {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify({ clone_url: cloneUrl, target_dir: targetDir }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+/** Git status (branch + changed files) for a local directory. */
+export async function getRepoStatus(repoPath: string): Promise<RepoStatus> {
+  const res = await fetch(`${BASE}/code/status?repo_path=${encodeURIComponent(repoPath)}`, {
+    headers: authHeader(),
+  })
+  if (!res.ok) return { is_repo: false }
   return res.json()
 }
 
