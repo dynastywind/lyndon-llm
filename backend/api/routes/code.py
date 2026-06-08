@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from api.auth_deps import get_current_user
 from api.deps import get_session
 from code.editor import CodeEditor
-from code.repo import RepoManager, clone_repo
+from code.repo import RepoManager, clone_repo, pull_repo
 from code.reviewer import CodeReviewer
 from code.test_runner import TestRunner
 from config.settings import settings
@@ -45,7 +45,17 @@ class TestRequest(BaseModel):
 
 class CloneRequest(BaseModel):
     clone_url: str  # e.g. https://github.com/owner/repo.git
-    target_dir: str  # must be an existing, empty directory
+    target_dir: str  # cloned into here; created if missing, must be empty if it exists
+    branch: str | None = None  # optional branch to check out
+
+
+class CheckoutRequest(BaseModel):
+    repo_path: str
+    branch: str
+
+
+class PullRequest(BaseModel):
+    repo_path: str
 
 
 @router.post("/edit")
@@ -91,23 +101,51 @@ async def run_tests(body: TestRequest, session: Session = Depends(get_session)):
 
 @router.post("/clone")
 async def clone(body: CloneRequest, user: User = Depends(get_current_user)):
-    """Clone a GitHub repo into a selected directory (which must exist and be empty)."""
+    """Clone a GitHub repo into target_dir (created if missing; must be empty if it exists)."""
     target = Path(body.target_dir).expanduser()
-    if not target.is_dir():
-        raise HTTPException(status_code=400, detail="Selected directory does not exist.")
-    if not is_directory_empty(str(target)):
-        raise HTTPException(
-            status_code=409,
-            detail="Directory is not empty. Choose an empty directory.",
-        )
+    if target.exists():
+        if not target.is_dir():
+            raise HTTPException(status_code=400, detail="Target path is not a directory.")
+        if not is_directory_empty(str(target)):
+            raise HTTPException(
+                status_code=409,
+                detail="Directory is not empty. Choose an empty directory.",
+            )
+    else:
+        # git creates the leaf dir; ensure the parent exists.
+        target.parent.mkdir(parents=True, exist_ok=True)
     token = (
         memory_cipher.decrypt(user.github_token, scope_id=user.id) if user.github_token else None
     )
     try:
-        branch = await clone_repo(body.clone_url, str(target.resolve()), token)
+        branch = await clone_repo(body.clone_url, str(target), token, branch=body.branch)
     except Exception as exc:  # noqa: BLE001 — surface git/clone failures to the client
         raise HTTPException(status_code=502, detail=f"Clone failed: {exc}") from exc
     return {"path": str(target.resolve()), "branch": branch}
+
+
+@router.post("/checkout")
+async def checkout(body: CheckoutRequest, user: User = Depends(get_current_user)):
+    """Switch the working tree to *branch* (must already exist locally or as a remote-tracking ref)."""
+    try:
+        repo = RepoManager(str(Path(body.repo_path).expanduser()))
+        repo.checkout_branch(body.branch)
+    except Exception as exc:  # noqa: BLE001 — surface checkout failures (dirty tree, etc.)
+        raise HTTPException(status_code=409, detail=f"Checkout failed: {exc}") from exc
+    return {"branch": body.branch}
+
+
+@router.post("/pull")
+async def pull(body: PullRequest, user: User = Depends(get_current_user)):
+    """``git pull`` the current branch, authenticating with the user's stored token."""
+    token = (
+        memory_cipher.decrypt(user.github_token, scope_id=user.id) if user.github_token else None
+    )
+    try:
+        await pull_repo(str(Path(body.repo_path).expanduser()), token)
+    except Exception as exc:  # noqa: BLE001 — surface pull failures to the client
+        raise HTTPException(status_code=502, detail=f"Pull failed: {exc}") from exc
+    return {"ok": True}
 
 
 @router.get("/status")
@@ -115,9 +153,12 @@ async def repo_status(repo_path: str | None = None, session: Session = Depends(g
     path = repo_path or settings.code_default_repo_path
     try:
         repo = RepoManager(str(Path(path).expanduser()))
+        ahead, behind = repo.ahead_behind()
         return {
             "is_repo": True,
             "branch": repo.current_branch(),
+            "ahead": ahead,
+            "behind": behind,
             "status": repo.status(),
             "log": repo.log(5),
         }

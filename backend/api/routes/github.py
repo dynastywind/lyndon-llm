@@ -160,3 +160,37 @@ async def list_repos(
         q = search.lower()
         items = [r for r in items if q in r["full_name"].lower()]
     return {"connected": True, "repos": items}
+
+
+@router.get("/branches")
+async def list_branches(
+    repo: str,  # "owner/name"
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List branches for a repo (default branch first)."""
+    token = _decrypt_token(user)
+    if not token:
+        return {"connected": False, "branches": []}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "LyndonLLM",
+    }
+    async with httpx.AsyncClient(timeout=20) as client:
+        meta = await client.get(f"{_GITHUB_API}/repos/{repo}", headers=headers)
+        default_branch = meta.json().get("default_branch") if meta.status_code == 200 else None
+        resp = await client.get(
+            f"{_GITHUB_API}/repos/{repo}/branches",
+            headers=headers,
+            params={"per_page": 100},
+        )
+        if resp.status_code == 401:
+            await UserRepo(db).set_github_token(user.id, None)
+            return {"connected": False, "branches": []}
+        if resp.status_code != 200:
+            raise HTTPException(status_code=502, detail="Failed to fetch branches.")
+        names = [b["name"] for b in resp.json()]
+    branches = [{"name": n, "default": n == default_branch} for n in names]
+    branches.sort(key=lambda b: (not b["default"], b["name"]))  # default first, then alpha
+    return {"connected": True, "branches": branches}

@@ -960,9 +960,16 @@ export interface GithubRepo {
   updated_at: string | null
 }
 
+export interface GithubBranch {
+  name: string
+  default: boolean
+}
+
 export interface RepoStatus {
   is_repo: boolean
   branch?: string
+  ahead?: number
+  behind?: number
   status?: { modified: string[]; staged: string[]; untracked: string[] }
   log?: { sha: string; message: string; author: string; date: string }[]
 }
@@ -994,15 +1001,27 @@ export async function getGithubRepos(
   return res.json()
 }
 
-/** Clone a repo into an empty directory. Throws with the server detail on failure (e.g. 409). */
+/** List branches for a repo ("owner/name"), default branch first. */
+export async function getGithubBranches(
+  repo: string,
+): Promise<{ connected: boolean; branches: GithubBranch[] }> {
+  const res = await fetch(`${BASE}/github/branches?repo=${encodeURIComponent(repo)}`, {
+    headers: authHeader(),
+  })
+  if (!res.ok) return { connected: false, branches: [] }
+  return res.json()
+}
+
+/** Clone a repo into targetDir (created if missing; empty if it exists). Throws server detail on failure. */
 export async function cloneRepo(
   cloneUrl: string,
   targetDir: string,
+  branch?: string,
 ): Promise<{ path: string; branch: string }> {
   const res = await fetch(`${BASE}/code/clone`, {
     method: 'POST',
     headers: jsonHeaders(),
-    body: JSON.stringify({ clone_url: cloneUrl, target_dir: targetDir }),
+    body: JSON.stringify({ clone_url: cloneUrl, target_dir: targetDir, branch }),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
@@ -1011,7 +1030,37 @@ export async function cloneRepo(
   return res.json()
 }
 
-/** Git status (branch + changed files) for a local directory. */
+/** Switch the working tree to a branch. Throws server detail on failure (e.g. dirty tree). */
+export async function checkoutBranch(
+  repoPath: string,
+  branch: string,
+): Promise<{ branch: string }> {
+  const res = await fetch(`${BASE}/code/checkout`, {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify({ repo_path: repoPath, branch }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+/** Pull the current branch. Throws server detail on failure. */
+export async function pullRepo(repoPath: string): Promise<void> {
+  const res = await fetch(`${BASE}/code/pull`, {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify({ repo_path: repoPath }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+}
+
+/** Git status (branch + ahead/behind + changed files) for a local directory. */
 export async function getRepoStatus(repoPath: string): Promise<RepoStatus> {
   const res = await fetch(`${BASE}/code/status?repo_path=${encodeURIComponent(repoPath)}`, {
     headers: authHeader(),

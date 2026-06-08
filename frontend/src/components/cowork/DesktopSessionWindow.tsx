@@ -19,6 +19,8 @@ import {
   Github,
   GitBranch,
   Search,
+  ArrowLeft,
+  Lock,
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useStream } from '@/hooks/useStream'
@@ -29,10 +31,13 @@ import {
   rejectToolCall,
   getGithubConnectUrl,
   getGithubRepos,
+  getGithubBranches,
   cloneRepo,
+  checkoutBranch,
+  pullRepo,
   getRepoStatus,
 } from '@/api/client'
-import type { GithubRepo, RepoStatus } from '@/api/client'
+import type { GithubRepo, GithubBranch, RepoStatus } from '@/api/client'
 import type { Message, ChatSessionMessage, ToolCallRecord } from '@/types'
 import { cn } from '@/lib/utils'
 import { MicButton } from '@/components/chat/MicButton'
@@ -660,147 +665,6 @@ function ModelDropdown({
 // ── Directory dropdown ────────────────────────────────────────────────────────
 const COMMON_DIRS = ['~/projects', '~/Documents', '~/Desktop']
 
-function DirectoryChip({
-  directory,
-  onChange,
-}: {
-  directory: string | null
-  onChange: (d: string | null) => void
-}) {
-  // Open the OS folder picker via the Tauri dialog plugin. Loaded lazily so the
-  // web bundle never pulls it in (cowork/code are desktop-only anyway).
-  const handleBrowse = async () => {
-    try {
-      const { open } = await import('@tauri-apps/plugin-dialog')
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: 'Select work directory',
-        // defaultPath only accepts absolute paths — skip "~/…" shortcuts.
-        ...(directory?.startsWith('/') ? { defaultPath: directory } : {}),
-      })
-      if (typeof selected === 'string') onChange(selected)
-    } catch (err) {
-      console.warn('[directory] folder picker failed:', err)
-    }
-  }
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button
-          type="button"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-            background: directory ? LV.wash : 'transparent',
-            border: `1px solid ${LV.rule}`,
-            padding: '5px 12px 5px 8px',
-            cursor: 'pointer',
-            borderRadius: 999,
-            transition: 'all 0.18s',
-          }}
-        >
-          <span style={{ color: directory ? LV.gold : LV.mute, lineHeight: 0 }}>
-            <Folder size={13} />
-          </span>
-          <span
-            style={{
-              fontFamily: LV.font.mono,
-              fontSize: 11,
-              color: directory ? LV.soft : LV.mute,
-              letterSpacing: '0.02em',
-              maxWidth: 140,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap' as const,
-            }}
-          >
-            {directory ?? 'Set directory'}
-          </span>
-          <ChevronDown size={11} style={{ color: LV.mute, flexShrink: 0 }} />
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          side="top"
-          align="start"
-          sideOffset={8}
-          style={{
-            zIndex: 200,
-            minWidth: 240,
-            background: 'var(--lv-card)',
-            border: `1px solid ${LV.ruleStrong}`,
-            borderRadius: 8,
-            padding: '4px 0',
-            boxShadow: LV.shadow,
-          }}
-          className={cn(
-            'data-[state=open]:animate-in data-[state=closed]:animate-out',
-            'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-            'data-[state=open]:slide-in-from-bottom-2',
-          )}
-        >
-          <div
-            style={{
-              padding: '4px 10px 6px',
-              fontFamily: LV.font.mono,
-              fontSize: 9,
-              letterSpacing: '0.28em',
-              textTransform: 'uppercase' as const,
-              color: LV.mute,
-            }}
-          >
-            Work Directory
-          </div>
-          {COMMON_DIRS.map((d) => (
-            <DropdownMenu.Item
-              key={d}
-              onSelect={() => onChange(d)}
-              style={{ outline: 'none', cursor: 'pointer' }}
-              className="hover:bg-accent focus:bg-accent transition-colors"
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '8px 14px',
-                }}
-              >
-                <span style={{ fontFamily: LV.font.sans, fontSize: 12.5, color: LV.ink }}>{d}</span>
-                {d === directory && (
-                  <Check size={13} style={{ color: LV.gold, marginLeft: 'auto' }} />
-                )}
-              </div>
-            </DropdownMenu.Item>
-          ))}
-          <div style={{ height: 1, background: LV.rule, margin: '4px 0' }} />
-          <DropdownMenu.Item
-            onSelect={() => void handleBrowse()}
-            style={{ outline: 'none', cursor: 'pointer' }}
-            className="hover:bg-accent focus:bg-accent transition-colors"
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '8px 14px',
-              }}
-            >
-              <FolderOpen size={14} style={{ color: LV.mute }} />
-              <span style={{ fontFamily: LV.font.sans, fontSize: 12.5, color: LV.soft }}>
-                Browse…
-              </span>
-            </div>
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  )
-}
-
 // ── Acting mode dropdown ──────────────────────────────────────────────────────
 function ActingModeChip({
   actingMode,
@@ -952,252 +816,774 @@ const CHIP_BTN: React.CSSProperties = {
   transition: 'all 0.18s',
 }
 
-function RepoChip({
-  repo,
-  cloning,
-  onSelect,
+// ── Folder picker (Tauri dialog, lazy-loaded — desktop only) ──────────────────
+async function pickFolder(defaultPath?: string): Promise<string | null> {
+  try {
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: 'Select directory',
+      ...(defaultPath?.startsWith('/') ? { defaultPath } : {}),
+    })
+    return typeof selected === 'string' ? selected : null
+  } catch (err) {
+    console.warn('[directory] folder picker failed:', err)
+    return null
+  }
+}
+
+function relativeUpdated(iso: string | null): string {
+  if (!iso) return 'recently'
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 30) return `${days}d ago`
+  return `${Math.floor(days / 30)}mo ago`
+}
+
+const CHIP_EYEBROW: React.CSSProperties = {
+  fontFamily: LV.font.mono,
+  fontSize: 9,
+  letterSpacing: '0.18em',
+  textTransform: 'uppercase',
+  color: LV.mute,
+}
+const CLONE_BTN: React.CSSProperties = {
+  width: '100%',
+  background: LV.gold,
+  color: LV.bg,
+  border: 'none',
+  cursor: 'pointer',
+  padding: '9px 0',
+  fontFamily: LV.font.sans,
+  fontWeight: 600,
+  fontSize: 12,
+  letterSpacing: '0.04em',
+  transition: 'background 0.18s var(--ease-snap)',
+}
+const GHOST_BTN: React.CSSProperties = {
+  flex: 1,
+  background: 'transparent',
+  color: LV.soft,
+  border: `1px solid ${LV.rule}`,
+  cursor: 'pointer',
+  padding: '6px 0',
+  fontFamily: LV.font.mono,
+  fontSize: 10.5,
+  letterSpacing: '0.04em',
+  borderRadius: 999,
+}
+
+function DropMsg({ text }: { text: string }) {
+  return (
+    <div style={{ padding: '10px 14px', fontFamily: LV.font.mono, fontSize: 11, color: LV.mute }}>
+      {text}
+    </div>
+  )
+}
+
+// Reusable dropdown row (icon + title + sub + right slot), hover-highlighted.
+function GhRow({
+  left,
+  title,
+  sub,
+  right,
+  mono,
+  onClick,
 }: {
+  left?: React.ReactNode
+  title: string
+  sub?: string
+  right?: React.ReactNode
+  mono?: boolean
+  onClick?: () => void
+}) {
+  const [h, setH] = useState(false)
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setH(true)}
+      onMouseLeave={() => setH(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '8px 12px',
+        cursor: 'pointer',
+        background: h ? LV.wash : 'transparent',
+        transition: 'background 0.15s var(--ease-snap)',
+      }}
+    >
+      {left && (
+        <span style={{ color: h ? LV.gold : LV.mute, lineHeight: 0, flex: 'none' }}>{left}</span>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontFamily: mono ? LV.font.mono : LV.font.sans,
+            fontSize: mono ? 11.5 : 12.5,
+            color: LV.ink,
+            fontWeight: 500,
+            lineHeight: 1.3,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {title}
+        </div>
+        {sub && (
+          <div style={{ fontFamily: LV.font.mono, fontSize: 10, color: LV.mute, marginTop: 2 }}>
+            {sub}
+          </div>
+        )}
+      </div>
+      {right && <span style={{ flex: 'none', lineHeight: 0 }}>{right}</span>}
+    </div>
+  )
+}
+
+function WizHeader({ label, onBack }: { label: string; onBack: () => void }) {
+  const [h, setH] = useState(false)
+  return (
+    <div
+      onClick={onBack}
+      onMouseEnter={() => setH(true)}
+      onMouseLeave={() => setH(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 7,
+        padding: '7px 12px 9px',
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ color: h ? LV.gold : LV.mute, lineHeight: 0 }}>
+        <ArrowLeft size={13} />
+      </span>
+      <span style={CHIP_EYEBROW}>{label}</span>
+    </div>
+  )
+}
+
+// ── Directory / GitHub selector (replaces the plain directory button) ─────────
+// Unified chip: pick a local dir, or connect a GitHub repo (account → repo →
+// branch → clone-to → clone). Once on a git repo, shows live branch + status.
+type WizStep = 'account' | 'repo' | 'branch' | 'dir' | 'cloning'
+
+function CWGitDirectory({
+  directory,
+  repo,
+  status,
+  allowGithub,
+  onPickLocal,
+  onClone,
+  onCheckout,
+  onPull,
+  onDisconnect,
+}: {
+  directory: string | null
   repo: string | null
-  cloning: boolean
-  onSelect: (r: GithubRepo) => void
+  status: RepoStatus | null
+  allowGithub: boolean // GitHub association is a Code-mode feature; cowork is dir-only
+  onPickLocal: (path: string) => void
+  onClone: (r: GithubRepo, branch: string | undefined, targetDir: string) => Promise<void>
+  onCheckout: (branch: string) => Promise<void>
+  onPull: () => Promise<void>
+  onDisconnect: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [connected, setConnected] = useState(true)
-  const [repos, setRepos] = useState<GithubRepo[]>([])
-  const [search, setSearch] = useState('')
+  const [step, setStep] = useState<WizStep | null>(null)
+  const [allRepos, setAllRepos] = useState<GithubRepo[]>([])
+  const [loadingRepos, setLoadingRepos] = useState(false)
+  const [account, setAccount] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [selRepo, setSelRepo] = useState<GithubRepo | null>(null)
+  const [selBranch, setSelBranch] = useState<string | null>(null)
+  const [branches, setBranches] = useState<GithubBranch[]>([])
+  const [loadingBranches, setLoadingBranches] = useState(false)
+  const [parent, setParent] = useState<string>(COMMON_DIRS[0])
+  const [progress, setProgress] = useState(0)
+  const [cloneErr, setCloneErr] = useState<string | null>(null)
+  const [switching, setSwitching] = useState(false)
+  const [pulling, setPulling] = useState(false)
 
-  // Re-check connection + repos each time the menu opens (catches a just-finished connect).
-  const handleOpenChange = (o: boolean) => {
-    setOpen(o)
-    if (!o) return
-    setLoading(true)
+  const isGit = status?.is_repo === true && allowGithub
+  const s = status?.status
+  const changed = s ? s.modified.length + s.staged.length + s.untracked.length : 0
+  const ahead = status?.ahead ?? 0
+  const behind = status?.behind ?? 0
+  const dirty = changed > 0 || ahead > 0 || behind > 0
+  const repoShort = repo ? repo.split('/').slice(-1)[0] : null
+
+  // Reset transient wizard state whenever the popover closes.
+  useEffect(() => {
+    if (!open) {
+      setStep(null)
+      setQuery('')
+      setCloneErr(null)
+      setSwitching(false)
+    }
+  }, [open])
+
+  // Clone: animate the bar toward 90% while the real clone runs, finish at 100%.
+  useEffect(() => {
+    if (step !== 'cloning' || !selRepo) return
+    setProgress(0)
+    setCloneErr(null)
+    let p = 0
+    let finished = false
+    const target = `${parent}/${selRepo.full_name.split('/').slice(-1)[0]}`
+    const iv = setInterval(() => {
+      if (finished) return
+      p = Math.min(90, p + Math.random() * 13 + 7)
+      setProgress(p)
+    }, 230)
+    void (async () => {
+      try {
+        await onClone(selRepo, selBranch ?? undefined, target)
+        finished = true
+        clearInterval(iv)
+        setProgress(100)
+        setTimeout(() => setOpen(false), 650)
+      } catch (e) {
+        finished = true
+        clearInterval(iv)
+        setCloneErr(e instanceof Error ? e.message : 'Clone failed')
+      }
+    })()
+    return () => clearInterval(iv)
+  }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startWizard = () => {
+    setLoadingRepos(true)
+    setQuery('')
+    setAccount(null)
+    setStep('account')
     void (async () => {
       try {
         const r = await getGithubRepos()
-        setConnected(r.connected)
-        setRepos(r.repos)
-      } catch {
-        setConnected(false)
+        if (!r.connected) {
+          const { url } = await getGithubConnectUrl()
+          openExternal(url) // navigates to GitHub OAuth; user re-opens after authorizing
+          return
+        }
+        setAllRepos(r.repos)
+        const owners = [...new Set(r.repos.map((x) => x.full_name.split('/')[0]))]
+        if (owners.length === 1) {
+          setAccount(owners[0])
+          setStep('repo')
+        }
+      } catch (err) {
+        console.warn('[github] repo list failed:', err)
       } finally {
-        setLoading(false)
+        setLoadingRepos(false)
       }
     })()
   }
 
-  const handleConnect = async () => {
-    try {
-      const { url } = await getGithubConnectUrl()
-      openExternal(url)
-    } catch (err) {
-      console.warn('[github] connect failed:', err)
-    }
+  const loadBranches = (repoFullName: string) => {
+    setLoadingBranches(true)
+    setBranches([])
+    void (async () => {
+      try {
+        const b = await getGithubBranches(repoFullName)
+        setBranches(b.branches)
+      } catch {
+        setBranches([])
+      } finally {
+        setLoadingBranches(false)
+      }
+    })()
   }
 
-  const filtered = search
-    ? repos.filter((r) => r.full_name.toLowerCase().includes(search.toLowerCase()))
-    : repos
+  const pickRepo = (r: GithubRepo) => {
+    setSelRepo(r)
+    setSelBranch(null)
+    setSwitching(false)
+    setStep('branch')
+    loadBranches(r.full_name)
+  }
 
-  return (
-    <DropdownMenu.Root open={open} onOpenChange={handleOpenChange}>
-      <DropdownMenu.Trigger asChild>
-        <button type="button" style={{ ...CHIP_BTN, background: repo ? LV.wash : 'transparent' }}>
-          <span style={{ color: repo ? LV.gold : LV.mute, lineHeight: 0 }}>
-            {cloning ? <Loader2 size={13} className="animate-spin" /> : <Github size={13} />}
+  const openBranchSwitch = () => {
+    if (!repo) return
+    setSwitching(true)
+    setStep('branch')
+    loadBranches(repo)
+  }
+
+  const doPull = () => {
+    setPulling(true)
+    void (async () => {
+      try {
+        await onPull()
+      } finally {
+        setPulling(false)
+      }
+    })()
+  }
+
+  // ── Chip face ───────────────────────────────────────────────────────────────
+  const chip = (() => {
+    if (!directory) {
+      return (
+        <>
+          <span style={{ color: open ? LV.gold : LV.mute, lineHeight: 0 }}>
+            <Folder size={13} />
+          </span>
+          <span
+            style={{
+              ...CHIP_EYEBROW,
+              fontSize: 11,
+              letterSpacing: '0.02em',
+              textTransform: 'none',
+            }}
+          >
+            Set directory
+          </span>
+          <ChevronDown size={11} style={{ color: LV.mute, flexShrink: 0 }} />
+        </>
+      )
+    }
+    if (!isGit) {
+      return (
+        <>
+          <span style={{ color: open ? LV.gold : LV.soft, lineHeight: 0 }}>
+            <Folder size={13} />
           </span>
           <span
             style={{
               fontFamily: LV.font.mono,
               fontSize: 11,
-              color: repo ? LV.soft : LV.mute,
-              letterSpacing: '0.02em',
-              maxWidth: 170,
+              color: LV.soft,
+              maxWidth: 200,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap' as const,
+              whiteSpace: 'nowrap',
             }}
           >
-            {cloning ? 'Cloning…' : (repo ?? 'Select repo')}
+            {directory}
           </span>
           <ChevronDown size={11} style={{ color: LV.mute, flexShrink: 0 }} />
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          side="top"
-          align="start"
-          sideOffset={8}
-          style={{
-            zIndex: 200,
-            minWidth: 300,
-            maxHeight: 360,
-            overflow: 'auto',
-            background: 'var(--lv-card)',
-            border: `1px solid ${LV.ruleStrong}`,
-            borderRadius: 8,
-            padding: '4px 0',
-            boxShadow: LV.shadow,
-          }}
-          className={cn(
-            'data-[state=open]:animate-in data-[state=closed]:animate-out',
-            'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-            'data-[state=open]:slide-in-from-bottom-2',
-          )}
-        >
-          {loading ? (
-            <div
+        </>
+      )
+    }
+    return (
+      <>
+        <span style={{ color: dirty ? LV.gold : LV.soft, lineHeight: 0 }}>
+          <GitBranch size={13} />
+        </span>
+        <span style={{ fontFamily: LV.font.mono, fontSize: 11, color: LV.soft }}>
+          {repoShort ?? directory.split('/').slice(-1)[0]}
+        </span>
+        <span style={{ width: 1, height: 11, background: LV.rule, flex: 'none' }} />
+        <span style={{ fontFamily: LV.font.mono, fontSize: 11, color: LV.soft }}>
+          {status?.branch ?? '—'}
+        </span>
+        {dirty ? (
+          <span style={{ fontFamily: LV.font.mono, fontSize: 10.5, color: LV.mute }}>
+            ↑{ahead} ↓{behind} <span style={{ color: LV.gold }}>· {changed} changed</span>
+          </span>
+        ) : (
+          <span style={{ fontFamily: LV.font.mono, fontSize: 10.5, color: LV.mute }}>✓ clean</span>
+        )}
+        <ChevronDown size={11} style={{ color: LV.mute, flexShrink: 0 }} />
+      </>
+    )
+  })()
+
+  // ── Dropdown body ─────────────────────────────────────────────────────────
+  let body: React.ReactNode
+  if (step === 'account') {
+    const owners = [...new Set(allRepos.map((r) => r.full_name.split('/')[0]))]
+    body = (
+      <>
+        <WizHeader label="Connect repo · Account" onBack={() => setStep(null)} />
+        {loadingRepos ? (
+          <DropMsg text="Loading…" />
+        ) : (
+          owners.map((o) => (
+            <GhRow
+              key={o}
+              left={<Github size={16} />}
+              title={o}
+              sub={`${allRepos.filter((r) => r.full_name.split('/')[0] === o).length} repos`}
+              right={
+                <ChevronDown size={12} style={{ color: LV.mute, transform: 'rotate(-90deg)' }} />
+              }
+              onClick={() => {
+                setAccount(o)
+                setQuery('')
+                setStep('repo')
+              }}
+            />
+          ))
+        )}
+      </>
+    )
+  } else if (step === 'repo') {
+    const list = allRepos
+      .filter((r) => r.full_name.split('/')[0] === account)
+      .filter((r) => r.full_name.toLowerCase().includes(query.trim().toLowerCase()))
+    body = (
+      <>
+        <WizHeader label={`${account} · Repository`} onBack={() => setStep('account')} />
+        <div style={{ padding: '0 12px 6px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              border: `1px solid ${LV.rule}`,
+              borderRadius: 999,
+              padding: '5px 12px',
+            }}
+          >
+            <Search size={13} style={{ color: LV.mute, flexShrink: 0 }} />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search repositories…"
               style={{
-                padding: '10px 14px',
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: LV.ink,
                 fontFamily: LV.font.mono,
                 fontSize: 11,
-                color: LV.mute,
               }}
-            >
-              Loading…
-            </div>
-          ) : !connected ? (
-            <DropdownMenu.Item
-              onSelect={(e) => {
-                e.preventDefault()
-                void handleConnect()
+            />
+          </div>
+        </div>
+        {list.length ? (
+          list.map((r) => (
+            <GhRow
+              key={r.full_name}
+              mono
+              left={<Github size={15} />}
+              title={r.full_name.split('/').slice(-1)[0]}
+              sub={`updated ${relativeUpdated(r.updated_at)}`}
+              right={r.private ? <Lock size={12} style={{ color: LV.mute }} /> : null}
+              onClick={() => pickRepo(r)}
+            />
+          ))
+        ) : (
+          <DropMsg text="No repositories match." />
+        )}
+      </>
+    )
+  } else if (step === 'branch') {
+    const repoName = selRepo ? selRepo.full_name.split('/').slice(-1)[0] : repoShort
+    body = (
+      <>
+        <WizHeader
+          label={`${repoName} · Branch`}
+          onBack={() => setStep(switching ? null : 'repo')}
+        />
+        {loadingBranches ? (
+          <DropMsg text="Loading…" />
+        ) : branches.length ? (
+          branches.map((b) => (
+            <GhRow
+              key={b.name}
+              mono
+              left={<GitBranch size={14} />}
+              title={b.name}
+              sub={b.default ? 'default' : undefined}
+              right={
+                switching && status?.branch === b.name ? (
+                  <Check size={14} style={{ color: LV.gold }} />
+                ) : null
+              }
+              onClick={() => {
+                if (switching) {
+                  void onCheckout(b.name)
+                  setStep(null)
+                  setSwitching(false)
+                } else {
+                  setSelBranch(b.name)
+                  setStep('dir')
+                }
               }}
-              style={{ outline: 'none', cursor: 'pointer' }}
-              className="hover:bg-accent focus:bg-accent transition-colors"
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px' }}>
-                <Github size={14} style={{ color: LV.mute }} />
-                <span style={{ fontFamily: LV.font.sans, fontSize: 12.5, color: LV.ink }}>
-                  Connect GitHub
-                </span>
-              </div>
-            </DropdownMenu.Item>
-          ) : (
-            <>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '6px 12px 8px',
-                }}
-              >
-                <Search size={12} style={{ color: LV.mute, flexShrink: 0 }} />
-                <input
-                  autoFocus
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  placeholder="Search repos…"
-                  style={{
-                    flex: 1,
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    color: LV.ink,
-                    fontFamily: LV.font.sans,
-                    fontSize: 12.5,
-                  }}
-                />
-              </div>
-              <div style={{ height: 1, background: LV.rule, margin: '0 0 4px' }} />
-              {filtered.length === 0 ? (
-                <div
-                  style={{
-                    padding: '8px 14px',
-                    fontFamily: LV.font.mono,
-                    fontSize: 11,
-                    color: LV.mute,
-                  }}
-                >
-                  No repositories
-                </div>
-              ) : (
-                filtered.slice(0, 50).map((r) => (
-                  <DropdownMenu.Item
-                    key={r.full_name}
-                    onSelect={() => onSelect(r)}
-                    style={{ outline: 'none', cursor: 'pointer' }}
-                    className="hover:bg-accent focus:bg-accent transition-colors"
-                  >
-                    <div
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px' }}
-                    >
-                      <span
-                        style={{
-                          fontFamily: LV.font.sans,
-                          fontSize: 12.5,
-                          color: LV.ink,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap' as const,
-                        }}
-                      >
-                        {r.full_name}
-                      </span>
-                      {r.private && (
-                        <span style={{ fontFamily: LV.font.mono, fontSize: 9, color: LV.mute }}>
-                          private
-                        </span>
-                      )}
-                      {r.full_name === repo && (
-                        <Check
-                          size={13}
-                          style={{ color: LV.gold, marginLeft: 'auto', flexShrink: 0 }}
-                        />
-                      )}
-                    </div>
-                  </DropdownMenu.Item>
-                ))
-              )}
-            </>
+            />
+          ))
+        ) : (
+          <DropMsg text="No branches." />
+        )}
+      </>
+    )
+  } else if (step === 'dir' && selRepo) {
+    const repoName = selRepo.full_name.split('/').slice(-1)[0]
+    body = (
+      <>
+        <WizHeader
+          label={`${repoName} · ${selBranch} · Clone to`}
+          onBack={() => setStep('branch')}
+        />
+        {COMMON_DIRS.map((p) => (
+          <GhRow
+            key={p}
+            mono
+            title={`${p}/${repoName}`}
+            sub={p === parent ? 'clone target' : 'parent directory'}
+            right={p === parent ? <Check size={14} style={{ color: LV.gold }} /> : null}
+            onClick={() => setParent(p)}
+          />
+        ))}
+        <GhRow
+          left={<FolderOpen size={15} />}
+          title="Browse…"
+          sub="Choose a parent folder"
+          onClick={() =>
+            void (async () => {
+              const picked = await pickFolder()
+              if (picked) setParent(picked)
+            })()
+          }
+        />
+        <div style={{ padding: '8px 12px' }}>
+          <button
+            type="button"
+            onClick={() => setStep('cloning')}
+            style={CLONE_BTN}
+            onMouseEnter={(e) => (e.currentTarget.style.background = LV.goldSoft)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = LV.gold)}
+          >
+            Clone repository →
+          </button>
+        </div>
+      </>
+    )
+  } else if (step === 'cloning' && selRepo) {
+    const pct = Math.round(progress)
+    const repoName = selRepo.full_name.split('/').slice(-1)[0]
+    const target = `${parent}/${repoName}`
+    body = (
+      <>
+        <div style={{ padding: '7px 12px 8px' }}>
+          <span style={{ ...CHIP_EYEBROW, color: LV.gold }}>Cloning · {repoName}</span>
+        </div>
+        <div
+          style={{
+            padding: '0 12px 8px',
+            fontFamily: LV.font.mono,
+            fontSize: 10.5,
+            lineHeight: 1.75,
+          }}
+        >
+          <div
+            style={{
+              color: LV.mute,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            $ git clone {selRepo.clone_url}
+          </div>
+          <div style={{ color: LV.soft }}>Cloning into &apos;{repoName}&apos;…</div>
+          {progress > 30 && (
+            <div style={{ color: LV.soft }}>remote: Enumerating objects, done.</div>
           )}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
-  )
-}
+          {progress > 60 && <div style={{ color: LV.soft }}>Receiving objects: {pct}%</div>}
+          {progress >= 100 && <div style={{ color: LV.gold }}>✓ Cloned to {target}</div>}
+          {cloneErr && <div style={{ color: '#dc2626' }}>✗ {cloneErr}</div>}
+        </div>
+        <div style={{ padding: '2px 12px 12px' }}>
+          <div style={{ height: 3, background: LV.rule, borderRadius: 2, overflow: 'hidden' }}>
+            <div
+              style={{
+                height: '100%',
+                width: `${progress}%`,
+                background: cloneErr ? '#dc2626' : LV.gold,
+                transition: 'width 0.22s linear',
+              }}
+            />
+          </div>
+        </div>
+        {cloneErr && (
+          <div style={{ padding: '0 12px 10px' }}>
+            <button type="button" onClick={() => setStep('dir')} style={GHOST_BTN}>
+              Back
+            </button>
+          </div>
+        )}
+      </>
+    )
+  } else if (isGit) {
+    body = (
+      <>
+        <div style={{ padding: '9px 12px 6px', display: 'flex', alignItems: 'center', gap: 9 }}>
+          <span style={{ color: LV.soft, lineHeight: 0 }}>
+            <Github size={16} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontFamily: LV.font.mono,
+                fontSize: 11.5,
+                color: LV.ink,
+                fontWeight: 500,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {repo ?? repoShort ?? 'Repository'}
+            </div>
+            <div
+              style={{
+                fontFamily: LV.font.mono,
+                fontSize: 10,
+                color: LV.mute,
+                marginTop: 2,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {directory}
+            </div>
+          </div>
+        </div>
+        <div style={{ borderTop: `1px solid ${LV.rule}`, margin: '4px 0' }} />
+        <GhRow
+          mono
+          left={<GitBranch size={14} />}
+          title={status?.branch ?? '—'}
+          sub="current branch · switch"
+          right={<ChevronDown size={12} style={{ color: LV.mute }} />}
+          onClick={openBranchSwitch}
+        />
+        <div style={{ padding: '8px 12px 4px' }}>
+          <span style={CHIP_EYEBROW}>Status</span>
+          <div
+            style={{
+              fontFamily: LV.font.mono,
+              fontSize: 10.5,
+              color: LV.soft,
+              lineHeight: 1.7,
+              marginTop: 6,
+            }}
+          >
+            {dirty ? (
+              <>
+                ↑{ahead} ahead · ↓{behind} behind ·{' '}
+                <span style={{ color: LV.gold }}>{changed} uncommitted</span>
+              </>
+            ) : (
+              <span style={{ color: LV.mute }}>
+                Working tree clean · up to date with origin/{status?.branch}
+              </span>
+            )}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, padding: '10px 12px' }}>
+          <button type="button" onClick={doPull} disabled={pulling} style={GHOST_BTN}>
+            {pulling ? 'Pulling…' : 'Pull'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onDisconnect()
+              setOpen(false)
+            }}
+            style={GHOST_BTN}
+          >
+            Disconnect
+          </button>
+        </div>
+      </>
+    )
+  } else {
+    body = (
+      <>
+        <div style={{ ...CHIP_EYEBROW, padding: '7px 12px 6px' }}>Work directory</div>
+        {COMMON_DIRS.map((d) => (
+          <GhRow
+            key={d}
+            mono
+            title={d}
+            right={d === directory ? <Check size={14} style={{ color: LV.gold }} /> : null}
+            onClick={() => {
+              onPickLocal(d)
+              setOpen(false)
+            }}
+          />
+        ))}
+        <GhRow
+          left={<FolderOpen size={15} />}
+          title="Browse…"
+          sub="Choose a folder"
+          onClick={() =>
+            void (async () => {
+              const picked = await pickFolder(directory ?? undefined)
+              if (picked) {
+                onPickLocal(picked)
+                setOpen(false)
+              }
+            })()
+          }
+        />
+        {allowGithub && (
+          <>
+            <div style={{ borderTop: `1px solid ${LV.rule}`, margin: '4px 0' }} />
+            <GhRow
+              left={<Github size={16} />}
+              title="Connect GitHub repo"
+              sub="Clone & track a repository"
+              onClick={startWizard}
+            />
+          </>
+        )}
+      </>
+    )
+  }
 
-// ── Git status pill (code mode) ───────────────────────────────────────────────
-function GitStatusChip({
-  status,
-  loading,
-  onRefresh,
-}: {
-  status: RepoStatus | null
-  loading: boolean
-  onRefresh: () => void
-}) {
-  if (!status?.is_repo) return null
-  const s = status.status
-  const dirty = s ? s.modified.length + s.staged.length + s.untracked.length : 0
   return (
-    <button
-      type="button"
-      onClick={onRefresh}
-      title="Git status — click to refresh"
-      style={{ ...CHIP_BTN, background: 'transparent', cursor: 'pointer' }}
-    >
-      <span style={{ color: LV.gold, lineHeight: 0 }}>
-        {loading ? <Loader2 size={12} className="animate-spin" /> : <GitBranch size={12} />}
-      </span>
-      <span
+    <div style={{ position: 'relative', flex: 'none' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
         style={{
-          fontFamily: LV.font.mono,
-          fontSize: 11,
-          color: LV.soft,
-          letterSpacing: '0.02em',
-          maxWidth: 140,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap' as const,
+          ...CHIP_BTN,
+          background: directory ? LV.wash : 'transparent',
+          border: `1px solid ${open ? LV.ruleStrong : LV.rule}`,
+          whiteSpace: 'nowrap',
         }}
       >
-        {status.branch ?? '—'}
-      </span>
-      {dirty > 0 && (
-        <span style={{ fontFamily: LV.font.mono, fontSize: 10.5, color: LV.gold }}>·{dirty}●</span>
+        {chip}
+      </button>
+      {open && (
+        <>
+          <div
+            onClick={() => setOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 199 }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 'calc(100% + 8px)',
+              left: 0,
+              width: 304,
+              zIndex: 200,
+              background: 'var(--lv-card)',
+              border: `1px solid ${LV.ruleStrong}`,
+              borderRadius: 8,
+              padding: '4px 0',
+              boxShadow: LV.shadow,
+              maxHeight: 380,
+              overflowY: 'auto',
+            }}
+          >
+            {body}
+          </div>
+        </>
       )}
-    </button>
+    </div>
   )
 }
 
@@ -1237,11 +1623,8 @@ export function DesktopSessionWindow({ mode }: Props) {
   const [inputText, setInputText] = useState('')
   const [models, setModels] = useState<string[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
-  // GitHub repo / git status (code mode only)
-  const [cloning, setCloning] = useState(false)
-  const [cloneMsg, setCloneMsg] = useState<string | null>(null)
+  // Live git status of the work directory (code mode only)
   const [gitStatus, setGitStatus] = useState<RepoStatus | null>(null)
-  const [gitLoading, setGitLoading] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -1301,14 +1684,6 @@ export function DesktopSessionWindow({ mode }: Props) {
     [sessionId, setEffortMode, setSessionEffortMode],
   )
 
-  /** Pick a working directory and remember it for this thread. */
-  const handleSelectDirectory = useCallback(
-    (d: string | null) => {
-      setSessionDirectory(sessionId ?? '__new__', d)
-    },
-    [sessionId, setSessionDirectory],
-  )
-
   /** Pick an acting mode and remember it for this thread. */
   const handleSelectActingMode = useCallback(
     (m: 'ask' | 'auto') => {
@@ -1323,20 +1698,16 @@ export function DesktopSessionWindow({ mode }: Props) {
       setGitStatus(null)
       return
     }
-    setGitLoading(true)
     try {
       setGitStatus(await getRepoStatus(directory))
     } catch {
       setGitStatus(null)
-    } finally {
-      setGitLoading(false)
     }
   }, [mode, directory])
 
   // Refresh git status when the directory changes, and after each assistant turn
   // finishes (the agent may have edited files in the repo).
   useEffect(() => {
-    setCloneMsg(null)
     void refreshGitStatus()
   }, [refreshGitStatus])
 
@@ -1346,27 +1717,52 @@ export function DesktopSessionWindow({ mode }: Props) {
     prevStreaming.current = isStreaming
   }, [isStreaming, refreshGitStatus])
 
-  /** Select a GitHub repo → auto-clone into the chosen (empty) directory. */
-  const handleSelectRepo = useCallback(
-    async (r: GithubRepo) => {
-      setSessionRepo(sessionId ?? '__new__', r.full_name)
-      setCloneMsg(null)
-      if (!directory) {
-        setCloneMsg('Choose a directory first, then pick the repo again.')
-        return
-      }
-      setCloning(true)
-      try {
-        await cloneRepo(r.clone_url, directory)
-        await refreshGitStatus()
-      } catch (err) {
-        setCloneMsg(err instanceof Error ? err.message : 'Clone failed')
-      } finally {
-        setCloning(false)
-      }
+  /** Pick a plain local directory (clears any tracked repo). */
+  const handlePickLocal = useCallback(
+    (path: string) => {
+      const key = sessionId ?? '__new__'
+      setSessionDirectory(key, path)
+      setSessionRepo(key, null)
     },
-    [sessionId, directory, setSessionRepo, refreshGitStatus],
+    [sessionId, setSessionDirectory, setSessionRepo],
   )
+
+  /** Clone a repo into targetDir, then track it as this thread's work directory. */
+  const handleClone = useCallback(
+    async (r: GithubRepo, branch: string | undefined, targetDir: string) => {
+      await cloneRepo(r.clone_url, targetDir, branch)
+      const key = sessionId ?? '__new__'
+      setSessionDirectory(key, targetDir)
+      setSessionRepo(key, r.full_name)
+      await refreshGitStatus()
+    },
+    [sessionId, setSessionDirectory, setSessionRepo, refreshGitStatus],
+  )
+
+  /** Switch branches in the cloned repo. */
+  const handleCheckout = useCallback(
+    async (branch: string) => {
+      if (!directory) return
+      await checkoutBranch(directory, branch)
+      await refreshGitStatus()
+    },
+    [directory, refreshGitStatus],
+  )
+
+  /** Pull the current branch. */
+  const handlePull = useCallback(async () => {
+    if (!directory) return
+    await pullRepo(directory)
+    await refreshGitStatus()
+  }, [directory, refreshGitStatus])
+
+  /** Stop tracking the repo/directory for this thread (does not delete files). */
+  const handleDisconnect = useCallback(() => {
+    const key = sessionId ?? '__new__'
+    setSessionDirectory(key, null)
+    setSessionRepo(key, null)
+    setGitStatus(null)
+  }, [sessionId, setSessionDirectory, setSessionRepo])
 
   // Scroll to bottom on streaming ticks and new messages
   useEffect(() => {
@@ -1547,37 +1943,18 @@ export function DesktopSessionWindow({ mode }: Props) {
                 gap: 8,
               }}
             >
-              {mode === 'code' && (
-                <RepoChip
-                  repo={repo}
-                  cloning={cloning}
-                  onSelect={(r) => void handleSelectRepo(r)}
-                />
-              )}
-              <DirectoryChip directory={directory} onChange={handleSelectDirectory} />
+              <CWGitDirectory
+                directory={directory}
+                repo={repo}
+                status={gitStatus}
+                allowGithub={mode === 'code'}
+                onPickLocal={handlePickLocal}
+                onClone={handleClone}
+                onCheckout={handleCheckout}
+                onPull={handlePull}
+                onDisconnect={handleDisconnect}
+              />
               <ActingModeChip actingMode={actingMode} onChange={handleSelectActingMode} />
-              {mode === 'code' && (
-                <GitStatusChip
-                  status={gitStatus}
-                  loading={gitLoading}
-                  onRefresh={() => void refreshGitStatus()}
-                />
-              )}
-              {mode === 'code' && cloneMsg && (
-                <span
-                  style={{
-                    fontFamily: LV.font.mono,
-                    fontSize: 10,
-                    color: '#dc2626',
-                    maxWidth: 220,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap' as const,
-                  }}
-                >
-                  {cloneMsg}
-                </span>
-              )}
               <span style={{ flex: 1 }} />
               <ModelDropdown
                 models={models}
@@ -1950,33 +2327,18 @@ export function DesktopSessionWindow({ mode }: Props) {
               padding: '8px 0 14px',
             }}
           >
-            {mode === 'code' && (
-              <RepoChip repo={repo} cloning={cloning} onSelect={(r) => void handleSelectRepo(r)} />
-            )}
-            <DirectoryChip directory={directory} onChange={handleSelectDirectory} />
+            <CWGitDirectory
+              directory={directory}
+              repo={repo}
+              status={gitStatus}
+              allowGithub={mode === 'code'}
+              onPickLocal={handlePickLocal}
+              onClone={handleClone}
+              onCheckout={handleCheckout}
+              onPull={handlePull}
+              onDisconnect={handleDisconnect}
+            />
             <ActingModeChip actingMode={actingMode} onChange={handleSelectActingMode} />
-            {mode === 'code' && (
-              <GitStatusChip
-                status={gitStatus}
-                loading={gitLoading}
-                onRefresh={() => void refreshGitStatus()}
-              />
-            )}
-            {mode === 'code' && cloneMsg && (
-              <span
-                style={{
-                  fontFamily: LV.font.mono,
-                  fontSize: 10,
-                  color: '#dc2626',
-                  maxWidth: 220,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap' as const,
-                }}
-              >
-                {cloneMsg}
-              </span>
-            )}
             <span style={{ fontFamily: LV.font.mono, fontSize: 9.5, color: LV.mute }}>⌘↵ send</span>
             <span style={{ fontFamily: LV.font.mono, fontSize: 9.5, color: LV.mute }}>
               @ reference

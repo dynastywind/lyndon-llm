@@ -32,19 +32,22 @@ def _clean_remote_url(clone_url: str) -> str:
     return re.sub(r"https://[^@/]+@", "https://", clone_url, count=1)
 
 
-async def clone_repo(clone_url: str, target_dir: str, token: str | None = None) -> str:
-    """Clone *clone_url* into *target_dir* (must be empty). Returns the cloned branch.
+async def clone_repo(
+    clone_url: str, target_dir: str, token: str | None = None, branch: str | None = None
+) -> str:
+    """Clone *clone_url* into *target_dir*. Returns the checked-out branch.
 
     Runs the synchronous GitPython clone off the event loop. After cloning, the
     ``origin`` remote is reset to the token-free URL so credentials never persist on
-    disk.
+    disk. When *branch* is given, that branch is checked out (``--branch``).
     """
     import asyncio
 
     def _do_clone() -> str:
         import git
 
-        repo = git.Repo.clone_from(_authed_clone_url(clone_url, token), target_dir)
+        kwargs = {"branch": branch} if branch else {}
+        repo = git.Repo.clone_from(_authed_clone_url(clone_url, token), target_dir, **kwargs)
         with suppress(Exception):  # always strip any embedded token from the saved remote
             repo.remote("origin").set_url(_clean_remote_url(clone_url))
         try:
@@ -53,6 +56,21 @@ async def clone_repo(clone_url: str, target_dir: str, token: str | None = None) 
             return repo.head.commit.hexsha[:8]
 
     return await asyncio.to_thread(_do_clone)
+
+
+async def pull_repo(repo_path: str, token: str | None = None) -> None:
+    """``git pull`` the current branch, authenticating from *token* (off the event loop)."""
+    import asyncio
+
+    def _do_pull() -> None:
+        import git
+
+        repo = git.Repo(repo_path)
+        branch = repo.active_branch.name
+        url = next(iter(repo.remote("origin").urls))
+        repo.git.pull(_authed_clone_url(url, token), branch)
+
+    await asyncio.to_thread(_do_pull)
 
 
 class RepoManager:
@@ -81,6 +99,22 @@ class RepoManager:
             "staged": [item.a_path for item in repo.index.diff("HEAD")],
             "untracked": repo.untracked_files,
         }
+
+    def ahead_behind(self) -> tuple[int, int]:
+        """Commits the local branch is (ahead, behind) its upstream. (0, 0) if no upstream."""
+        repo = self._get_repo()
+        try:
+            branch = repo.active_branch
+            tracking = branch.tracking_branch()
+            if tracking is None:
+                return (0, 0)
+            counts = repo.git.rev_list(
+                "--left-right", "--count", f"{tracking.name}...{branch.name}"
+            )
+            behind, ahead = counts.split()
+            return (int(ahead), int(behind))
+        except (ValueError, TypeError):
+            return (0, 0)
 
     def log(self, max_count: int = 10) -> list[dict[str, str]]:
         repo = self._get_repo()
