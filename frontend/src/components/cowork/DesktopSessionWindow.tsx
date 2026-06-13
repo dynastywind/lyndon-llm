@@ -2,6 +2,7 @@
 // Cowork and Code modes are desktop-only (guarded upstream by IS_TAURI check).
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -1008,6 +1009,25 @@ function CWGitDirectory({
   const [cloneErr, setCloneErr] = useState<string | null>(null)
   const [switching, setSwitching] = useState(false)
   const [pulling, setPulling] = useState(false)
+  // The popover is portaled to <body> (so it escapes the input bar's overflow
+  // clipping) and positioned with fixed coords anchored above the chip.
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const [pos, setPos] = useState<{ left: number; bottom: number; maxH: number } | null>(null)
+
+  const toggleOpen = () => {
+    setOpen((v) => {
+      const next = !v
+      if (next && btnRef.current) {
+        const r = btnRef.current.getBoundingClientRect()
+        setPos({
+          left: Math.max(8, Math.min(r.left, window.innerWidth - 304 - 8)),
+          bottom: window.innerHeight - r.top + 8,
+          maxH: Math.min(440, r.top - 16),
+        })
+      }
+      return next
+    })
+  }
 
   const isGit = status?.is_repo === true && allowGithub
   const s = status?.status
@@ -1546,8 +1566,9 @@ function CWGitDirectory({
   return (
     <div style={{ position: 'relative', flex: 'none' }}>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         style={{
           ...CHIP_BTN,
           background: directory ? LV.wash : 'transparent',
@@ -1557,32 +1578,35 @@ function CWGitDirectory({
       >
         {chip}
       </button>
-      {open && (
-        <>
-          <div
-            onClick={() => setOpen(false)}
-            style={{ position: 'fixed', inset: 0, zIndex: 199 }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 'calc(100% + 8px)',
-              left: 0,
-              width: 304,
-              zIndex: 200,
-              background: 'var(--lv-card)',
-              border: `1px solid ${LV.ruleStrong}`,
-              borderRadius: 8,
-              padding: '4px 0',
-              boxShadow: LV.shadow,
-              maxHeight: 380,
-              overflowY: 'auto',
-            }}
-          >
-            {body}
-          </div>
-        </>
-      )}
+      {open &&
+        pos &&
+        createPortal(
+          <>
+            <div
+              onClick={() => setOpen(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 199 }}
+            />
+            <div
+              style={{
+                position: 'fixed',
+                left: pos.left,
+                bottom: pos.bottom,
+                width: 304,
+                zIndex: 200,
+                background: 'var(--lv-card)',
+                border: `1px solid ${LV.ruleStrong}`,
+                borderRadius: 8,
+                padding: '4px 0',
+                boxShadow: LV.shadow,
+                maxHeight: pos.maxH,
+                overflowY: 'auto',
+              }}
+            >
+              {body}
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   )
 }

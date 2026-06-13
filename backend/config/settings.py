@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 4096
     llm_temperature: float = 0.7
     llm_stream: bool = True
+    # Cap the non-streaming tool-selection call so a model that doesn't support
+    # function-calling (e.g. EXO) can't hang the agentic loop forever — on timeout
+    # the engine falls back to a plain streamed answer.
+    llm_tool_call_timeout: int = 20  # seconds
 
     # Embedding model (for RAG + memory)
     embedding_model: str = "nomic-embed-text"  # served via local model server

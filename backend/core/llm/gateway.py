@@ -220,7 +220,13 @@ class LLMGateway:
         Returns (full message, usage).
         """
         t0 = time.monotonic()
-        response: ChatCompletion = await self._client.chat.completions.create(
+        # Bound this call: some local backends (EXO) don't support function-calling
+        # and never return for a tools= request. Cap the timeout AND disable the
+        # SDK's automatic retries (otherwise a timeout is retried ~3x), so on a hang
+        # the caller (the agentic loop) falls back to a plain streamed answer promptly.
+        response: ChatCompletion = await self._client.with_options(
+            max_retries=0
+        ).chat.completions.create(
             model=model or settings.llm_model,
             messages=messages,  # type: ignore[arg-type]
             temperature=temperature if temperature is not None else settings.llm_temperature,
@@ -228,6 +234,7 @@ class LLMGateway:
             tools=tools or None,  # type: ignore[arg-type]
             tool_choice=tool_choice,
             stream=False,
+            timeout=settings.llm_tool_call_timeout,
         )
         logger.info("llm.complete_with_tools_raw  %.0f ms", (time.monotonic() - t0) * 1000)
         return response.choices[0].message, _usage_from_response(response)
