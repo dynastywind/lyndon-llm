@@ -267,6 +267,7 @@ export const en = {
     newChat: 'New chat',
     openProject: 'Open project {name}',
     toggleContext: 'Toggle context panel',
+    reference: 'Reference',
   },
 
   authLogin: {

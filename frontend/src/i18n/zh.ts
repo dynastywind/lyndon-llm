@@ -262,6 +262,7 @@ export const zh: Dict = {
     newChat: '新对话',
     openProject: '打开项目 {name}',
     toggleContext: '切换上下文面板',
+    reference: '引用',
   },
 
   authLogin: {

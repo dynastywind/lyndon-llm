@@ -19,6 +19,7 @@ import {
   RotateCcw,
   Square,
   Volume2,
+  Quote,
   Plus,
   Puzzle,
   X,
@@ -1662,6 +1663,107 @@ function ThinkingBlock({ content, isLive }: { content: string; isLive: boolean }
   )
 }
 
+// ─── SelectionReferencePopup ──────────────────────────────────────────────────
+
+/**
+ * Floating "Reference" button shown when the user selects text inside an
+ * assistant message. Clicking it hands the selected text to `onReference`,
+ * which adds it to the composer as a referenced excerpt.
+ */
+function SelectionReferencePopup({ onReference }: { onReference: (text: string) => void }) {
+  const { t } = useT()
+  const [pop, setPop] = useState<{ x: number; y: number; text: string } | null>(null)
+
+  useEffect(() => {
+    const update = () => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+        setPop(null)
+        return
+      }
+      const text = sel.toString().trim()
+      if (!text) {
+        setPop(null)
+        return
+      }
+      // Only offer the action for selections inside an assistant message.
+      const anchor = sel.anchorNode
+      const el = anchor instanceof Element ? anchor : anchor?.parentElement
+      if (!el?.closest('[data-assistant-msg]')) {
+        setPop(null)
+        return
+      }
+      const rect = sel.getRangeAt(0).getBoundingClientRect()
+      if (rect.width === 0 && rect.height === 0) {
+        setPop(null)
+        return
+      }
+      setPop({ x: rect.left + rect.width / 2, y: rect.top, text })
+    }
+
+    const onMouseUp = () => window.setTimeout(update, 0)
+    const onSelChange = () => {
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed) setPop(null)
+    }
+    const onScroll = () => setPop(null)
+
+    document.addEventListener('mouseup', onMouseUp)
+    document.addEventListener('selectionchange', onSelChange)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('mouseup', onMouseUp)
+      document.removeEventListener('selectionchange', onSelChange)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [])
+
+  if (!pop) return null
+
+  return createPortal(
+    <div
+      // Keep the text selection alive when the button is pressed.
+      onMouseDown={(e) => e.preventDefault()}
+      style={{
+        position: 'fixed',
+        left: pop.x,
+        top: pop.y - 10,
+        transform: 'translate(-50%, -100%)',
+        zIndex: 400,
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          onReference(pop.text)
+          window.getSelection()?.removeAllRanges()
+          setPop(null)
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          background: 'var(--lv-card)',
+          border: '1px solid var(--lv-rule-strong)',
+          borderRadius: 6,
+          padding: '5px 10px',
+          cursor: 'pointer',
+          color: 'var(--lv-ink)',
+          fontFamily: 'var(--font-sans)',
+          fontSize: 12,
+          fontWeight: 500,
+          boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <Quote size={13} style={{ color: 'var(--lv-gold)' }} />
+        {t('chat.reference')}
+      </button>
+    </div>,
+    document.body,
+  )
+}
+
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 
 function MessageBubble({
@@ -1838,6 +1940,7 @@ function MessageBubble({
     >
       <div
         className="group/msg"
+        data-assistant-msg
         style={{ position: 'relative', paddingBottom: 28, maxWidth: hasCharts ? '90%' : '76%' }}
       >
         {/* Eyebrow */}
@@ -2164,6 +2267,16 @@ export function ChatWindow() {
       if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl)
       return prev.filter((a) => a.id !== id)
     })
+  }, [])
+
+  // Add selected assistant text as a referenced excerpt — modelled as a plain
+  // text-file attachment so it rides the existing attachment pipeline (chip in
+  // the composer, decoded into the prompt by the backend).
+  const addReference = useCallback((text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const file = new File([trimmed], 'referenced-text.txt', { type: 'text/plain' })
+    setAttachments((prev) => [...prev, { id: crypto.randomUUID(), file, previewUrl: null }])
   }, [])
 
   // Pagination state
@@ -2820,6 +2933,9 @@ export function ChatWindow() {
         background: 'var(--lv-bg)',
       }}
     >
+      {/* Selection → "Reference" popup over assistant messages */}
+      <SelectionReferencePopup onReference={addReference} />
+
       {/* ── Title bar ────────────────────────────────────────────────── */}
       <div
         style={{
