@@ -879,6 +879,8 @@ interface LocalAttachment {
   file: File
   /** Blob object URL (images only) — revoked when removed or submitted. */
   previewUrl: string | null
+  /** Present when this is a referenced excerpt — its text is shown in the chip. */
+  referenceText?: string
 }
 
 /** Read a file and return its full data URL ("data:<type>;base64,…"). */
@@ -889,6 +891,21 @@ function fileToDataUrl(file: File): Promise<string> {
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
+}
+
+// Filename used for referenced excerpts so the chip (composer + sent bubble)
+// can recognise them and show the excerpt text instead of the file name.
+const REFERENCE_FILENAME = 'referenced-text.txt'
+
+/** Decode the UTF-8 text content out of a base64 `data:` URL. */
+function decodeDataUrlText(dataUrl: string): string {
+  try {
+    const b64 = dataUrl.split(',')[1] ?? ''
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return ''
+  }
 }
 
 function AttachmentChip({
@@ -907,10 +924,12 @@ function AttachmentChip({
         border: '1px solid var(--lv-rule-strong)',
         background: 'rgba(var(--lv-wash-rgb),0.04)',
         padding: '3px 8px 3px 4px',
-        maxWidth: 180,
+        maxWidth: attachment.referenceText ? 280 : 180,
       }}
     >
-      {attachment.previewUrl ? (
+      {attachment.referenceText ? (
+        <Quote size={12} style={{ flexShrink: 0, color: 'var(--lv-gold)' }} />
+      ) : attachment.previewUrl ? (
         <img
           src={attachment.previewUrl}
           alt={attachment.file.name}
@@ -920,9 +939,11 @@ function AttachmentChip({
         <FileText size={12} style={{ flexShrink: 0, color: 'var(--lv-mute)' }} />
       )}
       <span
+        title={attachment.referenceText ?? undefined}
         style={{
-          fontFamily: 'var(--font-mono)',
+          fontFamily: attachment.referenceText ? 'var(--font-sans)' : 'var(--font-mono)',
           fontSize: 10.5,
+          fontStyle: attachment.referenceText ? 'italic' : 'normal',
           color: 'var(--lv-soft)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -930,7 +951,9 @@ function AttachmentChip({
           userSelect: 'none',
         }}
       >
-        {attachment.file.name}
+        {attachment.referenceText
+          ? attachment.referenceText.replace(/\s+/g, ' ')
+          : attachment.file.name}
       </span>
       <button
         type="button"
@@ -1165,19 +1188,27 @@ function MessageAttachments({ attachments }: { attachments: MessageAttachment[] 
   return (
     <>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-        {attachments.map((a, i) =>
-          a.type.startsWith('image/') ? (
-            <img
-              key={i}
-              src={a.dataUrl}
-              alt={a.name}
-              onClick={() => setPreviewing(a)}
-              style={{ maxWidth: 200, maxHeight: 150, objectFit: 'cover', cursor: 'pointer' }}
-            />
-          ) : (
+        {attachments.map((a, i) => {
+          if (a.type.startsWith('image/')) {
+            return (
+              <img
+                key={i}
+                src={a.dataUrl}
+                alt={a.name}
+                onClick={() => setPreviewing(a)}
+                style={{ maxWidth: 200, maxHeight: 150, objectFit: 'cover', cursor: 'pointer' }}
+              />
+            )
+          }
+          const isReference = a.name === REFERENCE_FILENAME
+          const refText = isReference
+            ? decodeDataUrlText(a.dataUrl).replace(/\s+/g, ' ').trim()
+            : ''
+          return (
             <div
               key={i}
               onClick={() => setPreviewing(a)}
+              title={isReference ? refText : undefined}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1186,25 +1217,30 @@ function MessageAttachments({ attachments }: { attachments: MessageAttachment[] 
                 padding: '4px 8px',
                 cursor: 'pointer',
                 border: '1px solid rgba(var(--lv-wash-rgb),0.1)',
-                fontFamily: 'var(--font-mono)',
+                fontFamily: isReference ? 'var(--font-sans)' : 'var(--font-mono)',
                 fontSize: 10.5,
+                fontStyle: isReference ? 'italic' : 'normal',
                 color: 'var(--lv-soft)',
               }}
             >
-              <FileText size={11} style={{ flexShrink: 0 }} />
+              {isReference ? (
+                <Quote size={11} style={{ flexShrink: 0, color: 'var(--lv-gold)' }} />
+              ) : (
+                <FileText size={11} style={{ flexShrink: 0 }} />
+              )}
               <span
                 style={{
-                  maxWidth: 140,
+                  maxWidth: isReference ? 240 : 140,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                 }}
               >
-                {a.name}
+                {isReference ? refText : a.name}
               </span>
             </div>
-          ),
-        )}
+          )
+        })}
       </div>
       {previewing && (
         <AttachmentPreviewModal attachment={previewing} onClose={() => setPreviewing(null)} />
@@ -1734,6 +1770,8 @@ function SelectionReferencePopup({ onReference }: { onReference: (text: string) 
     >
       <button
         type="button"
+        title={t('chat.reference')}
+        aria-label={t('chat.reference')}
         onClick={() => {
           onReference(pop.text)
           window.getSelection()?.removeAllRanges()
@@ -1742,22 +1780,17 @@ function SelectionReferencePopup({ onReference }: { onReference: (text: string) 
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
+          justifyContent: 'center',
           background: 'var(--lv-card)',
           border: '1px solid var(--lv-rule-strong)',
           borderRadius: 6,
-          padding: '5px 10px',
+          padding: 7,
           cursor: 'pointer',
           color: 'var(--lv-ink)',
-          fontFamily: 'var(--font-sans)',
-          fontSize: 12,
-          fontWeight: 500,
           boxShadow: '0 6px 20px rgba(0,0,0,0.5)',
-          whiteSpace: 'nowrap',
         }}
       >
-        <Quote size={13} style={{ color: 'var(--lv-gold)' }} />
-        {t('chat.reference')}
+        <Quote size={15} style={{ color: 'var(--lv-gold)' }} />
       </button>
     </div>,
     document.body,
@@ -2275,8 +2308,11 @@ export function ChatWindow() {
   const addReference = useCallback((text: string) => {
     const trimmed = text.trim()
     if (!trimmed) return
-    const file = new File([trimmed], 'referenced-text.txt', { type: 'text/plain' })
-    setAttachments((prev) => [...prev, { id: crypto.randomUUID(), file, previewUrl: null }])
+    const file = new File([trimmed], REFERENCE_FILENAME, { type: 'text/plain' })
+    setAttachments((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), file, previewUrl: null, referenceText: trimmed },
+    ])
   }, [])
 
   // Pagination state
