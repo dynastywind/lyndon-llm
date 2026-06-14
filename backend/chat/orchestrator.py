@@ -2,16 +2,29 @@
 Chat message orchestrator — decides whether to pre-fetch RAG, use tools, or
 stream directly to the model before each turn.
 
-Heuristic routing is the default; swap to LLM routing via settings when ready.
+Two strategies are available, selected by ``settings.orchestrator_strategy``:
+
+  • ``llm`` (default) — the user query first goes to the model, which classifies
+    its intent (casual / factual / complex / documents). The classification is
+    mapped onto the same RouteDecision the heuristic produces, so every
+    downstream path (direct stream, web-search fast path, planner) is reused.
+    Any classifier failure falls back to the heuristic so chat never breaks.
+  • ``heuristic`` — fast regex routing, no extra LLM call. Also the fallback.
 """
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
+import json
+import logging
 import re
 from typing import Literal, Protocol
 
 from config.settings import settings
+from core.llm.gateway import LLMMessage, llm_gateway
+
+logger = logging.getLogger(__name__)
 
 RouteName = Literal["direct", "rag", "tools", "rag_and_tools", "plan"]
 
@@ -243,13 +256,101 @@ def _wants_rag(text: str, has_kb_sources: bool) -> bool:
     return bool(_EXPLICIT_DOC_RE.search(text))
 
 
+# Base classifier instruction. The {documents_option} placeholder is filled with
+# an extra intent line only when the knowledge base has ingested sources, so the
+# model is never offered "documents" when there is nothing to search.
+_INTENT_SYSTEM = """\
+You are an intent classifier for a chat assistant. Read the user's message and
+decide which single category best describes what they want.
+
+Categories:
+  casual  — greetings, small talk, opinions, or general-knowledge questions the
+            assistant can answer directly from what it already knows.
+  factual — questions needing CURRENT or real-time external information: live
+            news, today's weather, current prices, scores, recent releases.
+            These require a web search.
+  complex — multi-step tasks that need a plan: research-and-compare, "first X
+            then Y", build/produce something from several steps, or any request
+            that combines multiple tools or sub-tasks.{documents_option}
+
+Output ONLY valid JSON, no markdown, no explanation:
+{{"intent": "<category>", "reason": "<short justification>"}}
+"""
+
+_DOCUMENTS_OPTION = """
+  documents — questions about the user's OWN uploaded files / documents /
+            knowledge base ("according to my report", "summarize my notes")."""
+
+_VALID_INTENTS = {"casual", "factual", "complex", "documents"}
+
+
 class LLMOrchestrator:
-    """Structured-output LLM router — not yet implemented."""
+    """Model-driven router — the query is classified by the LLM, then mapped onto
+    the same RouteDecision the heuristic produces. Falls back to the heuristic on
+    any failure so chat never breaks."""
+
+    def __init__(self) -> None:
+        self._fallback = HeuristicOrchestrator()
 
     async def route(self, message: str, *, has_kb_sources: bool) -> RouteDecision:
-        raise NotImplementedError(
-            "LLM orchestrator is not implemented yet; set orchestrator_strategy=heuristic"
+        text = (message or "").strip()
+        if not text:
+            return RouteDecision("direct", frozenset(), "empty message")
+
+        try:
+            intent, reason = await self._classify(text, has_kb_sources=has_kb_sources)
+        except Exception as e:  # timeout, JSON error, connection failure, etc.
+            logger.warning("LLM intent classification failed (%s); using heuristic", e)
+            return await self._fallback.route(text, has_kb_sources=has_kb_sources)
+
+        return await self._map_intent(intent, reason, text, has_kb_sources=has_kb_sources)
+
+    async def _classify(self, text: str, *, has_kb_sources: bool) -> tuple[str, str]:
+        system = _INTENT_SYSTEM.format(
+            documents_option=_DOCUMENTS_OPTION if has_kb_sources else ""
         )
+        response, _usage = await asyncio.wait_for(
+            llm_gateway.complete(
+                messages=[LLMMessage("system", system), LLMMessage("user", text)],
+                temperature=0.0,
+                max_tokens=120,
+            ),
+            timeout=settings.orchestrator_llm_timeout,
+        )
+        cleaned = (
+            response.strip()
+            .removeprefix("```json")
+            .removeprefix("```")
+            .removesuffix("```")
+            .strip()
+        )
+        data = json.loads(cleaned)
+        intent = str(data.get("intent", "")).strip().lower()
+        if intent not in _VALID_INTENTS:
+            raise ValueError(f"unknown intent: {intent!r}")
+        return intent, str(data.get("reason", "")).strip()
+
+    async def _map_intent(
+        self, intent: str, reason: str, text: str, *, has_kb_sources: bool
+    ) -> RouteDecision:
+        why = f"llm intent: {intent}" + (f" — {reason}" if reason else "")
+
+        if intent == "factual":
+            # Single-tool set so the engine takes the web-search fast path.
+            return RouteDecision("tools", frozenset({"web_search"}), why)
+
+        if intent == "complex":
+            if settings.planner_enabled:
+                return RouteDecision("plan", frozenset(), why)
+            # Planner disabled — don't strand the query; let the heuristic decide.
+            logger.info("planner disabled; routing 'complex' intent via heuristic")
+            return await self._fallback.route(text, has_kb_sources=has_kb_sources)
+
+        if intent == "documents" and has_kb_sources:
+            return RouteDecision("rag", frozenset(), why)
+
+        # casual (and documents without a KB) → direct answer
+        return RouteDecision("direct", frozenset(), why)
 
 
 def get_orchestrator() -> Orchestrator:

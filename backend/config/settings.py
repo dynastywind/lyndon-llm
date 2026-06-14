@@ -86,7 +86,8 @@ class Settings(BaseSettings):
 
     # Chat orchestrator (route: direct | rag | tools | rag_and_tools | plan)
     orchestrator_enabled: bool = True
-    orchestrator_strategy: str = "heuristic"  # heuristic | llm (future)
+    orchestrator_strategy: str = "llm"  # heuristic | llm
+    orchestrator_llm_timeout: float = 8.0  # max seconds for the intent classifier
 
     # Chat planner
     planner_enabled: bool = True
