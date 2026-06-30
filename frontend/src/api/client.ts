@@ -18,6 +18,7 @@ import type {
   McpServerCreate,
   McpServerTool,
   Skill,
+  ScheduledTask,
 } from '@/types'
 import { useAppStore } from '@/store'
 
@@ -587,6 +588,70 @@ export async function getAllChatMessages(
 export async function deleteChatSession(sessionId: string): Promise<void> {
   const res = await fetch(`${BASE}/chat/sessions/${sessionId}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`Failed to delete session: ${res.statusText}`)
+}
+
+// ── Scheduled tasks ──────────────────────────────────────────────────────────
+
+export interface ScheduledTaskInput {
+  name: string
+  goal: string
+  schedule_kind: 'interval' | 'daily' | 'weekly'
+  interval_seconds?: number | null
+  time_of_day?: string | null
+  weekday?: number | null
+  acting_mode?: 'auto' | 'auto_safe'
+  enabled?: boolean
+}
+
+export async function listScheduledTasks(): Promise<{ tasks: ScheduledTask[] }> {
+  const res = await fetch(`${BASE}/scheduled-tasks`, { headers: authHeader() })
+  if (!res.ok) throw new Error(`Failed to list scheduled tasks: ${res.statusText}`)
+  return res.json()
+}
+
+export async function createScheduledTask(input: ScheduledTaskInput): Promise<ScheduledTask> {
+  const res = await fetch(`${BASE}/scheduled-tasks`, {
+    method: 'POST',
+    headers: jsonHeaders(),
+    body: JSON.stringify(input),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export async function updateScheduledTask(
+  taskId: string,
+  patch: Partial<ScheduledTaskInput>,
+): Promise<ScheduledTask> {
+  const res = await fetch(`${BASE}/scheduled-tasks/${taskId}`, {
+    method: 'PATCH',
+    headers: jsonHeaders(),
+    body: JSON.stringify(patch),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail ?? res.statusText)
+  }
+  return res.json()
+}
+
+export async function deleteScheduledTask(taskId: string): Promise<void> {
+  const res = await fetch(`${BASE}/scheduled-tasks/${taskId}`, {
+    method: 'DELETE',
+    headers: authHeader(),
+  })
+  if (!res.ok) throw new Error(`Failed to delete scheduled task: ${res.statusText}`)
+}
+
+export async function runScheduledTaskNow(taskId: string): Promise<void> {
+  const res = await fetch(`${BASE}/scheduled-tasks/${taskId}/run-now`, {
+    method: 'POST',
+    headers: authHeader(),
+  })
+  if (!res.ok) throw new Error(`Failed to run task: ${res.statusText}`)
 }
 
 export async function renameChatSession(sessionId: string, title: string): Promise<ChatSession> {

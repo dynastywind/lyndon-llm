@@ -19,6 +19,7 @@ import {
   ListChecks,
   Code,
   Palette,
+  CalendarClock,
   Folder,
   FolderInput,
   ChevronRight,
@@ -1119,6 +1120,11 @@ export function Sidebar() {
                       { tab: 'tools' as SettingsTab, icon: Server, label: t('sidebar.tabMcp') },
                       { tab: 'skills' as SettingsTab, icon: Puzzle, label: t('sidebar.tabSkills') },
                       { tab: 'ai' as SettingsTab, icon: MessageSquare, label: t('sidebar.tabAi') },
+                      {
+                        tab: 'schedules' as SettingsTab,
+                        icon: CalendarClock,
+                        label: t('sidebar.tabSchedules'),
+                      },
                       {
                         tab: 'appearance' as SettingsTab,
                         icon: Palette,

@@ -19,6 +19,7 @@ from api.routes import (
     rag,
     registry,
     sandbox,
+    scheduled_tasks,
     skills,
     transcribe,
 )
@@ -37,8 +38,16 @@ async def lifespan(app: FastAPI):
 
     await mcp_tool_manager.reload_all()
     await skill_manager.reload_all()
+
+    from config.settings import settings
+    from core.scheduler.runner import scheduler_runner
+
+    if settings.scheduler_enabled:
+        await scheduler_runner.start()
     yield
-    # Shutdown — nothing to clean up yet
+    # Shutdown
+    if settings.scheduler_enabled:
+        await scheduler_runner.stop()
 
 
 async def _clear_stale_streaming() -> None:
@@ -102,6 +111,9 @@ async def _migrate(conn) -> None:
         "ALTER TABLE users ADD COLUMN profession TEXT",
         # v13 — encrypted GitHub access token (repo scope) for Code-mode clone/list
         "ALTER TABLE users ADD COLUMN github_token TEXT",
+        # v14 — scheduled tasks (table created by create_all; indexes are idempotent)
+        "CREATE INDEX IF NOT EXISTS ix_scheduled_tasks_next_run_at ON scheduled_tasks (next_run_at)",
+        "CREATE INDEX IF NOT EXISTS ix_scheduled_tasks_user_id ON scheduled_tasks (user_id)",
     ]
     for stmt in migrations:
         with suppress(Exception):  # column already exists — safe to ignore
@@ -171,6 +183,9 @@ app.include_router(rag.router, prefix="/api/rag", tags=["rag"])
 app.include_router(registry.router, prefix="/api/registry", tags=["registry"])
 app.include_router(sandbox.router, prefix="/api/sandbox", tags=["sandbox"])
 app.include_router(skills.router, prefix="/api/skills", tags=["skills"])
+app.include_router(
+    scheduled_tasks.router, prefix="/api/scheduled-tasks", tags=["scheduled-tasks"]
+)
 app.include_router(transcribe.router, prefix="/api/transcribe", tags=["transcribe"])
 app.include_router(ws_router, prefix="/ws", tags=["websocket"])
 

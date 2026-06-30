@@ -169,6 +169,28 @@ export interface ChatSessionsResponse {
   total: number
 }
 
+export type ScheduleKind = 'interval' | 'daily' | 'weekly'
+export type ActingMode = 'auto' | 'auto_safe'
+
+export interface ScheduledTask {
+  id: string
+  name: string
+  goal: string
+  schedule_kind: ScheduleKind
+  interval_seconds: number | null
+  time_of_day: string | null // "HH:MM" (UTC)
+  weekday: number | null // 0=Mon..6=Sun
+  acting_mode: ActingMode
+  enabled: boolean
+  last_run_at: string | null
+  next_run_at: string | null
+  last_status: 'ok' | 'error' | 'running' | null
+  last_error: string | null
+  last_session_id: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
 // ── Projects ──────────────────────────────────────────────────────────────────
 export interface ProjectFolder {
   path: string

@@ -4,5 +4,6 @@ from db.models.cowork import CoworkPlan  # noqa: F401
 from db.models.login_record import LoginRecord  # noqa: F401
 from db.models.mcp import McpServer, McpToolCache  # noqa: F401
 from db.models.project import Project  # noqa: F401
+from db.models.scheduled_task import ScheduledTask  # noqa: F401
 from db.models.skill import Skill, SkillTool  # noqa: F401
 from db.models.user import User  # noqa: F401

@@ -132,6 +132,10 @@ class Settings(BaseSettings):
     # Session
     session_ttl_seconds: int = 86400  # 24 hours
 
+    # Scheduled tasks — background loop that fires recurring cowork goals
+    scheduler_enabled: bool = True
+    scheduler_poll_seconds: int = 45
+
     # Auth — JWT
     jwt_secret_key: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"

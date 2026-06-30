@@ -20,6 +20,7 @@ import { FileViewerModal } from './FileViewerModal'
 import { ImageThumbnail } from './ImageThumbnail'
 import { PdfPageThumbnail } from './PdfPageThumbnail'
 import { SkillsPanel } from './SkillsPanel'
+import { ScheduledTasksPanel } from './ScheduledTasksPanel'
 import { ToolsRegistryPanel } from './ToolsRegistryPanel'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -34,7 +35,14 @@ interface UploadItem {
   error?: string
 }
 
-export type SettingsTab = 'profile' | 'ai' | 'knowledge' | 'tools' | 'skills' | 'appearance'
+export type SettingsTab =
+  | 'profile'
+  | 'ai'
+  | 'knowledge'
+  | 'tools'
+  | 'skills'
+  | 'schedules'
+  | 'appearance'
 
 interface Props {
   open: boolean
@@ -106,7 +114,8 @@ const NAV_SECTIONS: { id: SettingsTab; no: string }[] = [
   { id: 'knowledge', no: '03' },
   { id: 'tools', no: '04' },
   { id: 'skills', no: '05' },
-  { id: 'appearance', no: '06' },
+  { id: 'schedules', no: '06' },
+  { id: 'appearance', no: '07' },
 ]
 
 // CSS helpers (inline style objects keep us independent of Tailwind here)
@@ -1638,7 +1647,28 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                 <SkillsPanel />
               </section>
 
-              {/* ── 06 · Appearance ── */}
+              {/* ── 06 · Scheduled tasks ── */}
+              <section
+                id="schedules"
+                ref={setRef('schedules')}
+                style={{ maxWidth: 880, paddingBottom: 18, marginTop: 22 }}
+              >
+                <div
+                  style={{
+                    borderTop: '1px solid var(--lv-rule)',
+                    paddingTop: 22,
+                    marginBottom: 26,
+                  }}
+                >
+                  <span style={{ ...S.eyebrow, marginBottom: 14 }}>
+                    {t('settings.schedules.eyebrow')}
+                  </span>
+                  <h2 style={S.kbTitle}>{t('settings.schedules.title')}</h2>
+                </div>
+                <ScheduledTasksPanel active={open} />
+              </section>
+
+              {/* ── 07 · Appearance ── */}
               <section
                 id="appearance"
                 ref={setRef('appearance')}

@@ -43,6 +43,7 @@ HTTP / SSE / WebSocket
 │  SessionManager      — in-memory session + TTL               │
 │  StreamRegistry      — SSE buffer + replay for reconnects    │
 │  EventBus            — async pub/sub for lifecycle events    │
+│  SchedulerRunner     — recurring tasks → unattended cowork   │
 └───────────────────────────────────┬───────────────────────────┘
                                     │
 ┌───────────────────────────────────▼───────────────────────────┐
@@ -54,6 +55,7 @@ HTTP / SSE / WebSocket
 │  ├── chat_messages                                            │
 │  ├── skills / skill_tools                                     │
 │  ├── mcp_servers / tool_cache                                 │
+│  ├── scheduled_tasks                                          │
 │  └── login_records                                            │
 └───────────────────────────────────────────────────────────────┘
 
@@ -76,6 +78,7 @@ HTTP / SSE / WebSocket
 | Cowork | `cowork/` | Goal decomposition, plan execution, automation tools | [cowork.md](cowork.md) |
 | Code | `code/` | Git operations, file editing, code review, test running | [code.md](code.md) |
 | Core | `core/` | LLM gateway, tool registry, permissions gate, event bus | [core.md](core.md) |
+| Scheduler | `core/scheduler/` | Recurring scheduled tasks that run cowork goals unattended | [scheduler.md](scheduler.md) |
 | MCP | `core/mcp/` | Model Context Protocol client and tool manager | [mcp.md](mcp.md) |
 | Sessions | `core/session/` | Session lifecycle, stream buffer, reconnect | [sessions.md](sessions.md) |
 | Skills | `skills/` | User-uploaded skill tools: parser, manager, argument injection | [skills.md](skills.md) |
@@ -124,4 +127,5 @@ This allows the browser to disconnect and reconnect without losing tokens (see [
 - Registers all built-in tools at startup via `_register_all_tools()`
 - Applies incremental DB migrations (`_migrate()`)
 - Reloads MCP servers and user skills via `mcp_tool_manager.reload_all()` and `skill_manager.reload_all()`
+- Starts the scheduled-task loop via `scheduler_runner.start()` (and stops it on shutdown) — see [scheduler.md](scheduler.md)
 - Mounts all route routers under `/api/*`
