@@ -38,7 +38,7 @@ This document tracks planned features, ideas, and improvements. Add entries as t
 - [ ] **Web deployment** — publicly accessible instance with OAuth-only login; remove local-model assumption
 - [ ] **Agent-to-agent communication** — allow a Cowork plan to spawn a sub-Chat session as a research step
 - [ ] **Plugin system** — structured extension point beyond MCP; plugins can register new routes, UI panels, and tool categories
-- [ ] **Mobile companion** — Android/iOS app talking to the same backend API for on-the-go access. Feasibility & options assessed in [android.md](android.md) (recommended: Tauri v2 Android thin client → hosted backend)
+- [ ] **Mobile companion** — Android/iOS app talking to the same backend API for on-the-go access. App-side changes done; see [android.md](android.md) for the Tauri v2 thin-client approach + Android/iOS run guides
 - [ ] **Offline model fallback** — graceful degradation when the LLM server is unreachable; queue messages and retry
 - [ ] **Audit trail** — structured log of all tool executions (args, results, timestamps) for Cowork/Code sessions; exportable as JSON
 

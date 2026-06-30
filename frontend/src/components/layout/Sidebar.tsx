@@ -26,6 +26,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { IS_DESKTOP } from '@/lib/platform'
 import { useT } from '@/i18n'
 import { useAppStore } from '@/store'
 import { useChatHistory } from '@/hooks/useChatHistory'
@@ -235,11 +236,7 @@ function SidebarAsteriskAnimated({ size = 12 }: { size?: number }) {
   )
 }
 
-// ── Environment detection ─────────────────────────────────────────────────────
-const IS_TAURI =
-  typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== 'undefined'
-
-// ── Modes (desktop-only — web is chat-only with no tab group) ─────────────────
+// ── Modes (desktop-only — web and mobile are chat-only with no tab group) ─────
 const DESKTOP_MODES: { id: Mode; labelKey: string; Icon: LucideIcon }[] = [
   { id: 'chat', labelKey: 'sidebar.modeChat', Icon: MessageSquare },
   { id: 'cowork', labelKey: 'sidebar.modeCowork', Icon: ListChecks },
@@ -266,7 +263,13 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 // ── component ─────────────────────────────────────────────────────────────────
-export function Sidebar() {
+export function Sidebar({
+  mobile = false,
+  onNavigate,
+}: {
+  mobile?: boolean
+  onNavigate?: () => void
+} = {}) {
   const { t, language } = useT()
   const {
     mode,
@@ -345,6 +348,7 @@ export function Sidebar() {
   const openSettings = (tab: SettingsTab) => {
     setSettingsTab(tab)
     setSettingsOpen(true)
+    onNavigate?.()
   }
 
   const { sessions, loading, loadingMore, hasMore, sentinelRef, removeSession } = useChatHistory(
@@ -357,9 +361,9 @@ export function Sidebar() {
     if (current) setSessionTitle(current.title)
   }, [sessions, sessionId, setSessionTitle])
 
-  // Web is chat-only — reset any persisted desktop mode value
+  // Web and mobile are chat-only — reset any persisted desktop mode value
   useEffect(() => {
-    if (!IS_TAURI && mode !== 'chat') setMode('chat')
+    if (!IS_DESKTOP && mode !== 'chat') setMode('chat')
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ⌘K / Ctrl+K global shortcut — toggles the search dialog
@@ -432,12 +436,13 @@ export function Sidebar() {
   return (
     <aside
       style={{
-        width: 240,
+        width: mobile ? '100%' : 240,
         background: LV.bg,
-        borderRight: `1px solid ${LV.rule}`,
+        borderRight: mobile ? 'none' : `1px solid ${LV.rule}`,
         display: 'flex',
         flexDirection: 'column',
-        height: '100vh',
+        height: mobile ? '100%' : '100vh',
+        paddingTop: mobile ? 'env(safe-area-inset-top)' : undefined,
         flexShrink: 0,
       }}
     >
@@ -489,9 +494,9 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Mode tabs — desktop only; web is chat-only.
+      {/* Mode tabs — desktop only; web and mobile are chat-only.
           Inactive = icon-only tab; active = icon + label pill. */}
-      {IS_TAURI && (
+      {IS_DESKTOP && (
         <Tabs.Root
           value={mode === 'sandbox' ? 'chat' : mode}
           onValueChange={(v) => handleModeChange(v as Mode)}

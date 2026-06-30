@@ -143,6 +143,20 @@ html.light {
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
+    /* Mobile / WKWebView: no rubber-band scroll or long-press callout, and don't
+       auto-inflate text on rotation. */
+    overscroll-behavior: none;
+    -webkit-text-size-adjust: 100%;
+    -webkit-touch-callout: none;
+  }
+  /* Use the dynamic viewport height where supported so 100% accounts for mobile
+     browser chrome / safe areas correctly. */
+  @supports (height: 100dvh) {
+    html,
+    body,
+    #root {
+      height: 100dvh;
+    }
   }
   ::selection {
     background: var(--lv-gold);

@@ -71,6 +71,7 @@ import type {
 import { PlanPreviewCard } from '@/components/chat/PlanPreviewCard'
 import { MicButton } from '@/components/chat/MicButton'
 import { useSpeech } from '@/hooks/useSpeech'
+import { useIsNarrow } from '@/hooks/useMediaQuery'
 
 // ─── Asterisk mark components ─────────────────────────────────────────────────
 
@@ -1813,6 +1814,7 @@ function MessageBubble({
   rerunDisabled?: boolean
 }) {
   const { t } = useT()
+  const isNarrow = useIsNarrow()
   const [hover, setHover] = useState(false)
   const isUser = msg.role === 'user'
   const hasCharts = (msg.charts?.length ?? 0) > 0 || msg.content.includes('```chart')
@@ -1828,7 +1830,7 @@ function MessageBubble({
       >
         <div
           className="group/msg"
-          style={{ position: 'relative', maxWidth: '72%', paddingBottom: 28 }}
+          style={{ position: 'relative', maxWidth: isNarrow ? '90%' : '72%', paddingBottom: 28 }}
         >
           {/* Label row — "You" + time fades in on hover */}
           <div
@@ -1974,7 +1976,11 @@ function MessageBubble({
       <div
         className="group/msg"
         data-assistant-msg
-        style={{ position: 'relative', paddingBottom: 28, maxWidth: hasCharts ? '90%' : '76%' }}
+        style={{
+          position: 'relative',
+          paddingBottom: 28,
+          maxWidth: isNarrow ? '94%' : hasCharts ? '90%' : '76%',
+        }}
       >
         {/* Eyebrow */}
         <div
@@ -2110,6 +2116,7 @@ function getGreeting(t: (key: string, vars?: Record<string, string | number>) =>
 
 export function ChatWindow() {
   const { t } = useT()
+  const isNarrow = useIsNarrow()
   const {
     user,
     sessionMessages,
@@ -2540,7 +2547,7 @@ export function ChatWindow() {
               fontFamily: 'var(--font-display)',
               fontStyle: 'italic',
               fontWeight: 500,
-              fontSize: 38,
+              fontSize: isNarrow ? 28 : 38,
               letterSpacing: '-0.02em',
               color: 'var(--lv-ink)',
               lineHeight: 1.25,
@@ -2976,10 +2983,10 @@ export function ChatWindow() {
       <div
         style={{
           display: 'flex',
-          alignItems: 'flex-end',
-          paddingLeft: 32,
-          paddingBottom: 12,
-          height: 'var(--header-h)',
+          alignItems: isNarrow ? 'center' : 'flex-end',
+          paddingLeft: isNarrow ? 16 : 32,
+          paddingBottom: isNarrow ? 0 : 12,
+          height: isNarrow ? 48 : 'var(--header-h)',
           flexShrink: 0,
         }}
       >
@@ -2988,7 +2995,7 @@ export function ChatWindow() {
             fontFamily: 'var(--font-display)',
             fontStyle: 'normal',
             fontWeight: 500,
-            fontSize: 32,
+            fontSize: isNarrow ? 19 : 32,
             color: 'var(--lv-ink)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -3045,7 +3052,12 @@ export function ChatWindow() {
           {/* Messages scroll area */}
           <div
             ref={scrollRef}
-            style={{ flex: 1, overflowY: 'auto', padding: '24px 240px', overflowAnchor: 'none' }}
+            style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: isNarrow ? '16px 16px' : '24px 240px',
+              overflowAnchor: 'none',
+            }}
             onWheel={(e) => {
               if (e.deltaY < 0 && hasMore && canLoadRef.current) loadMore()
             }}
@@ -3097,7 +3109,9 @@ export function ChatWindow() {
           <div
             style={{
               borderTop: '1px solid var(--lv-rule)',
-              padding: '14px 240px 18px',
+              padding: isNarrow
+                ? '12px 12px calc(env(safe-area-inset-bottom) + 12px)'
+                : '14px 240px 18px',
               flexShrink: 0,
             }}
           >
@@ -3608,8 +3622,20 @@ export function ChatWindow() {
                 flexShrink: 0,
                 overflow: 'hidden',
                 border: '1px solid var(--lv-rule)',
-                borderRadius: 12,
-                margin: '8px 8px 8px 0',
+                borderRadius: isNarrow ? 0 : 12,
+                margin: isNarrow ? 0 : '8px 8px 8px 0',
+                ...(isNarrow
+                  ? {
+                      position: 'fixed',
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 55,
+                      background: 'var(--lv-bg)',
+                      paddingTop: 'env(safe-area-inset-top)',
+                      boxShadow: '0 0 40px rgba(0,0,0,0.6)',
+                    }
+                  : {}),
               }}
               initial={{ x: '100%' }}
               animate={{ x: 0 }}

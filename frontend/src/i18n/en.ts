@@ -34,6 +34,11 @@ export const en = {
       light: 'Light',
     },
     dialogTitle: 'Settings',
+    backendUrl: {
+      label: 'Backend URL',
+      hint: 'Where the LyndonLLM backend is reachable. Leave empty to use the built-in default. Required on mobile (e.g. http://10.0.2.2:8000 for the Android emulator).',
+      placeholder: 'http://10.0.2.2:8000',
+    },
     nav: {
       heading: 'Settings',
       profile: 'Profile',

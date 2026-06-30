@@ -199,6 +199,9 @@ interface AppState {
   setUiTheme: (theme: 'dark' | 'light') => void
   language: 'en' | 'zh'
   setLanguage: (language: 'en' | 'zh') => void
+  /** Override backend origin (e.g. http://10.0.2.2:8000). Empty = built-in default. */
+  apiBaseUrl: string
+  setApiBaseUrl: (url: string) => void
 
   // Profile
   profession: string
@@ -431,6 +434,11 @@ export const useAppStore = create<AppState>()(
         localStorage.setItem('lv-lang', language)
         set({ language })
       },
+      apiBaseUrl: localStorage.getItem('lv-api-base') ?? '',
+      setApiBaseUrl: (apiBaseUrl) => {
+        localStorage.setItem('lv-api-base', apiBaseUrl)
+        set({ apiBaseUrl })
+      },
 
       // ── Profile ───────────────────────────────────────────────────────
       profession: '',
@@ -447,6 +455,7 @@ export const useAppStore = create<AppState>()(
         codeTheme: s.codeTheme,
         uiTheme: s.uiTheme,
         language: s.language,
+        apiBaseUrl: s.apiBaseUrl,
         // systemPrompt & profession are intentionally NOT persisted here — they
         // are server-scoped per user (loaded via getMe on login) so they can
         // never leak across accounts through shared client-side storage.

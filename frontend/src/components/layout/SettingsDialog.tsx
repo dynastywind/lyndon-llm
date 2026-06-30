@@ -14,6 +14,7 @@ import {
   type RagSource,
 } from '@/api/client'
 import { useAppStore } from '@/store'
+import { useIsNarrow } from '@/hooks/useMediaQuery'
 import { useT } from '@/i18n'
 import { CODE_THEME_OPTIONS } from '@/config/codeThemes'
 import { FileViewerModal } from './FileViewerModal'
@@ -184,6 +185,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
     setUiTheme,
     language,
     setLanguage,
+    apiBaseUrl,
+    setApiBaseUrl,
     codeTheme,
     setCodeTheme,
     profession,
@@ -192,6 +195,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
     setAvatarVersion,
   } = useAppStore()
   const { t, tn } = useT()
+  const isNarrow = useIsNarrow()
 
   // ── active section scroll-spy ─────────────────────────────────────────────
   const [activeSection, setActiveSection] = useState<SettingsTab>(initialTab)
@@ -496,20 +500,31 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
         <Dialog.Content
           style={{
             position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
             zIndex: 101,
-            width: 'min(1060px, 95vw)',
-            height: 'min(82vh, 800px)',
             background: 'var(--lv-bg)',
-            border: '1px solid var(--lv-rule-strong)',
-            boxShadow: '0 32px 100px rgba(0,0,0,0.75)',
             color: 'var(--lv-ink)',
             fontFamily: 'var(--font-sans)',
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
+            ...(isNarrow
+              ? {
+                  inset: 0,
+                  width: '100vw',
+                  height: '100dvh',
+                  paddingTop: 'env(safe-area-inset-top)',
+                  paddingBottom: 'env(safe-area-inset-bottom)',
+                  border: 'none',
+                }
+              : {
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: 'min(1060px, 95vw)',
+                  height: 'min(82vh, 800px)',
+                  border: '1px solid var(--lv-rule-strong)',
+                  boxShadow: '0 32px 100px rgba(0,0,0,0.75)',
+                }),
           }}
           // prevent Radix from closing on outside click while save bar is dirty
           onInteractOutside={(e) => {
@@ -530,12 +545,42 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
             {t('settings.dialogTitle')}
           </Dialog.Title>
 
+          {/* Mobile close — the rail (which holds nav) is hidden on narrow
+              screens, and a full-screen dialog has no backdrop to tap. */}
+          {isNarrow && (
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              aria-label={t('fileViewer.close')}
+              style={{
+                position: 'absolute',
+                top: 'calc(env(safe-area-inset-top) + 10px)',
+                right: 12,
+                zIndex: 5,
+                width: 36,
+                height: 36,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--lv-elev)',
+                border: '1px solid var(--lv-rule-strong)',
+                borderRadius: 8,
+                color: 'var(--lv-ink)',
+                cursor: 'pointer',
+              }}
+            >
+              <X size={18} />
+            </button>
+          )}
+
           {/* ── Content area (rail + scrollable main) ── */}
           <div
             style={{
               flex: 1,
+              minHeight: 0,
               display: 'grid',
-              gridTemplateColumns: '256px 1fr',
+              gridTemplateColumns: isNarrow ? '1fr' : '256px 1fr',
+              gridTemplateRows: 'minmax(0, 1fr)',
               overflow: 'hidden',
             }}
           >
@@ -545,7 +590,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                 height: '100%',
                 borderRight: '1px solid var(--lv-rule)',
                 background: 'var(--lv-bg)',
-                display: 'flex',
+                display: isNarrow ? 'none' : 'flex',
                 flexDirection: 'column',
                 padding: '28px 26px',
                 overflow: 'hidden',
@@ -677,8 +722,12 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
               ref={mainRef}
               id="settings-scroller"
               style={{
+                minHeight: 0,
                 overflowY: 'auto',
-                padding: '40px 40px 0',
+                WebkitOverflowScrolling: 'touch',
+                padding: isNarrow
+                  ? '20px 18px calc(env(safe-area-inset-bottom) + 32px)'
+                  : '40px 40px 0',
               }}
             >
               {/* Page header */}
@@ -1010,6 +1059,35 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                   <span style={S.eyebrowMute}>{t('settings.ai.eyebrow')}</span>
                   <h2 style={S.blockTitle}>{t('settings.ai.title')}</h2>
                 </div>
+
+                {/* Backend URL — required on mobile / when using a hosted backend */}
+                <SettingsRow
+                  label={t('settings.backendUrl.label')}
+                  hint={t('settings.backendUrl.hint')}
+                >
+                  <input
+                    type="url"
+                    inputMode="url"
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    value={apiBaseUrl}
+                    onChange={(e) => setApiBaseUrl(e.target.value)}
+                    placeholder={t('settings.backendUrl.placeholder')}
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 13,
+                      color: 'var(--lv-ink)',
+                      background: 'var(--lv-elev)',
+                      border: '1px solid var(--lv-rule-strong)',
+                      padding: '10px 12px',
+                      borderRadius: 5,
+                      outline: 'none',
+                    }}
+                  />
+                </SettingsRow>
 
                 {/* System prompt */}
                 <SettingsRow

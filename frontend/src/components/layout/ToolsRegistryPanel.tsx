@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-
-const IS_TAURI =
-  typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== 'undefined'
+import { IS_DESKTOP } from '@/lib/platform'
 import {
   AlertCircle,
   ChevronDown,
@@ -40,7 +38,7 @@ function InternalToolsSection({ tools }: { tools: RegistryTool[] }) {
       <SectionLabel>{t('tools.builtInTitle')}</SectionLabel>
       <p className="text-xs text-muted-foreground mb-3">{t('tools.builtInDescription')}</p>
       {Object.entries(byMode)
-        .filter(([mode]) => mode !== 'cowork' && (IS_TAURI || mode !== 'code'))
+        .filter(([mode]) => mode !== 'cowork' && (IS_DESKTOP || mode !== 'code'))
         .map(([mode, modeTools]) => (
           <div key={mode} className="mb-4">
             <p className="text-xs font-medium text-muted-foreground mb-1.5 capitalize">{mode}</p>

@@ -31,6 +31,11 @@ export const zh: Dict = {
       light: '浅色',
     },
     dialogTitle: '设置',
+    backendUrl: {
+      label: '后端地址',
+      hint: 'LyndonLLM 后端的访问地址。留空则使用内置默认值。移动端必须填写（例如 Android 模拟器使用 http://10.0.2.2:8000）。',
+      placeholder: 'http://10.0.2.2:8000',
+    },
     nav: {
       heading: '设置',
       profile: '个人资料',

@@ -1,5 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { Menu } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useIsNarrow } from '@/hooks/useMediaQuery'
 import { checkAvatarExists, getMe } from '@/api/client'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { ChatWindow } from '@/components/chat/ChatWindow'
@@ -26,6 +28,14 @@ export default function App() {
     setSystemPrompt,
     setProfession,
   } = useAppStore()
+
+  const isNarrow = useIsNarrow()
+  const [navOpen, setNavOpen] = useState(false)
+
+  // Close the mobile drawer whenever the active view/session changes.
+  useEffect(() => {
+    setNavOpen(false)
+  }, [sessionId, activeView, mode, homeVersion])
 
   // Apply theme class to <html> whenever uiTheme changes
   useEffect(() => {
@@ -114,6 +124,119 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const windowContent =
+    activeView === 'projectsList' ? (
+      <ProjectsWindow />
+    ) : activeView === 'projectDetail' ? (
+      <ProjectDetailWindow />
+    ) : (
+      <>
+        {/*
+          key=sessionId forces a full remount whenever the active session
+          changes, resetting all local state (scroll refs, pagination cursors,
+          hasMore flags) and re-fetching messages for the correct session.
+        */}
+        {mode === 'chat' && <ChatWindow key={sessionId ?? `home-${homeVersion}`} />}
+        {mode === 'cowork' && <CoworkWindow key={sessionId ?? `home-${homeVersion}`} />}
+        {mode === 'code' && <CodeWindow key={sessionId ?? `home-${homeVersion}`} />}
+        {mode === 'sandbox' && <SandboxWindow />}
+      </>
+    )
+
+  // ── Mobile: sidebar becomes a slide-in drawer ──────────────────────────────
+  if (isNarrow) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100dvh',
+          background: 'var(--lv-bg)',
+          color: 'var(--lv-ink)',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Top bar with menu toggle */}
+        <header
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '8px 12px',
+            paddingTop: 'calc(env(safe-area-inset-top) + 8px)',
+            borderBottom: '1px solid var(--lv-rule)',
+            flexShrink: 0,
+            background: 'var(--lv-bg)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setNavOpen(true)}
+            aria-label="Menu"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              background: 'none',
+              border: 'none',
+              color: 'var(--lv-ink)',
+              cursor: 'pointer',
+            }}
+          >
+            <Menu size={20} />
+          </button>
+          <span
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 600,
+              fontSize: 17,
+              color: 'var(--lv-ink)',
+            }}
+          >
+            LyndonLLM
+          </span>
+        </header>
+
+        <main
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {windowContent}
+        </main>
+
+        {/* Drawer + backdrop */}
+        {navOpen && (
+          <div
+            onClick={() => setNavOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 60 }}
+          />
+        )}
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: 'min(86vw, 320px)',
+            zIndex: 70,
+            transform: navOpen ? 'translateX(0)' : 'translateX(-100%)',
+            transition: 'transform 0.22s var(--ease-snap)',
+            boxShadow: navOpen ? '0 0 40px rgba(0,0,0,0.6)' : 'none',
+          }}
+        >
+          <Sidebar mobile onNavigate={() => setNavOpen(false)} />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       style={{
@@ -126,27 +249,7 @@ export default function App() {
     >
       <Sidebar />
       <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {/*
-          key=sessionId forces a full remount whenever the active session
-          changes.  This guarantees all local state (scroll refs, pagination
-          cursors, hasMore flags) is reset to its initial value and that
-          loadInitial always fetches messages for the correct session.
-          React 18 batches the setSessionId + addMessage calls from the lazy
-          creation path, so the remounted component's effect correctly sees
-          messages.length > 0 and skips the unnecessary DB fetch.
-        */}
-        {activeView === 'projectsList' ? (
-          <ProjectsWindow />
-        ) : activeView === 'projectDetail' ? (
-          <ProjectDetailWindow />
-        ) : (
-          <>
-            {mode === 'chat' && <ChatWindow key={sessionId ?? `home-${homeVersion}`} />}
-            {mode === 'cowork' && <CoworkWindow key={sessionId ?? `home-${homeVersion}`} />}
-            {mode === 'code' && <CodeWindow key={sessionId ?? `home-${homeVersion}`} />}
-            {mode === 'sandbox' && <SandboxWindow />}
-          </>
-        )}
+        {windowContent}
       </main>
     </div>
   )

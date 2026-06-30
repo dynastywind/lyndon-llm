@@ -28,7 +28,20 @@ import { useAppStore } from '@/store'
 // Detect Tauri at runtime and point directly at the local backend.
 const IS_TAURI =
   typeof (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ !== 'undefined'
-const BASE = IS_TAURI ? 'http://localhost:8000/api' : '/api'
+
+/**
+ * Effective API base URL.
+ *
+ * A user-set override (Settings → backend URL) wins — this is how the mobile
+ * app reaches a hosted backend, since `localhost` on a phone is the phone
+ * itself. Otherwise: the desktop app talks to the bundled local backend, and
+ * the web build uses a relative path (same-origin / Vite proxy).
+ */
+function apiBase(): string {
+  const override = useAppStore.getState().apiBaseUrl?.trim()
+  if (override) return override.replace(/\/+$/, '') + '/api'
+  return IS_TAURI ? 'http://localhost:8000/api' : '/api'
+}
 
 /** Attachment payload sent to the chat endpoint (base64 content, no prefix). */
 export interface AttachmentPayload {
@@ -78,7 +91,7 @@ function getDeviceId(): string {
 }
 
 export async function login(username: string, password: string): Promise<AuthResponse> {
-  const res = await fetch(`${BASE}/auth/login`, {
+  const res = await fetch(`${apiBase()}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password, device_id: getDeviceId() }),
@@ -91,7 +104,7 @@ export async function login(username: string, password: string): Promise<AuthRes
 }
 
 export async function register(username: string, password: string): Promise<AuthResponse> {
-  const res = await fetch(`${BASE}/auth/register`, {
+  const res = await fetch(`${apiBase()}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password, device_id: getDeviceId() }),
@@ -104,13 +117,15 @@ export async function register(username: string, password: string): Promise<Auth
 }
 
 export async function checkUsername(username: string): Promise<{ available: boolean }> {
-  const res = await fetch(`${BASE}/auth/check-username?username=${encodeURIComponent(username)}`)
+  const res = await fetch(
+    `${apiBase()}/auth/check-username?username=${encodeURIComponent(username)}`,
+  )
   if (!res.ok) throw new Error('Failed to check username')
   return res.json()
 }
 
 export async function getGoogleAuthUrl(): Promise<{ url: string }> {
-  const res = await fetch(`${BASE}/auth/google/authorize`)
+  const res = await fetch(`${apiBase()}/auth/google/authorize`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? res.statusText)
@@ -119,7 +134,7 @@ export async function getGoogleAuthUrl(): Promise<{ url: string }> {
 }
 
 export async function getGithubAuthUrl(): Promise<{ url: string }> {
-  const res = await fetch(`${BASE}/auth/github/authorize`)
+  const res = await fetch(`${apiBase()}/auth/github/authorize`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? res.statusText)
@@ -131,7 +146,7 @@ export async function completeOAuthLogin(
   pendingToken: string,
   username: string,
 ): Promise<AuthResponse> {
-  const res = await fetch(`${BASE}/auth/oauth/complete`, {
+  const res = await fetch(`${apiBase()}/auth/oauth/complete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ pending_token: pendingToken, username }),
@@ -145,13 +160,13 @@ export async function completeOAuthLogin(
 
 /** Returns the URL to display a user's avatar, with a cache-buster version param. */
 export function getAvatarUrl(userId: string, version: number): string {
-  return `${BASE}/auth/avatar/${userId}?v=${version}`
+  return `${apiBase()}/auth/avatar/${userId}?v=${version}`
 }
 
 /** Returns true if the server has an avatar for the given user. */
 export async function checkAvatarExists(userId: string): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE}/auth/avatar/${userId}`)
+    const res = await fetch(`${apiBase()}/auth/avatar/${userId}`)
     return res.ok
   } catch {
     return false
@@ -164,7 +179,7 @@ export async function uploadAvatar(dataUrl: string): Promise<void> {
   const blob = await fetchRes.blob()
   const form = new FormData()
   form.append('file', blob, 'avatar.jpg')
-  const res = await fetch(`${BASE}/auth/avatar`, {
+  const res = await fetch(`${apiBase()}/auth/avatar`, {
     method: 'POST',
     headers: authHeader(), // no Content-Type — browser sets multipart boundary
     body: form,
@@ -176,7 +191,7 @@ export async function uploadAvatar(dataUrl: string): Promise<void> {
 }
 
 export async function deleteAvatar(): Promise<void> {
-  const res = await fetch(`${BASE}/auth/avatar`, {
+  const res = await fetch(`${apiBase()}/auth/avatar`, {
     method: 'DELETE',
     headers: authHeader(),
   })
@@ -188,7 +203,7 @@ export async function updateProfile(fields: {
   system_prompt?: string | null
   profession?: string | null
 }): Promise<void> {
-  const res = await fetch(`${BASE}/auth/me`, {
+  const res = await fetch(`${apiBase()}/auth/me`, {
     method: 'PATCH',
     headers: jsonHeaders(),
     body: JSON.stringify(fields),
@@ -209,7 +224,7 @@ export interface MeResponse {
 }
 
 export async function getMe(): Promise<MeResponse> {
-  const res = await fetch(`${BASE}/auth/me`, { headers: jsonHeaders() })
+  const res = await fetch(`${apiBase()}/auth/me`, { headers: jsonHeaders() })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? res.statusText)
@@ -218,7 +233,7 @@ export async function getMe(): Promise<MeResponse> {
 }
 
 export async function resetPassword(username: string, newPassword: string): Promise<void> {
-  const res = await fetch(`${BASE}/auth/reset-password`, {
+  const res = await fetch(`${apiBase()}/auth/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, new_password: newPassword }),
@@ -230,7 +245,7 @@ export async function resetPassword(username: string, newPassword: string): Prom
 }
 
 export async function deleteAccount(): Promise<void> {
-  const res = await fetch(`${BASE}/auth/me`, {
+  const res = await fetch(`${apiBase()}/auth/me`, {
     method: 'DELETE',
     headers: authHeader(),
   })
@@ -268,7 +283,7 @@ export async function streamChat(
 ): Promise<void> {
   let res: Response
   try {
-    res = await fetch(`${BASE}/chat/`, {
+    res = await fetch(`${apiBase()}/chat/`, {
       method: 'POST',
       headers: headers(sessionId, mode),
       signal,
@@ -345,7 +360,7 @@ export async function streamChat(
 
 /** Returns whether the backend has an active LLM task running for this session. */
 export async function getStreamStatus(sessionId: string): Promise<{ streaming: boolean }> {
-  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/stream/status`, {
+  const res = await fetch(`${apiBase()}/chat/sessions/${sessionId}/stream/status`, {
     headers: authHeader(),
   })
   if (!res.ok) return { streaming: false }
@@ -364,7 +379,7 @@ export async function resumeStream(
 ): Promise<void> {
   let res: Response
   try {
-    res = await fetch(`${BASE}/chat/sessions/${sessionId}/stream/resume`, {
+    res = await fetch(`${apiBase()}/chat/sessions/${sessionId}/stream/resume`, {
       headers: authHeader(),
       signal,
     })
@@ -424,7 +439,7 @@ export async function resumeStream(
  */
 export async function cancelStream(sessionId: string): Promise<void> {
   try {
-    await fetch(`${BASE}/chat/sessions/${sessionId}/stream/cancel`, {
+    await fetch(`${apiBase()}/chat/sessions/${sessionId}/stream/cancel`, {
       method: 'POST',
       headers: authHeader(),
     })
@@ -440,7 +455,7 @@ export async function confirmChatPlan(
   sessionId: string,
   onEvent: (type: string, data: Record<string, unknown>) => void,
 ): Promise<void> {
-  const res = await fetch(`${BASE}/chat/plan/confirm`, {
+  const res = await fetch(`${apiBase()}/chat/plan/confirm`, {
     method: 'POST',
     headers: headers(sessionId, 'chat'),
     body: JSON.stringify({ plan_id: planId }),
@@ -478,7 +493,7 @@ export async function confirmChatPlan(
 }
 
 export async function cancelChatPlan(planId: string, sessionId: string): Promise<void> {
-  await fetch(`${BASE}/chat/plan/cancel`, {
+  await fetch(`${apiBase()}/chat/plan/cancel`, {
     method: 'POST',
     headers: headers(sessionId, 'chat'),
     body: JSON.stringify({ plan_id: planId }),
@@ -488,7 +503,7 @@ export async function cancelChatPlan(planId: string, sessionId: string): Promise
 // ── Tool approval (ask-before-acting) ────────────────────────────────────────
 
 export async function approveToolCall(sessionId: string, callId: string): Promise<void> {
-  await fetch(`${BASE}/chat/tool/approve`, {
+  await fetch(`${apiBase()}/chat/tool/approve`, {
     method: 'POST',
     headers: headers(sessionId, 'chat'),
     body: JSON.stringify({ call_id: callId }),
@@ -496,7 +511,7 @@ export async function approveToolCall(sessionId: string, callId: string): Promis
 }
 
 export async function rejectToolCall(sessionId: string, callId: string): Promise<void> {
-  await fetch(`${BASE}/chat/tool/reject`, {
+  await fetch(`${apiBase()}/chat/tool/reject`, {
     method: 'POST',
     headers: headers(sessionId, 'chat'),
     body: JSON.stringify({ call_id: callId }),
@@ -509,7 +524,7 @@ export async function createChatSession(
   mode = 'chat',
   projectId: string | null = null,
 ): Promise<ChatSession> {
-  const res = await fetch(`${BASE}/chat/sessions`, {
+  const res = await fetch(`${apiBase()}/chat/sessions`, {
     method: 'POST',
     headers: { ...authHeader(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ mode, project_id: projectId }),
@@ -522,7 +537,7 @@ export async function moveSessionToProject(
   sessionId: string,
   projectId: string | null,
 ): Promise<ChatSession> {
-  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/project`, {
+  const res = await fetch(`${apiBase()}/chat/sessions/${sessionId}/project`, {
     method: 'PATCH',
     headers: jsonHeaders(),
     body: JSON.stringify({ project_id: projectId }),
@@ -534,7 +549,7 @@ export async function moveSessionToProject(
 export async function getChatSession(
   sessionId: string,
 ): Promise<ChatSession & { project_name: string | null }> {
-  const res = await fetch(`${BASE}/chat/sessions/${sessionId}`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/chat/sessions/${sessionId}`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to load session: ${res.statusText}`)
   return res.json()
 }
@@ -544,9 +559,12 @@ export async function listChatSessions(
   limit = 20,
   offset = 0,
 ): Promise<ChatSessionsResponse> {
-  const res = await fetch(`${BASE}/chat/sessions?mode=${mode}&limit=${limit}&offset=${offset}`, {
-    headers: authHeader(),
-  })
+  const res = await fetch(
+    `${apiBase()}/chat/sessions?mode=${mode}&limit=${limit}&offset=${offset}`,
+    {
+      headers: authHeader(),
+    },
+  )
   if (!res.ok) throw new Error(`Failed to list sessions: ${res.statusText}`)
   return res.json()
 }
@@ -558,7 +576,7 @@ export async function searchChatSessions(
   offset = 0,
 ): Promise<{ sessions: (ChatSession & { snippet?: string })[]; total: number }> {
   const params = new URLSearchParams({ mode, q, limit: String(limit), offset: String(offset) })
-  const res = await fetch(`${BASE}/chat/sessions/search?${params}`, {
+  const res = await fetch(`${apiBase()}/chat/sessions/search?${params}`, {
     headers: authHeader(),
   })
   if (!res.ok) throw new Error(`Search failed: ${res.statusText}`)
@@ -572,7 +590,7 @@ export async function getChatMessages(
 ): Promise<{ messages: ChatSessionMessage[]; has_more: boolean }> {
   const params = new URLSearchParams({ limit: String(limit) })
   if (before) params.set('before', before)
-  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/messages?${params}`)
+  const res = await fetch(`${apiBase()}/chat/sessions/${sessionId}/messages?${params}`)
   if (!res.ok) throw new Error(`Failed to load messages: ${res.statusText}`)
   return res.json()
 }
@@ -580,13 +598,13 @@ export async function getChatMessages(
 export async function getAllChatMessages(
   sessionId: string,
 ): Promise<{ messages: ChatSessionMessage[] }> {
-  const res = await fetch(`${BASE}/chat/sessions/${sessionId}/messages/all`)
+  const res = await fetch(`${apiBase()}/chat/sessions/${sessionId}/messages/all`)
   if (!res.ok) throw new Error(`Failed to load messages: ${res.statusText}`)
   return res.json()
 }
 
 export async function deleteChatSession(sessionId: string): Promise<void> {
-  const res = await fetch(`${BASE}/chat/sessions/${sessionId}`, { method: 'DELETE' })
+  const res = await fetch(`${apiBase()}/chat/sessions/${sessionId}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`Failed to delete session: ${res.statusText}`)
 }
 
@@ -604,13 +622,13 @@ export interface ScheduledTaskInput {
 }
 
 export async function listScheduledTasks(): Promise<{ tasks: ScheduledTask[] }> {
-  const res = await fetch(`${BASE}/scheduled-tasks`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/scheduled-tasks`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to list scheduled tasks: ${res.statusText}`)
   return res.json()
 }
 
 export async function createScheduledTask(input: ScheduledTaskInput): Promise<ScheduledTask> {
-  const res = await fetch(`${BASE}/scheduled-tasks`, {
+  const res = await fetch(`${apiBase()}/scheduled-tasks`, {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify(input),
@@ -626,7 +644,7 @@ export async function updateScheduledTask(
   taskId: string,
   patch: Partial<ScheduledTaskInput>,
 ): Promise<ScheduledTask> {
-  const res = await fetch(`${BASE}/scheduled-tasks/${taskId}`, {
+  const res = await fetch(`${apiBase()}/scheduled-tasks/${taskId}`, {
     method: 'PATCH',
     headers: jsonHeaders(),
     body: JSON.stringify(patch),
@@ -639,7 +657,7 @@ export async function updateScheduledTask(
 }
 
 export async function deleteScheduledTask(taskId: string): Promise<void> {
-  const res = await fetch(`${BASE}/scheduled-tasks/${taskId}`, {
+  const res = await fetch(`${apiBase()}/scheduled-tasks/${taskId}`, {
     method: 'DELETE',
     headers: authHeader(),
   })
@@ -647,7 +665,7 @@ export async function deleteScheduledTask(taskId: string): Promise<void> {
 }
 
 export async function runScheduledTaskNow(taskId: string): Promise<void> {
-  const res = await fetch(`${BASE}/scheduled-tasks/${taskId}/run-now`, {
+  const res = await fetch(`${apiBase()}/scheduled-tasks/${taskId}/run-now`, {
     method: 'POST',
     headers: authHeader(),
   })
@@ -655,7 +673,7 @@ export async function runScheduledTaskNow(taskId: string): Promise<void> {
 }
 
 export async function renameChatSession(sessionId: string, title: string): Promise<ChatSession> {
-  const res = await fetch(`${BASE}/chat/sessions/${sessionId}`, {
+  const res = await fetch(`${apiBase()}/chat/sessions/${sessionId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title }),
@@ -667,14 +685,14 @@ export async function renameChatSession(sessionId: string, title: string): Promi
 // ── Projects ──────────────────────────────────────────────────────────────────
 
 export async function listProjects(mode = 'chat'): Promise<{ projects: Project[] }> {
-  const res = await fetch(`${BASE}/projects/?mode=${mode}`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/projects/?mode=${mode}`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to list projects: ${res.statusText}`)
   return res.json()
 }
 
 export async function searchProjects(mode = 'chat', q: string): Promise<{ projects: Project[] }> {
   const params = new URLSearchParams({ mode, q })
-  const res = await fetch(`${BASE}/projects/search?${params}`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/projects/search?${params}`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Project search failed: ${res.statusText}`)
   return res.json()
 }
@@ -684,7 +702,7 @@ export async function createProject(
   name: string,
   instructions?: string,
 ): Promise<Project> {
-  const res = await fetch(`${BASE}/projects/`, {
+  const res = await fetch(`${apiBase()}/projects/`, {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify({ mode, name, instructions: instructions ?? null }),
@@ -694,7 +712,7 @@ export async function createProject(
 }
 
 export async function getProject(id: string): Promise<Project> {
-  const res = await fetch(`${BASE}/projects/${id}`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/projects/${id}`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to load project: ${res.statusText}`)
   return res.json()
 }
@@ -703,7 +721,7 @@ export async function updateProject(
   id: string,
   patch: { name?: string; instructions?: string; folders?: { path: string; name: string }[] },
 ): Promise<Project> {
-  const res = await fetch(`${BASE}/projects/${id}`, {
+  const res = await fetch(`${apiBase()}/projects/${id}`, {
     method: 'PATCH',
     headers: jsonHeaders(),
     body: JSON.stringify(patch),
@@ -713,7 +731,7 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/projects/${id}`, {
+  const res = await fetch(`${apiBase()}/projects/${id}`, {
     method: 'DELETE',
     headers: authHeader(),
   })
@@ -721,13 +739,13 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 export async function listProjectSessions(id: string): Promise<{ sessions: ChatSession[] }> {
-  const res = await fetch(`${BASE}/projects/${id}/sessions`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/projects/${id}/sessions`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to load project chats: ${res.statusText}`)
   return res.json()
 }
 
 export async function listProjectFiles(id: string): Promise<{ files: ProjectFile[] }> {
-  const res = await fetch(`${BASE}/projects/${id}/files`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/projects/${id}/files`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to load project files: ${res.statusText}`)
   return res.json()
 }
@@ -738,7 +756,7 @@ export async function uploadProjectFile(
 ): Promise<{ filename: string; path: string; chunks_stored: number }> {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`${BASE}/projects/${id}/files`, {
+  const res = await fetch(`${apiBase()}/projects/${id}/files`, {
     method: 'POST',
     body: form,
     headers: authHeader(),
@@ -752,7 +770,7 @@ export async function uploadProjectFile(
 
 export async function deleteProjectFile(id: string, source: string): Promise<void> {
   const params = new URLSearchParams({ source })
-  const res = await fetch(`${BASE}/projects/${id}/files?${params}`, {
+  const res = await fetch(`${apiBase()}/projects/${id}/files?${params}`, {
     method: 'DELETE',
     headers: authHeader(),
   })
@@ -760,7 +778,7 @@ export async function deleteProjectFile(id: string, source: string): Promise<voi
 }
 
 export async function ingestDocument(source: string): Promise<{ chunks_stored: number }> {
-  const res = await fetch(`${BASE}/chat/ingest`, {
+  const res = await fetch(`${apiBase()}/chat/ingest`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ source }),
@@ -775,7 +793,7 @@ export async function uploadRagFile(
 ): Promise<{ filename: string; path: string; chunks_stored: number }> {
   const form = new FormData()
   form.append('file', file)
-  const res = await fetch(`${BASE}/rag/upload`, {
+  const res = await fetch(`${apiBase()}/rag/upload`, {
     method: 'POST',
     body: form,
     headers: authHeader(),
@@ -792,7 +810,7 @@ export async function transcribeAudio(blob: Blob, language?: string): Promise<st
   const form = new FormData()
   form.append('file', blob, 'recording.webm')
   if (language) form.append('language', language)
-  const res = await fetch(`${BASE}/transcribe/`, {
+  const res = await fetch(`${apiBase()}/transcribe/`, {
     method: 'POST',
     body: form,
     headers: authHeader(),
@@ -819,7 +837,7 @@ export async function listRagSources(
 ): Promise<{ sources: RagSource[]; total: number }> {
   const params = new URLSearchParams({ limit: String(limit), offset: String(offset) })
   if (query) params.set('query', query)
-  const res = await fetch(`${BASE}/rag/sources?${params}`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/rag/sources?${params}`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to list sources: ${res.statusText}`)
   return res.json()
 }
@@ -827,7 +845,7 @@ export async function listRagSources(
 export async function checkRagSourceName(
   name: string,
 ): Promise<{ exists: boolean; path: string | null }> {
-  const res = await fetch(`${BASE}/rag/sources/check?name=${encodeURIComponent(name)}`, {
+  const res = await fetch(`${apiBase()}/rag/sources/check?name=${encodeURIComponent(name)}`, {
     headers: authHeader(),
   })
   if (!res.ok) throw new Error(`Failed to check source name: ${res.statusText}`)
@@ -837,7 +855,7 @@ export async function checkRagSourceName(
 export async function reindexRagSource(
   source: string,
 ): Promise<{ path: string; chunks_stored: number }> {
-  const res = await fetch(`${BASE}/rag/reindex?source=${encodeURIComponent(source)}`, {
+  const res = await fetch(`${apiBase()}/rag/reindex?source=${encodeURIComponent(source)}`, {
     method: 'POST',
     headers: authHeader(),
   })
@@ -850,7 +868,7 @@ export async function reindexRagSource(
 
 export async function deleteRagSource(source: string, deleteFile = true): Promise<void> {
   const params = new URLSearchParams({ source, delete_file: String(deleteFile) })
-  const res = await fetch(`${BASE}/rag/sources?${params}`, {
+  const res = await fetch(`${apiBase()}/rag/sources?${params}`, {
     method: 'DELETE',
     headers: authHeader(),
   })
@@ -860,7 +878,7 @@ export async function deleteRagSource(source: string, deleteFile = true): Promis
 // Set asBinary for files served as raw bytes (PDF, images) — returns an object
 // URL for a Blob. For text/code files it returns the decoded text content.
 export async function fetchRagSourceContent(source: string, asBinary: boolean): Promise<string> {
-  const res = await fetch(`${BASE}/rag/sources/content?source=${encodeURIComponent(source)}`, {
+  const res = await fetch(`${apiBase()}/rag/sources/content?source=${encodeURIComponent(source)}`, {
     headers: authHeader(),
   })
   if (!res.ok) {
@@ -878,13 +896,13 @@ export async function fetchRagSourceContent(source: string, asBinary: boolean): 
 // ── Tool registry (MCP + internal) ───────────────────────────────────────────
 
 export async function getToolRegistry(): Promise<ToolRegistry> {
-  const res = await fetch(`${BASE}/registry`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/registry`, { headers: authHeader() })
   if (!res.ok) throw new Error(`Failed to load tool registry: ${res.statusText}`)
   return res.json()
 }
 
 export async function createMcpServer(body: McpServerCreate): Promise<McpServer> {
-  const res = await fetch(`${BASE}/registry/mcp/servers`, {
+  const res = await fetch(`${apiBase()}/registry/mcp/servers`, {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify(body),
@@ -900,7 +918,7 @@ export async function updateMcpServer(
   serverId: string,
   body: Partial<McpServerCreate>,
 ): Promise<McpServer> {
-  const res = await fetch(`${BASE}/registry/mcp/servers/${serverId}`, {
+  const res = await fetch(`${apiBase()}/registry/mcp/servers/${serverId}`, {
     method: 'PUT',
     headers: jsonHeaders(),
     body: JSON.stringify(body),
@@ -913,7 +931,7 @@ export async function updateMcpServer(
 }
 
 export async function deleteMcpServer(serverId: string): Promise<void> {
-  const res = await fetch(`${BASE}/registry/mcp/servers/${serverId}`, {
+  const res = await fetch(`${apiBase()}/registry/mcp/servers/${serverId}`, {
     method: 'DELETE',
     headers: authHeader(),
   })
@@ -921,7 +939,7 @@ export async function deleteMcpServer(serverId: string): Promise<void> {
 }
 
 export async function refreshMcpServer(serverId: string): Promise<McpServer> {
-  const res = await fetch(`${BASE}/registry/mcp/servers/${serverId}/refresh`, {
+  const res = await fetch(`${apiBase()}/registry/mcp/servers/${serverId}/refresh`, {
     method: 'POST',
     headers: authHeader(),
   })
@@ -938,7 +956,7 @@ export async function toggleMcpTool(
   enabled: boolean,
 ): Promise<McpServerTool> {
   const res = await fetch(
-    `${BASE}/registry/mcp/servers/${serverId}/tools/${encodeURIComponent(qualifiedName)}`,
+    `${apiBase()}/registry/mcp/servers/${serverId}/tools/${encodeURIComponent(qualifiedName)}`,
     {
       method: 'PATCH',
       headers: jsonHeaders(),
@@ -951,7 +969,7 @@ export async function toggleMcpTool(
 
 // ── Cowork ────────────────────────────────────────────────────────────────────
 export async function createPlan(goal: string, sessionId: string): Promise<Plan> {
-  const res = await fetch(`${BASE}/cowork/plan`, {
+  const res = await fetch(`${apiBase()}/cowork/plan`, {
     method: 'POST',
     headers: headers(sessionId, 'cowork'),
     body: JSON.stringify({ goal }),
@@ -964,7 +982,7 @@ export async function executePlan(
   planId: string,
   sessionId: string,
 ): Promise<{ results: StepResult[] }> {
-  const res = await fetch(`${BASE}/cowork/execute`, {
+  const res = await fetch(`${apiBase()}/cowork/execute`, {
     method: 'POST',
     headers: headers(sessionId, 'cowork'),
     body: JSON.stringify({ plan_id: planId }),
@@ -980,7 +998,7 @@ export async function editFile(
   sessionId: string,
   contextFiles: string[] = [],
 ): Promise<FileDiff> {
-  const res = await fetch(`${BASE}/code/edit`, {
+  const res = await fetch(`${apiBase()}/code/edit`, {
     method: 'POST',
     headers: headers(sessionId, 'code'),
     body: JSON.stringify({ file_path: filePath, instruction, context_files: contextFiles }),
@@ -989,7 +1007,7 @@ export async function editFile(
 }
 
 export async function reviewDiff(diff: string, sessionId: string): Promise<ReviewResult> {
-  const res = await fetch(`${BASE}/code/review`, {
+  const res = await fetch(`${apiBase()}/code/review`, {
     method: 'POST',
     headers: headers(sessionId, 'code'),
     body: JSON.stringify({ diff }),
@@ -998,7 +1016,7 @@ export async function reviewDiff(diff: string, sessionId: string): Promise<Revie
 }
 
 export async function runTests(sessionId: string, testPath?: string): Promise<TestResult> {
-  const res = await fetch(`${BASE}/code/test`, {
+  const res = await fetch(`${apiBase()}/code/test`, {
     method: 'POST',
     headers: headers(sessionId, 'code'),
     body: JSON.stringify({ test_path: testPath }),
@@ -1007,7 +1025,7 @@ export async function runTests(sessionId: string, testPath?: string): Promise<Te
 }
 
 export async function commitFiles(files: string[], message: string, sessionId: string) {
-  const res = await fetch(`${BASE}/code/commit`, {
+  const res = await fetch(`${apiBase()}/code/commit`, {
     method: 'POST',
     headers: headers(sessionId, 'code'),
     body: JSON.stringify({ files, message }),
@@ -1041,14 +1059,14 @@ export interface RepoStatus {
 
 /** Whether the user has connected GitHub (a token is stored server-side). */
 export async function getGithubStatus(): Promise<{ connected: boolean }> {
-  const res = await fetch(`${BASE}/github/status`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/github/status`, { headers: authHeader() })
   if (!res.ok) return { connected: false }
   return res.json()
 }
 
 /** GitHub consent URL (repo scope) to connect the logged-in user's account. */
 export async function getGithubConnectUrl(): Promise<{ url: string }> {
-  const res = await fetch(`${BASE}/github/connect/authorize`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/github/connect/authorize`, { headers: authHeader() })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(err.detail ?? res.statusText)
@@ -1061,7 +1079,7 @@ export async function getGithubRepos(
   search?: string,
 ): Promise<{ connected: boolean; repos: GithubRepo[] }> {
   const q = search ? `?search=${encodeURIComponent(search)}` : ''
-  const res = await fetch(`${BASE}/github/repos${q}`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/github/repos${q}`, { headers: authHeader() })
   if (!res.ok) return { connected: false, repos: [] }
   return res.json()
 }
@@ -1070,7 +1088,7 @@ export async function getGithubRepos(
 export async function getGithubBranches(
   repo: string,
 ): Promise<{ connected: boolean; branches: GithubBranch[] }> {
-  const res = await fetch(`${BASE}/github/branches?repo=${encodeURIComponent(repo)}`, {
+  const res = await fetch(`${apiBase()}/github/branches?repo=${encodeURIComponent(repo)}`, {
     headers: authHeader(),
   })
   if (!res.ok) return { connected: false, branches: [] }
@@ -1083,7 +1101,7 @@ export async function cloneRepo(
   targetDir: string,
   branch?: string,
 ): Promise<{ path: string; branch: string }> {
-  const res = await fetch(`${BASE}/code/clone`, {
+  const res = await fetch(`${apiBase()}/code/clone`, {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify({ clone_url: cloneUrl, target_dir: targetDir, branch }),
@@ -1100,7 +1118,7 @@ export async function checkoutBranch(
   repoPath: string,
   branch: string,
 ): Promise<{ branch: string }> {
-  const res = await fetch(`${BASE}/code/checkout`, {
+  const res = await fetch(`${apiBase()}/code/checkout`, {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify({ repo_path: repoPath, branch }),
@@ -1114,7 +1132,7 @@ export async function checkoutBranch(
 
 /** Pull the current branch. Throws server detail on failure. */
 export async function pullRepo(repoPath: string): Promise<void> {
-  const res = await fetch(`${BASE}/code/pull`, {
+  const res = await fetch(`${apiBase()}/code/pull`, {
     method: 'POST',
     headers: jsonHeaders(),
     body: JSON.stringify({ repo_path: repoPath }),
@@ -1127,7 +1145,7 @@ export async function pullRepo(repoPath: string): Promise<void> {
 
 /** Git status (branch + ahead/behind + changed files) for a local directory. */
 export async function getRepoStatus(repoPath: string): Promise<RepoStatus> {
-  const res = await fetch(`${BASE}/code/status?repo_path=${encodeURIComponent(repoPath)}`, {
+  const res = await fetch(`${apiBase()}/code/status?repo_path=${encodeURIComponent(repoPath)}`, {
     headers: authHeader(),
   })
   if (!res.ok) return { is_repo: false }
@@ -1137,7 +1155,7 @@ export async function getRepoStatus(repoPath: string): Promise<RepoStatus> {
 // ── Sandbox ───────────────────────────────────────────────────────────────────
 
 export async function getSandboxLanguages(): Promise<{ languages: SandboxLanguage[] }> {
-  const res = await fetch(`${BASE}/sandbox/languages`)
+  const res = await fetch(`${apiBase()}/sandbox/languages`)
   if (!res.ok) throw new Error('Failed to fetch languages')
   return res.json()
 }
@@ -1147,7 +1165,7 @@ export async function runSandbox(
   code: string,
   timeout = 10,
 ): Promise<SandboxResult> {
-  const res = await fetch(`${BASE}/sandbox/run`, {
+  const res = await fetch(`${apiBase()}/sandbox/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ language, code, timeout }),
@@ -1159,13 +1177,13 @@ export async function runSandbox(
 // ── Memory ────────────────────────────────────────────────────────────────────
 
 export async function getMemories(): Promise<MemoriesResponse> {
-  const res = await fetch(`${BASE}/chat/memories`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/chat/memories`, { headers: authHeader() })
   if (!res.ok) throw new Error('Failed to fetch memories')
   return res.json()
 }
 
 export async function deleteMemory(memoryId: string): Promise<void> {
-  const res = await fetch(`${BASE}/chat/memories/${encodeURIComponent(memoryId)}`, {
+  const res = await fetch(`${apiBase()}/chat/memories/${encodeURIComponent(memoryId)}`, {
     method: 'DELETE',
     headers: authHeader(),
   })
@@ -1181,7 +1199,7 @@ export async function getMetrics(
   if (params.limit !== undefined) qs.set('limit', String(params.limit))
   if (params.offset !== undefined) qs.set('offset', String(params.offset))
   if (params.session_id) qs.set('session_id', params.session_id)
-  const res = await fetch(`${BASE}/metrics?${qs}`)
+  const res = await fetch(`${apiBase()}/metrics?${qs}`)
   if (!res.ok) throw new Error('Failed to fetch metrics')
   return res.json()
 }
@@ -1189,7 +1207,7 @@ export async function getMetrics(
 // ── Models ────────────────────────────────────────────────────────────────────
 
 export async function getModels(): Promise<{ models: string[] }> {
-  const res = await fetch(`${BASE.replace('/api', '')}/api/models`)
+  const res = await fetch(`${apiBase().replace('/api', '')}/api/models`)
   if (!res.ok) throw new Error('Failed to fetch models')
   return res.json()
 }
@@ -1197,13 +1215,13 @@ export async function getModels(): Promise<{ models: string[] }> {
 // ── Skills ────────────────────────────────────────────────────────────────────
 
 export async function getSkills(): Promise<Skill[]> {
-  const res = await fetch(`${BASE}/skills`, { headers: authHeader() })
+  const res = await fetch(`${apiBase()}/skills`, { headers: authHeader() })
   if (!res.ok) throw new Error('Failed to fetch skills')
   return res.json()
 }
 
 export async function uploadSkill(formData: FormData): Promise<Skill> {
-  const res = await fetch(`${BASE}/skills/upload`, {
+  const res = await fetch(`${apiBase()}/skills/upload`, {
     method: 'POST',
     headers: authHeader(),
     body: formData,
@@ -1216,7 +1234,7 @@ export async function uploadSkill(formData: FormData): Promise<Skill> {
 }
 
 export async function toggleSkill(id: string, enabled: boolean): Promise<Skill> {
-  const res = await fetch(`${BASE}/skills/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${apiBase()}/skills/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { ...authHeader(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
@@ -1226,7 +1244,7 @@ export async function toggleSkill(id: string, enabled: boolean): Promise<Skill> 
 }
 
 export async function deleteSkill(id: string): Promise<void> {
-  const res = await fetch(`${BASE}/skills/${encodeURIComponent(id)}`, {
+  const res = await fetch(`${apiBase()}/skills/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: authHeader(),
   })
