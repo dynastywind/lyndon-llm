@@ -514,6 +514,8 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
                   height: '100dvh',
                   paddingTop: 'env(safe-area-inset-top)',
                   paddingBottom: 'env(safe-area-inset-bottom)',
+                  paddingLeft: 'env(safe-area-inset-left)',
+                  paddingRight: 'env(safe-area-inset-right)',
                   border: 'none',
                 }
               : {
@@ -555,7 +557,7 @@ export function SettingsDialog({ open, onOpenChange, initialTab = 'profile' }: P
               style={{
                 position: 'absolute',
                 top: 'calc(env(safe-area-inset-top) + 10px)',
-                right: 12,
+                right: 'calc(env(safe-area-inset-right) + 12px)',
                 zIndex: 5,
                 width: 36,
                 height: 36,
@@ -2113,13 +2115,15 @@ function SettingsRow({
   hint: string
   children: React.ReactNode
 }) {
+  const isNarrow = useIsNarrow()
   return (
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '210px 1fr',
-        gap: 40,
-        padding: '30px 0',
+        // Stack label above the control on mobile so the control gets full width.
+        gridTemplateColumns: isNarrow ? '1fr' : '210px 1fr',
+        gap: isNarrow ? 12 : 40,
+        padding: isNarrow ? '20px 0' : '30px 0',
         borderBottom: '1px solid var(--lv-rule)',
       }}
     >

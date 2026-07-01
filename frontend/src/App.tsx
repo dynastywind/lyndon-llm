@@ -154,6 +154,10 @@ export default function App() {
           background: 'var(--lv-bg)',
           color: 'var(--lv-ink)',
           overflow: 'hidden',
+          // Landscape: the notch / rounded corners move to the sides, so keep
+          // content clear of them.
+          paddingLeft: 'env(safe-area-inset-left)',
+          paddingRight: 'env(safe-area-inset-right)',
         }}
       >
         {/* Top bar with menu toggle */}

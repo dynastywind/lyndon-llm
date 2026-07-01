@@ -3613,6 +3613,15 @@ export function ChatWindow() {
           </div>
         </div>
 
+        {/* On mobile the panel is a fixed overlay that covers the toggle
+            button, so a tappable backdrop is the way to close it. */}
+        {isNarrow && showContext && (
+          <div
+            onClick={() => setShowContext(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 54 }}
+          />
+        )}
+
         {/* ── Context panel — slides in from right ───────────────────── */}
         <AnimatePresence>
           {showContext && (
@@ -3633,6 +3642,7 @@ export function ChatWindow() {
                       zIndex: 55,
                       background: 'var(--lv-bg)',
                       paddingTop: 'env(safe-area-inset-top)',
+                      paddingRight: 'env(safe-area-inset-right)',
                       boxShadow: '0 0 40px rgba(0,0,0,0.6)',
                     }
                   : {}),

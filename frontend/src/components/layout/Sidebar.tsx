@@ -443,6 +443,7 @@ export function Sidebar({
         flexDirection: 'column',
         height: mobile ? '100%' : '100vh',
         paddingTop: mobile ? 'env(safe-area-inset-top)' : undefined,
+        paddingLeft: mobile ? 'env(safe-area-inset-left)' : undefined,
         flexShrink: 0,
       }}
     >
