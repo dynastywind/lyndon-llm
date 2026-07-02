@@ -4,6 +4,19 @@ This document tracks planned features, ideas, and improvements. Add entries as t
 
 ---
 
+## Shipped
+
+> Recently delivered — see the linked detail docs.
+
+- [x] **Voice input / output** — local Whisper (`faster-whisper`) STT via a mic in every composer, plus browser `SpeechSynthesis` "read aloud" on assistant messages. See [backend/transcription.md](backend/transcription.md).
+- [x] **Scheduled tasks** — recurring cowork goals fired by a background scheduler (interval / daily / weekly). See [backend/scheduler.md](backend/scheduler.md).
+- [x] **Internationalization** — full UI localization (English + Simplified Chinese), zero-dependency typed dictionary. See [frontend/i18n.md](frontend/i18n.md).
+- [x] **Reference-to-answer** — select assistant text and "Reference" it into the next prompt.
+- [x] **Light / dark themes**, per-conversation **effort modes** (low / mid / high), **GitHub OAuth + repo connect** for Code mode.
+- [~] **Mobile companion (Android & iOS)** — app-side complete: Tauri v2 mobile thin client, configurable backend URL, responsive UI. Remaining: a hosted backend deployment. See [android.md](android.md).
+
+---
+
 ## Near-Term
 
 > Features that are well-scoped and could be implemented in the current architecture with modest effort.
@@ -22,7 +35,6 @@ This document tracks planned features, ideas, and improvements. Add entries as t
 
 - [ ] **Multi-model support** — allow per-session model selection with a model picker; support model-specific context windows and pricing display
 - [ ] **RAG source management** — UI to tag, search, and selectively query uploaded sources; per-source enable/disable for RAG retrieval
-- [ ] **Voice input / output** — integrate local Whisper for STT and a TTS model for audio responses; surfaced as a toggle in ChatWindow
 - [ ] **Skill marketplace** — a catalog of community-contributed skills with one-click install; versioning and update notifications
 - [ ] **Memory editing** — let users view, edit, and delete individual long-term memory entries from the Memory panel
 - [ ] **Code mode: auto-commit** — option to automatically stage and commit changes made by the Code engine after user approval
@@ -38,7 +50,6 @@ This document tracks planned features, ideas, and improvements. Add entries as t
 - [ ] **Web deployment** — publicly accessible instance with OAuth-only login; remove local-model assumption
 - [ ] **Agent-to-agent communication** — allow a Cowork plan to spawn a sub-Chat session as a research step
 - [ ] **Plugin system** — structured extension point beyond MCP; plugins can register new routes, UI panels, and tool categories
-- [ ] **Mobile companion** — Android/iOS app talking to the same backend API for on-the-go access. App-side changes done; see [android.md](android.md) for the Tauri v2 thin-client approach + Android/iOS run guides
 - [ ] **Offline model fallback** — graceful degradation when the LLM server is unreachable; queue messages and retry
 - [ ] **Audit trail** — structured log of all tool executions (args, results, timestamps) for Cowork/Code sessions; exportable as JSON
 

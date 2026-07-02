@@ -1,6 +1,19 @@
 # System Architecture
 
-LyndonLLM is a local-first personal AI assistant with three operational modes — Chat, Cowork, and Code — served from a single FastAPI backend and consumed by a React SPA that can run both in-browser and as a native macOS app via Tauri.
+LyndonLLM is a local-first personal AI assistant with three operational modes — Chat, Cowork, and Code — served from a single FastAPI backend and consumed by a React SPA that runs in-browser, as a native macOS desktop app, and as an **Android / iOS mobile app** (all via Tauri v2).
+
+---
+
+## Feature Highlights
+
+Beyond the three core modes, recent additions:
+
+- **Mobile apps (Android & iOS)** — the same frontend ships as a Tauri v2 mobile thin client pointing at a hosted backend, with a responsive drawer layout, safe-area handling, and Chat-first feature scoping on phones. See [android.md](android.md).
+- **Voice in / out** — speech-to-text via local Whisper (`faster-whisper`) with a mic in every composer, plus text-to-speech "read aloud" on assistant messages using the OS voices. See [backend/transcription.md](backend/transcription.md).
+- **Scheduled tasks** — recurring cowork goals fired by a background scheduler on simple presets (interval / daily / weekly). See [backend/scheduler.md](backend/scheduler.md).
+- **Internationalization** — full UI localization (English + Simplified Chinese) via a zero-dependency, compile-time-checked typed dictionary. See [frontend/i18n.md](frontend/i18n.md).
+- **Reference-to-answer** — select text in a reply and "Reference" it; the excerpt rides the attachment pipeline into your next prompt.
+- **Light / dark themes**, per-conversation **effort modes** (low / mid / high), and **GitHub OAuth + repo connect** for Code mode.
 
 ---
 

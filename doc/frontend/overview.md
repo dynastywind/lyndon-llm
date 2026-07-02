@@ -82,13 +82,18 @@ frontend/src/
 ├── hooks/
 │   ├── useStream.ts                 # Core streaming hook
 │   ├── useChatHistory.ts
-│   └── usePlanExecution.ts
+│   ├── usePlanExecution.ts
+│   ├── useScheduledTasks.ts         # Scheduled-task CRUD
+│   ├── useAudioRecorder.ts          # Mic capture → transcription
+│   ├── useSpeech.ts                  # Text-to-speech (read aloud)
+│   └── useMediaQuery.ts             # useIsNarrow() — mobile layout switch
 ├── store/
 │   └── index.ts                     # Zustand AppState
 ├── types/
 │   └── index.ts                     # TypeScript interfaces
 └── lib/
-    └── utils.ts                     # generateId, cn (className merge)
+    ├── utils.ts                     # generateId, cn (className merge)
+    └── platform.ts                  # IS_TAURI / IS_MOBILE / IS_DESKTOP
 ```
 
 ---
@@ -156,6 +161,24 @@ Tailwind's `darkMode: 'class'` config enables CSS-variable-driven dark mode for 
 ## Internationalization
 
 The UI is fully localized (English default, Simplified Chinese). A `language` field in the Zustand store drives a lightweight, provider-free `useT()` hook; switching language re-renders the whole app instantly. See **`doc/frontend/i18n.md`** for the dictionary structure, the compile-time key-parity guarantee, and how to add strings or languages.
+
+---
+
+## Mobile & Platform
+
+The same SPA runs as an **Android / iOS** app (Tauri v2) as well as the macOS desktop app. `src/lib/platform.ts` exposes `IS_TAURI`, `IS_MOBILE`, and `IS_DESKTOP` (`IS_TAURI && !IS_MOBILE`, with an iPadOS desktop-UA fallback). Desktop-only features (Cowork/Code modes, filesystem, `desktop_control`) are gated on `IS_DESKTOP`, so phones are Chat-first.
+
+- **Configurable backend URL** — the mobile app is a thin client; `client.ts` `apiBase()` reads a user-set backend URL from the store (Settings → AI & Chat → Backend URL), since `localhost` on a phone is the device itself.
+- **Responsive layout** — `useIsNarrow()` (`useMediaQuery`, forced true on real mobile) switches to a slide-in drawer sidebar, full-screen scrollable Settings, and safe-area insets (portrait + landscape).
+
+See **`doc/android.md`** for the Android/iOS build + run guide.
+
+---
+
+## Voice (speech-to-text + text-to-speech)
+
+- **Speech-to-text** — a mic button in every composer records audio (`useAudioRecorder`), posts it to `POST /api/transcribe`, and inserts the returned text. Transcription runs locally on the backend via Whisper (see `doc/backend/transcription.md`).
+- **Text-to-speech** — a "read aloud" button on assistant messages uses `useSpeech` over the browser `SpeechSynthesis` API (OS voices, en/zh auto-selected). No backend involved.
 
 ---
 
